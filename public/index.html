@@ -22,6 +22,37 @@
 :root{--r:12px;--rs:8px}
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:100vh;display:flex;overflow:hidden}
 
+/* Toast */
+.toast-wrap{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:400;display:flex;flex-direction:column-reverse;gap:6px;pointer-events:none}
+.toast{pointer-events:auto;background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--rs);padding:10px 16px;box-shadow:var(--shd);font-size:13px;display:flex;align-items:center;gap:10px;animation:slideUp .25s ease-out;min-width:260px;max-width:420px}
+.toast .t-msg{flex:1}.toast .t-undo{color:var(--brand);font-weight:600;cursor:pointer;white-space:nowrap;font-size:12px}
+.toast .t-undo:hover{text-decoration:underline}
+@keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes fadeOut{from{opacity:1}to{opacity:0}}
+.toast.fading{animation:fadeOut .2s ease-in forwards}
+
+/* Hamburger */
+.ham{display:none;position:fixed;top:14px;left:14px;z-index:60;background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--rs);padding:8px;cursor:pointer;color:var(--tx)}
+.sb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:39}
+
+@media(max-width:768px){
+  .ham{display:flex}
+  .sb{position:fixed;left:-280px;z-index:40;transition:left .25s;width:280px;box-shadow:var(--shd)}
+  .sb.open{left:0}
+  .sb-overlay.open{display:block}
+  .mn{margin-left:0}
+  .tb{padding:18px 16px 0;padding-left:52px}
+  .ct{padding:16px 16px 28px}
+  .vt{padding:10px 16px 0}
+  .fab{bottom:20px;right:20px}
+  .board{flex-direction:column}
+  .bcol{min-width:100% !important;max-width:100% !important}
+  .dp{width:100vw;right:-100vw}
+  .dp.open{right:0}
+  .cg{font-size:9px}
+  .cc{min-height:70px}
+}
+
 /* Sidebar */
 .sb{width:256px;background:var(--bg-s);border-right:1px solid var(--brd);display:flex;flex-direction:column;height:100vh;flex-shrink:0}
 .sb-brand{padding:20px 20px 16px;display:flex;align-items:center;gap:10px}
@@ -261,7 +292,10 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 </head>
 <body>
 
-<aside class="sb">
+<button class="ham" id="ham"><span class="material-icons-round">menu</span></button>
+<div class="sb-overlay" id="sb-ov"></div>
+
+<aside class="sb" id="sb">
   <div class="sb-brand"><div class="logo">L</div><h1>LifeFlow</h1></div>
   <div class="ns">
     <div class="ns-label">Views</div>
@@ -331,7 +365,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 <div class="qc-ov" id="qc-ov">
   <div class="qc-box">
     <h3><span class="material-icons-round" style="font-size:18px;color:var(--brand)">bolt</span>Quick Capture</h3>
-    <input type="text" id="qc-title" placeholder="What needs to be done?">
+    <input type="text" id="qc-title" placeholder="Buy groceries tomorrow p2 #errands">
+    <div id="qc-nlp-preview" style="font-size:11px;color:var(--tx2);margin:-6px 0 8px;padding:0 2px;min-height:16px"></div>
     <label style="display:block;font-size:11px;color:var(--txd);margin-bottom:3px;font-weight:500">Goal</label>
     <select id="qc-goal"></select>
     <div class="qc-row">
@@ -361,6 +396,9 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 
 <!-- FAB -->
 <button class="fab" id="fab-btn" title="Quick add task (N)"><span class="material-icons-round">add</span></button>
+
+<!-- Toast container -->
+<div class="toast-wrap" id="toast-wrap"></div>
 
 <script>
 const COLORS=['#D50000','#E67C73','#F4511E','#F6BF26','#33B679','#0B8043','#039BE5','#3F51B5','#7986CB','#8E24AA','#616161','#795548'];
@@ -398,7 +436,7 @@ const expandedTasks=new Set();
 document.querySelectorAll('.ni').forEach(el=>el.addEventListener('click',()=>{
   currentView=el.dataset.view;activeAreaId=null;activeGoalId=null;
   document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));
-  el.classList.add('active');render();
+  el.classList.add('active');closeMobileSb();render();
 }));
 
 async function loadAreas(){areas=await api.get('/api/areas');renderAreas()}
@@ -414,12 +452,14 @@ function renderAreas(){
   el.querySelectorAll('.ai').forEach(item=>item.addEventListener('click',e=>{
     if(e.target.classList.contains('da'))return;
     activeAreaId=Number(item.dataset.id);activeGoalId=null;currentView='area';
-    document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));item.classList.add('active');render();
+    document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));item.classList.add('active');closeMobileSb();render();
   }));
   el.querySelectorAll('.da').forEach(btn=>btn.addEventListener('click',async e=>{
     e.stopPropagation();if(!confirm('Delete this life area and everything in it?'))return;
-    await api.del('/api/areas/'+btn.dataset.id);
-    if(Number(btn.dataset.id)===activeAreaId){activeAreaId=null;currentView='myday'}
+    const aid=Number(btn.dataset.id);const area=areas.find(a=>a.id===aid);
+    await api.del('/api/areas/'+aid);
+    showToast('Area deleted'+(area?' — "'+area.name+'"':''));
+    if(aid===activeAreaId){activeAreaId=null;currentView='myday'}
     await loadAreas();render();
   }));
 }
@@ -551,7 +591,16 @@ async function renderArea(){
   c.innerHTML=h;attachGA();
   c.querySelectorAll('.gc').forEach(card=>card.addEventListener('click',e=>{if(e.target.closest('.ga'))return;activeGoalId=Number(card.dataset.id);currentView='goal';render()}));
   c.querySelectorAll('.eg').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();openGM(Number(b.dataset.id))}));
-  c.querySelectorAll('.dg').forEach(b=>b.addEventListener('click',async e=>{e.stopPropagation();await api.del('/api/goals/'+b.dataset.id);await loadAreas();render()}));
+  c.querySelectorAll('.dg').forEach(b=>b.addEventListener('click',async e=>{
+    e.stopPropagation();const gid=Number(b.dataset.id);
+    const g=goals.find(x=>x.id===gid);
+    await api.del('/api/goals/'+gid);
+    showToast('Goal deleted'+(g?' — "'+g.title+'"':''), g ? async()=>{
+      await api.post('/api/areas/'+activeAreaId+'/goals',{title:g.title,description:g.description||'',due_date:g.due_date||null,color:g.color||'#6C63FF'});
+      await loadAreas();render();
+    } : null);
+    await loadAreas();render();
+  }));
 }
 function attachGA(){
   const i=$('gi'),b=$('gab');if(!i||!b)return;
@@ -652,10 +701,28 @@ function attachTE(){
   document.querySelectorAll('.tk').forEach(el=>el.addEventListener('click',async e=>{
     e.stopPropagation();const id=Number(el.dataset.id);
     let tk=tasks.find(t=>t.id===id);if(!tk){const a=await api.get('/api/tasks/all');tk=a.find(t=>t.id===id)}
-    if(!tk)return;await api.put('/api/tasks/'+id,{status:tk.status==='done'?'todo':'done'});await loadAreas();render();
+    if(!tk)return;
+    const newSt=tk.status==='done'?'todo':'done';
+    await api.put('/api/tasks/'+id,{status:newSt});
+    if(newSt==='done'){
+      showToast('Task completed'+(tk.recurring?' · Next '+tk.recurring+' task created':''), async()=>{
+        await api.put('/api/tasks/'+id,{status:'todo'});await loadAreas();render();loadOverdueBadge();
+      });
+    }
+    await loadAreas();render();loadOverdueBadge();
   }));
   document.querySelectorAll('.et').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();openDP(Number(el.dataset.id))}));
-  document.querySelectorAll('.dt').forEach(el=>el.addEventListener('click',async e=>{e.stopPropagation();await api.del('/api/tasks/'+el.dataset.id);await loadAreas();render()}));
+  document.querySelectorAll('.dt').forEach(el=>el.addEventListener('click',async e=>{
+    e.stopPropagation();const id=Number(el.dataset.id);
+    // Fetch task data first for undo
+    let tk; try{ const r=await fetch('/api/tasks/'+id); tk=await r.json(); }catch{}
+    await api.del('/api/tasks/'+id);
+    showToast('Task deleted', tk ? async()=>{
+      await api.post('/api/goals/'+tk.goal_id+'/tasks',{title:tk.title,note:tk.note,priority:tk.priority,due_date:tk.due_date,recurring:tk.recurring,assigned_to:tk.assigned_to,my_day:tk.my_day});
+      await loadAreas();render();loadOverdueBadge();showToast('Task restored');
+    } : null);
+    await loadAreas();render();loadOverdueBadge();
+  }));
   // Inline subtask circle checks
   document.querySelectorAll('.stk').forEach(el=>el.addEventListener('click',async e=>{
     e.stopPropagation();const sid=Number(el.dataset.sid);
@@ -790,7 +857,7 @@ $('dp-save').addEventListener('click',async()=>{
     recurring:$('dp-rec').value||null, my_day:$('dp-md').checked
   });
   await api.put('/api/tasks/'+dpTask.id+'/tags',{tagIds:dpTags});
-  $('dp').classList.remove('open');await loadAreas();render();
+  $('dp').classList.remove('open');showToast('Task saved');await loadAreas();render();
 });
 
 // ─── AREA MODAL ───
@@ -836,6 +903,33 @@ function initThemes(){
   }));
 }
 initThemes();
+
+// ─── TOAST SYSTEM ───
+function showToast(msg, undoFn, duration=5000) {
+  const wrap = $('toast-wrap');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `<span class="t-msg">${esc(msg)}</span>${undoFn ? '<span class="t-undo">Undo</span>' : ''}`;
+  wrap.appendChild(el);
+  let timer = setTimeout(() => removeToast(el), duration);
+  if (undoFn) {
+    el.querySelector('.t-undo').addEventListener('click', () => {
+      clearTimeout(timer);
+      undoFn();
+      removeToast(el);
+    });
+  }
+}
+function removeToast(el) {
+  el.classList.add('fading');
+  setTimeout(() => el.remove(), 200);
+}
+
+// ─── HAMBURGER (Mobile) ───
+$('ham').addEventListener('click', () => { $('sb').classList.toggle('open'); $('sb-ov').classList.toggle('open'); });
+$('sb-ov').addEventListener('click', () => { $('sb').classList.remove('open'); $('sb-ov').classList.remove('open'); });
+// Close sidebar on nav click (mobile)
+function closeMobileSb() { $('sb').classList.remove('open'); $('sb-ov').classList.remove('open'); }
 
 // Boot
 Promise.all([loadAreas(),loadTags()]).then(()=>{render();loadOverdueBadge()});
@@ -886,11 +980,51 @@ $('qc-ov').addEventListener('click',e=>{if(e.target===$('qc-ov'))closeQC()});
 $('qc-cancel').addEventListener('click',closeQC);
 $('qc-save').addEventListener('click',saveQC);
 $('qc-title').addEventListener('keydown',e=>{if(e.key==='Enter')saveQC()});
+// NLP live preview on quick capture input
+let nlpTimer=null,nlpParsed=null;
+$('qc-title').addEventListener('input',()=>{
+  clearTimeout(nlpTimer);
+  const v=$('qc-title').value.trim();
+  if(!v){$('qc-nlp-preview').innerHTML='';nlpParsed=null;return}
+  nlpTimer=setTimeout(async()=>{
+    try{
+      const r=await api.post('/api/tasks/parse',{text:v});
+      nlpParsed=r;
+      let parts=[];
+      if(r.due_date)parts.push('📅 '+r.due_date);
+      if(r.priority>0)parts.push(['','⚪ Normal','🟡 High','🔴 Critical'][r.priority]);
+      if(r.tags&&r.tags.length)parts.push(r.tags.map(t=>'#'+t).join(' '));
+      if(r.my_day)parts.push('☀️ My Day');
+      $('qc-nlp-preview').innerHTML=parts.length?'<span style="color:var(--txd);font-size:11px">→ '+esc(r.title)+'</span> '+parts.map(p=>'<span style="font-size:10px;background:var(--bg-c);padding:2px 6px;border-radius:8px;border:1px solid var(--brd)">'+p+'</span>').join(' '):'';
+    }catch{nlpParsed=null;$('qc-nlp-preview').innerHTML=''}
+  },300);
+});
 async function saveQC(){
-  const title=$('qc-title').value.trim();const goalId=Number($('qc-goal').value);
-  if(!title||!goalId)return;
-  await api.post('/api/goals/'+goalId+'/tasks',{title,priority:Number($('qc-pri').value),due_date:$('qc-due').value||null,my_day:$('qc-myday').checked});
-  closeQC();await loadAreas();render();loadOverdueBadge();
+  const goalId=Number($('qc-goal').value);
+  if(!goalId)return;
+  let title=$('qc-title').value.trim();
+  if(!title)return;
+  // Use NLP parsed values as defaults, allow manual overrides
+  let pri=Number($('qc-pri').value), due=$('qc-due').value||null, myday=$('qc-myday').checked;
+  let tagIds=[];
+  if(nlpParsed){
+    title=nlpParsed.title||title;
+    if(!Number($('qc-pri').value)&&nlpParsed.priority)pri=nlpParsed.priority;
+    if(!$('qc-due').value&&nlpParsed.due_date)due=nlpParsed.due_date;
+    if(nlpParsed.my_day)myday=true;
+    // Resolve tags
+    if(nlpParsed.tags&&nlpParsed.tags.length){
+      for(const tn of nlpParsed.tags){
+        let tg=allTags.find(t=>t.name===tn.toLowerCase());
+        if(!tg){tg=await api.post('/api/tags',{name:tn.toLowerCase(),color:COLORS[allTags.length%COLORS.length]});await loadTags()}
+        tagIds.push(tg.id);
+      }
+    }
+  }
+  const task=await api.post('/api/goals/'+goalId+'/tasks',{title,priority:pri,due_date:due,my_day:myday});
+  if(tagIds.length)await api.put('/api/tasks/'+task.id+'/tags',{tagIds});
+  nlpParsed=null;$('qc-nlp-preview').innerHTML='';
+  closeQC();showToast('Task added');await loadAreas();render();loadOverdueBadge();
 }
 $('fab-btn').addEventListener('click',openQuickCapture);
 

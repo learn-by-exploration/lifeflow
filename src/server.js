@@ -3,9 +3,12 @@ const path = require('path');
 const Database = require('better-sqlite3');
 
 const app = express();
-const PORT = 3456;
+const PORT = process.env.PORT || 3456;
 
-const db = new Database(path.join(__dirname, '..', 'lifeflow.db'));
+const fs = require('fs');
+const dbDir = process.env.DB_DIR || path.join(__dirname, '..');
+if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+const db = new Database(path.join(dbDir, 'lifeflow.db'));
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
@@ -307,6 +310,30 @@ app.post('/api/goals/:goalId/tasks', (req, res) => {
   }
   res.status(201).json(enrichTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(taskId)));
 });
+// Single task GET
+app.get('/api/tasks/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const t = db.prepare(`
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id WHERE t.id=?
+  `).get(id);
+  if (!t) return res.status(404).json({ error: 'Not found' });
+  res.json(enrichTask(t));
+});
+
+// Recurring task helper: compute next due date
+function nextDueDate(dueDate, recurrence) {
+  if (!dueDate || !recurrence) return null;
+  const d = new Date(dueDate + 'T00:00:00');
+  if (recurrence === 'daily') d.setDate(d.getDate() + 1);
+  else if (recurrence === 'weekly') d.setDate(d.getDate() + 7);
+  else if (recurrence === 'monthly') d.setMonth(d.getMonth() + 1);
+  else return null;
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
 app.put('/api/tasks/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
@@ -322,6 +349,18 @@ app.put('/api/tasks/:id', (req, res) => {
     assigned_to!==undefined?assigned_to:null, my_day!==undefined?(my_day?1:0):null,
     position!==undefined?position:null, goal_id||null, completedAt, id
   );
+  // Recurring: spawn next task when completed
+  if (status === 'done' && ex.status !== 'done' && ex.recurring) {
+    const nd = nextDueDate(ex.due_date, ex.recurring);
+    const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM tasks WHERE goal_id=?').get(ex.goal_id);
+    const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,recurring,assigned_to,my_day,position) VALUES (?,?,?,?,?,?,?,?,?)').run(
+      ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.recurring, ex.assigned_to, 0, mp.p
+    );
+    // Copy tags to new task
+    const oldTags = db.prepare('SELECT tag_id FROM task_tags WHERE task_id=?').all(id);
+    const insTag = db.prepare('INSERT OR IGNORE INTO task_tags (task_id,tag_id) VALUES (?,?)');
+    oldTags.forEach(tt => insTag.run(r.lastInsertRowid, tt.tag_id));
+  }
   res.json(enrichTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(id)));
 });
 app.delete('/api/tasks/:id', (req, res) => {
@@ -384,6 +423,40 @@ app.get('/api/stats', (req, res) => {
     ORDER BY t.completed_at DESC LIMIT 10
   `).all();
   res.json({ total, done, overdue, dueToday, thisWeek, byArea, byPriority, recentDone });
+});
+
+// ─── NLP Quick Capture Parser ───
+app.post('/api/tasks/parse', (req, res) => {
+  const { text } = req.body;
+  if (!text || !text.trim()) return res.status(400).json({ error: 'Text required' });
+  let input = text.trim();
+  let priority = 0, due_date = null, tags = [], my_day = false;
+  // Extract priority: p1 p2 p3 or !1 !2 !3
+  input = input.replace(/\b[pP!]([1-3])\b/g, (_, n) => { priority = Number(n); return ''; });
+  // Extract tags: #tagname
+  input = input.replace(/#([a-zA-Z0-9_-]+)/g, (_, tag) => { tags.push(tag.toLowerCase()); return ''; });
+  // Extract my_day: *today* or *myday*
+  if (/\bmy\s*day\b/i.test(input)) { my_day = true; input = input.replace(/\bmy\s*day\b/gi, ''); }
+  // Extract dates: today, tomorrow, day-after-tomorrow, next monday-sunday, in N days
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+  input = input.replace(/\b(today)\b/gi, () => { due_date = fmt(today); return ''; });
+  input = input.replace(/\b(tomorrow)\b/gi, () => { const d = new Date(today); d.setDate(d.getDate()+1); due_date = fmt(d); return ''; });
+  input = input.replace(/\bday\s*after\s*tomorrow\b/gi, () => { const d = new Date(today); d.setDate(d.getDate()+2); due_date = fmt(d); return ''; });
+  input = input.replace(/\bin\s+(\d+)\s*days?\b/gi, (_, n) => { const d = new Date(today); d.setDate(d.getDate()+Number(n)); due_date = fmt(d); return ''; });
+  input = input.replace(/\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi, (_, day) => {
+    const targetDay = dayNames.indexOf(day.toLowerCase());
+    const d = new Date(today); let diff = targetDay - d.getDay(); if (diff <= 0) diff += 7;
+    d.setDate(d.getDate() + diff); due_date = fmt(d); return '';
+  });
+  // Extract YYYY-MM-DD or MM/DD
+  input = input.replace(/(\d{4})-(\d{2})-(\d{2})/g, (m) => { due_date = m; return ''; });
+  input = input.replace(/\b(\d{1,2})\/(\d{1,2})\b/g, (_, mo, da) => {
+    const y = today.getFullYear(); due_date = `${y}-${String(mo).padStart(2,'0')}-${String(da).padStart(2,'0')}`; return '';
+  });
+  const title = input.replace(/\s+/g, ' ').trim();
+  function fmt(d) { return d.toISOString().slice(0, 10); }
+  res.json({ title: title || text.trim(), priority, due_date, tags, my_day });
 });
 
 // ─── All Goals (for quick capture) ───
