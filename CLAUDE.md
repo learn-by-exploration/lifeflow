@@ -10,6 +10,7 @@ Express.js backend + vanilla JS single-page app frontend. SQLite via better-sqli
 ```bash
 npm install
 node src/server.js          # http://localhost:3456
+npm test                    # 168 tests via node:test
 # or with Docker:
 docker compose up -d
 ```
@@ -147,13 +148,107 @@ All foreign keys use `ON DELETE CASCADE`.
 ## File Organization
 
 ```
-src/server.js          — Backend (all logic in one file)
-public/index.html      — Frontend SPA (CSS + HTML + JS)
+src/server.js          — Backend (all logic in one file, ~620 lines)
+public/index.html      — Frontend SPA (CSS + HTML + JS, ~1661 lines)
+tests/helpers.js       — Test factories, DB setup/teardown, supertest agent
+tests/*.test.js        — 9 test files, 168 tests (node:test + assert/strict)
 Dockerfile             — node:22-slim, npm ci, EXPOSE 3456
 docker-compose.yml     — Single service, persistent volume
 docs/design/           — Brainstorm spec documents (3 perspectives)
 backups/               — Auto-generated JSON backups (gitignored)
 ```
+
+## Testing
+
+```bash
+npm test                    # Run all 168 tests
+```
+
+**Runner:** `node --test --test-force-exit` with `node:assert/strict` + `supertest`
+
+| Test File | Tests | Covers |
+|-----------|-------|--------|
+| `tests/areas.test.js` | 16 | Life Areas CRUD, cascade deletes, validation, ordering |
+| `tests/goals.test.js` | 15 | Goals CRUD, computed counts, cascade, area association |
+| `tests/tasks.test.js` | 28 | Tasks CRUD, recurring spawn (daily/weekly/monthly), tag copy, reorder, status transitions |
+| `tests/subtasks.test.js` | 16 | Subtasks CRUD, done toggle, notes, enrichment in parent |
+| `tests/tags.test.js` | 14 | Tags CRUD, dedup, sanitize, task-tag replace/clear, non-integer handling |
+| `tests/views.test.js` | 21 | my-day, all, board (5 filter combos), calendar, overdue, search (subtask search, limit 50) |
+| `tests/stats.test.js` | 16 | Dashboard stats, streaks/heatmap, focus sessions, activity pagination |
+| `tests/nlp.test.js` | 16 | Priority, tags, 7 date formats, my_day, combined extraction, fallback |
+| `tests/misc.test.js` | 10 | Backup/export, SPA fallback, unicode, concurrency, full cascade hierarchy |
+
+**Isolation:** Each test file uses a temp DB directory (`DB_DIR` env var), `cleanDb()` in `beforeEach`, factories: `makeArea()`, `makeGoal()`, `makeTask()`, `makeSubtask()`, `makeTag()`, `linkTag()`, `makeFocus()`.
+
+## What's Done (Shipped)
+
+### Batch 0 — Foundation (`c8f8c3f`)
+- Express 5 + better-sqlite3 backend with full REST API
+- Vanilla JS SPA frontend — no framework, no build step
+- 4-level hierarchy: Life Area → Goal → Task → Subtask
+- 7 SQLite tables with foreign key cascades
+- Board (Kanban) view, Calendar view, Dashboard view
+- 8 color themes, keyboard shortcuts, Docker setup
+
+### Batch 1 — Consensus Features (`3c5bba2`)
+- Toast notifications with undo (5s timer)
+- Recurring tasks (daily/weekly/monthly) with auto-spawn on completion
+- NLP quick capture parser (priority, dates, tags from natural text)
+- Responsive sidebar (hamburger + overlay for mobile)
+- Docker Compose persistent volume
+
+### Batch 2 — Polish Features (`ca2a917`)
+- Activity log / logbook (completed tasks grouped by day, paginated)
+- Focus / Pomodoro timer (25min/5min/15min, SVG ring, session tracking to DB)
+- Relative date badges ("in 3 days", "2d overdue", "Next Mon")
+- Clickable calendar event pills → task detail
+- Dashboard drill-down (click area/priority → filtered board)
+- Markdown rendering in notes (bold, italic, code, links, headers, lists, blockquotes)
+- Auto-backup JSON (startup + every 24h, rotates last 7)
+
+### Batch 3 — Power Features (`5242a75`)
+- Drag-and-drop task reordering (within lists + between weekly columns)
+- Weekly Planning view (7-day column layout)
+- Eisenhower Matrix view (2×2 urgency/importance grid)
+- Streak counter + GitHub-style contribution heatmap (365 days)
+- Multi-select with bulk complete/delete/set priority
+- Confetti celebration on goal 100% completion
+
+### Documentation & Testing (`e1f43f1`, `826be3a`)
+- CLAUDE.md project configuration
+- 168 API tests across 9 files (100% endpoint coverage)
+- Route ordering bugfix: `/search` and `/overdue` before `/:id`
+- NLP bugfix: "day after tomorrow" processed before "tomorrow"
+
+## What Needs to Be Done (Roadmap)
+
+### High Priority
+- **Data import/restore** — Currently export-only; need `POST /api/import` to restore from backup JSON
+- **Task due-date reminders** — Browser notification API or in-app notification bell
+- **Goal progress tracking** — Visual progress bar on goal cards (% tasks done)
+- **Undo for destructive actions** — Delete area/goal currently has no undo (tasks have toast undo)
+- **Task dependencies** — "blocked by" relationships between tasks
+
+### Medium Priority
+- **Drag-and-drop for subtasks** — Reorder subtasks within a task (currently only tasks support drag)
+- **Task templates** — Save/apply common task structures (e.g., "Sprint Planning" with preset subtasks)
+- **Recurring task improvements** — Custom intervals (every 2 weeks, specific days), skip/snooze
+- **Goal archiving UI** — Backend supports `archived` status but no frontend way to archive/view archived goals
+- **Tag management view** — Dedicated page to rename/recolor/merge tags (currently tag CRUD only via API)
+- **Focus session history view** — See past Pomodoro sessions by day/week (data exists, no UI)
+- **Search improvements** — Search within specific area/goal, filter by date range, saved searches
+
+### Low Priority / Nice to Have
+- **PWA support** — Service worker for offline, add-to-homescreen
+- **Dark/light auto-detect** — Follow `prefers-color-scheme` media query
+- **Keyboard-driven task creation** — Create task from keyboard without mouse (N → type → Enter)
+- **Gantt chart view** — Timeline view for tasks with due dates
+- **Time tracking** — Track total time spent per task (beyond Pomodoro sessions)
+- **Area/goal reordering** — Drag to reorder life areas and goals (tasks already support this)
+- **Attachment support** — File/image uploads on tasks
+- **Collaboration** — Multi-user with task assignment (assigned_to field exists but unused in UI)
+- **API authentication** — Currently no auth; add token-based access for remote use
+- **Mobile app** — React Native or Capacitor wrapper
 
 ## Rules
 
