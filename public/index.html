@@ -388,6 +388,25 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .md-note h1,.md-note h2,.md-note h3{font-weight:600;color:var(--tx);margin:8px 0 4px}
 .md-note h1{font-size:16px}.md-note h2{font-size:14px}.md-note h3{font-size:13px}
 
+/* Templates */
+.tmpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:16px}
+.tmpl-card{background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--r);padding:16px;cursor:pointer;transition:all .15s}
+.tmpl-card:hover{border-color:var(--brand);transform:translateY(-2px);box-shadow:var(--shd)}
+.tmpl-card .tmpl-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.tmpl-card .tmpl-icon{font-size:28px}
+.tmpl-card .tmpl-name{font-size:14px;font-weight:600;flex:1}
+.tmpl-card .tmpl-del{background:none;border:none;color:var(--txd);cursor:pointer;font-size:16px;padding:4px;border-radius:50%;opacity:0;transition:opacity .15s}
+.tmpl-card:hover .tmpl-del{opacity:1}.tmpl-card .tmpl-del:hover{color:var(--err);background:var(--bg-h)}
+.tmpl-card .tmpl-desc{font-size:11px;color:var(--tx2);margin-bottom:8px}
+.tmpl-card .tmpl-tasks{font-size:10px;color:var(--txd);display:flex;flex-wrap:wrap;gap:4px}
+.tmpl-card .tmpl-tasks span{background:var(--bg-c);padding:2px 8px;border-radius:4px}
+.tmpl-apply-ov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center}
+.tmpl-apply-ov.active{display:flex}
+.tmpl-apply-box{background:var(--bg-s);border-radius:var(--r);padding:24px;width:420px;max-width:90vw;box-shadow:var(--shd)}
+
+/* Vim-style focus indicator */
+.tc.vim-focus{outline:2px solid var(--brand);outline-offset:-2px;background:var(--bg-h)}
+
 /* Drag reorder */
 .tc.drag-over{border-top:2px solid var(--brand);margin-top:-2px}
 .tc.dragging{opacity:.35}
@@ -505,6 +524,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <div class="ni" data-view="matrix"><span class="material-icons-round">grid_view</span>Matrix</div>
     <div class="ni" data-view="logbook"><span class="material-icons-round">history</span>Activity Log</div>
     <div class="ni" data-view="tags"><span class="material-icons-round">label</span>Tag Manager</div>
+    <div class="ni" data-view="templates"><span class="material-icons-round">content_copy</span>Templates</div>
     <div class="ni" data-view="focushistory"><span class="material-icons-round">timer</span>Focus History</div>
   </div>
   <div class="ns"><div class="ns-label">Life Areas</div></div>
@@ -606,6 +626,11 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <div class="kb-row"><span>Matrix</span><span class="kb-key">7</span></div>
     <div class="kb-row"><span>Activity Log</span><span class="kb-key">8</span></div>
     <div class="kb-row"><span>Multi-select mode</span><span class="kb-key">M</span></div>
+    <div class="kb-row" style="margin-top:10px;font-size:10px;font-weight:600;color:var(--txd)"><span>Vim Navigation (task lists)</span><span></span></div>
+    <div class="kb-row"><span>Move down / up</span><span class="kb-key">J</span> <span class="kb-key">K</span></div>
+    <div class="kb-row"><span>Complete selected task</span><span class="kb-key">X</span></div>
+    <div class="kb-row"><span>Open selected task</span><span class="kb-key">Enter</span></div>
+    <div class="kb-row"><span>First / Last task</span><span class="kb-key">gg</span> <span class="kb-key">G</span></div>
     <div class="kb-row"><span>Close panel / overlay</span><span class="kb-key">Esc</span></div>
     <div class="kb-row"><span>Show this help</span><span class="kb-key">?</span></div>
   </div>
@@ -690,6 +715,14 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
       </div>
       <button class="onb-btn-next" id="onb-next-4">Complete Setup 🎉</button>
     </div>
+  </div>
+</div>
+
+<!-- Template Apply overlay -->
+<div class="tmpl-apply-ov" id="tmpl-apply-ov">
+  <div class="tmpl-apply-box" id="tmpl-apply-box">
+    <h3 style="margin-bottom:12px">Apply Template</h3>
+    <div id="tmpl-apply-content"></div>
   </div>
 </div>
 
@@ -792,6 +825,7 @@ async function render(){
   else if(currentView==='logbook')await renderLogbook();
   else if(currentView==='tags')await renderTags();
   else if(currentView==='focushistory')await renderFocusHistory();
+  else if(currentView==='templates')await renderTemplates();
   else if(currentView==='area')await renderArea();
   else if(currentView==='goal')await renderGoal();
   updateBC();
@@ -810,6 +844,7 @@ function updateBC(){
   else if(currentView==='dashboard'){pt.textContent='Dashboard';bc.innerHTML=''}
   else if(currentView==='tags'){pt.textContent='Tag Manager';bc.innerHTML=''}
   else if(currentView==='focushistory'){pt.textContent='Focus History';bc.innerHTML=''}
+  else if(currentView==='templates'){pt.textContent='Templates';bc.innerHTML=''}
   else if(currentView==='area'){
     const a=areas.find(x=>x.id===activeAreaId);
     pt.textContent=a?`${a.icon} ${a.name}`:'';
@@ -1001,19 +1036,29 @@ async function renderCal(){
   const bd={};ct2.forEach(t=>{if(!bd[t.due_date])bd[t.due_date]=[];bd[t.due_date].push(t)});
   const mn=f.toLocaleDateString('en-US',{month:'long',year:'numeric'});
   const ts=new Date().toISOString().slice(0,10);
-  let h=`<div class="ch"><button class="material-icons-round" id="cp">chevron_left</button><span class="ctt">${mn}</span><button class="material-icons-round" id="cn">chevron_right</button></div><div class="cg">`;
+  const isCurrentMonth=calY===new Date().getFullYear()&&calM===new Date().getMonth();
+  let h=`<div class="ch"><button class="material-icons-round" id="cp">chevron_left</button><span class="ctt">${mn}</span><button class="material-icons-round" id="cn">chevron_right</button>${!isCurrentMonth?'<button id="cal-today" style="margin-left:8px;padding:4px 12px;border-radius:6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx);font-size:11px;cursor:pointer;font-family:inherit">Today</button>':''}</div><div class="cg">`;
   ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d=>h+=`<div class="cdh">${d}</div>`);
   const cur=new Date(sd);while(cur<=ed){
     const ds=cur.toISOString().slice(0,10);const dt=bd[ds]||[];
-    h+=`<div class="cc ${ds===ts?'today':''} ${cur.getMonth()!==calM?'om':''}"><div class="cd">${cur.getDate()}</div>`;
+    h+=`<div class="cc ${ds===ts?'today':''} ${cur.getMonth()!==calM?'om':''}" data-date="${ds}"><div class="cd">${cur.getDate()}</div>`;
     dt.slice(0,3).forEach(t=>h+=`<span class="ctd" data-id="${t.id}" style="background:${escA(t.goal_color||'var(--brand)')}">${esc(t.title.substring(0,18))}</span>`);
     if(dt.length>3)h+=`<span style="font-size:9px;color:var(--txd)">+${dt.length-3}</span>`;
     h+=`</div>`;cur.setDate(cur.getDate()+1);}
   h+=`</div>`;c.innerHTML=h;
   $('cp').addEventListener('click',()=>{calM--;if(calM<0){calM=11;calY--}renderCal()});
   $('cn').addEventListener('click',()=>{calM++;if(calM>11){calM=0;calY++}renderCal()});
+  if(!isCurrentMonth&&$('cal-today'))$('cal-today').addEventListener('click',()=>{calM=new Date().getMonth();calY=new Date().getFullYear();renderCal()});
   // Clickable calendar events
   c.querySelectorAll('.ctd[data-id]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();openDP(Number(el.dataset.id))}));
+  // Click empty day cell to create task for that date
+  c.querySelectorAll('.cc[data-date]').forEach(cell=>cell.addEventListener('dblclick',e=>{
+    if(e.target.closest('.ctd'))return;
+    const date=cell.dataset.date;
+    openQuickCapture();
+    // Pre-fill date in quick capture
+    setTimeout(()=>{const inp=document.querySelector('.qc-input input');if(inp)inp.value=`due:${date} `},100);
+  }));
 }
 
 // ─── Task card HTML ───
@@ -1343,7 +1388,7 @@ function renderDPBody(){
     <div class="dp-row"><div><label>Due Date</label><input type="date" id="dp-due" value="${t.due_date||''}"></div>
     <div><label>Priority</label><select id="dp-pri"><option value="0" ${t.priority===0?'selected':''}>None</option><option value="1" ${t.priority===1?'selected':''}>Normal</option><option value="2" ${t.priority===2?'selected':''}>High</option><option value="3" ${t.priority===3?'selected':''}>Critical</option></select></div></div>
     <div class="dp-row"><div><label>Assigned To</label><input type="text" id="dp-asg" value="${escA(t.assigned_to||'')}"></div>
-    <div><label>Recurring</label><select id="dp-rec"><option value="">None</option><option value="daily" ${t.recurring==='daily'?'selected':''}>Daily</option><option value="weekdays" ${t.recurring==='weekdays'?'selected':''}>Weekdays</option><option value="weekly" ${t.recurring==='weekly'?'selected':''}>Weekly</option><option value="every-2-weeks" ${t.recurring==='every-2-weeks'?'selected':''}>Every 2 Weeks</option><option value="monthly" ${t.recurring==='monthly'?'selected':''}>Monthly</option><option value="yearly" ${t.recurring==='yearly'?'selected':''}>Yearly</option><option value="custom" ${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)?'selected':''}>Custom…</option></select><div id="dp-rec-custom" style="display:${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)&&t.recurring!=='every-2-weeks'?'flex':'none'};gap:6px;margin-top:4px;align-items:center"><span style="font-size:11px">Every</span><input type="number" id="dp-rec-n" min="1" max="365" style="width:60px" value="${(t.recurring?.match(/^every-(\d+)/)||[])[1]||'3'}"><select id="dp-rec-unit" style="width:80px"><option value="days" ${t.recurring?.endsWith('-days')?'selected':''}>Days</option><option value="weeks" ${t.recurring?.endsWith('-weeks')?'selected':''}>Weeks</option></select></div></div></div>
+    <div><label>Recurring</label><select id="dp-rec"><option value="">None</option><option value="daily" ${t.recurring==='daily'?'selected':''}>Daily</option><option value="weekdays" ${t.recurring==='weekdays'?'selected':''}>Weekdays</option><option value="weekly" ${t.recurring==='weekly'?'selected':''}>Weekly</option><option value="every-2-weeks" ${t.recurring==='every-2-weeks'?'selected':''}>Every 2 Weeks</option><option value="monthly" ${t.recurring==='monthly'?'selected':''}>Monthly</option><option value="yearly" ${t.recurring==='yearly'?'selected':''}>Yearly</option><option value="custom" ${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)?'selected':''}>Custom…</option></select><div id="dp-rec-custom" style="display:${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)&&t.recurring!=='every-2-weeks'?'flex':'none'};gap:6px;margin-top:4px;align-items:center"><span style="font-size:11px">Every</span><input type="number" id="dp-rec-n" min="1" max="365" style="width:60px" value="${(t.recurring?.match(/^every-(\d+)/)||[])[1]||'3'}"><select id="dp-rec-unit" style="width:80px"><option value="days" ${t.recurring?.endsWith('-days')?'selected':''}>Days</option><option value="weeks" ${t.recurring?.endsWith('-weeks')?'selected':''}>Weeks</option></select></div><div id="dp-rec-preview" style="display:${t.recurring?'block':'none'};margin-top:6px;padding:6px 8px;background:var(--bg-c);border-radius:4px;font-size:10px;color:var(--tx2)"><span class="material-icons-round" style="font-size:12px;vertical-align:middle">repeat</span> <span id="dp-rec-txt">${esc(t.recurring||'')} </span></div></div></div>
     <div><label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:10px"><input type="checkbox" id="dp-md" ${t.my_day?'checked':''} style="width:auto;margin:0">Add to My Day</label></div>
     <label>Tags</label><div class="tg-wrap" id="tg-wrap"><div class="tgi" id="tgi"></div></div>
     <label>Subtasks</label><div class="sta"><input type="text" id="st-input" placeholder="Add subtask..."><button id="st-add">Add</button></div><div class="stl" id="stl"></div>
@@ -1354,8 +1399,14 @@ function renderDPBody(){
   renderDeps();
   $('st-add').addEventListener('click',addSubtask);
   $('st-input').addEventListener('keydown',e=>{if(e.key==='Enter')addSubtask()});
-  // Custom recurring toggle
-  $('dp-rec').addEventListener('change',()=>{$('dp-rec-custom').style.display=$('dp-rec').value==='custom'?'flex':'none'});
+  // Custom recurring toggle + preview
+  $('dp-rec').addEventListener('change',()=>{
+    const v=$('dp-rec').value;
+    $('dp-rec-custom').style.display=v==='custom'?'flex':'none';
+    $('dp-rec-preview').style.display=v?'block':'none';
+    const labels={daily:'Repeats every day',weekdays:'Repeats Mon–Fri',weekly:'Repeats every week','every-2-weeks':'Repeats every 2 weeks',monthly:'Repeats every month',yearly:'Repeats every year',custom:'Custom interval'};
+    $('dp-rec-txt').textContent=labels[v]||v;
+  });
   // Markdown preview toggle
   const noteEl=$('dp-note'),prevEl=$('dp-note-preview');
   function updateNotePrev(){const v=noteEl.value.trim();if(v){prevEl.innerHTML=renderMd(v);prevEl.style.display='block'}else{prevEl.style.display='none'}}
@@ -2171,6 +2222,134 @@ async function renderFocusHistory(){
   c.innerHTML=h;
 }
 
+// ─── TEMPLATES ───
+async function renderTemplates(){
+  const tmpls=await api.get('/api/templates');
+  const c=$('ct');
+  let h='<div class="tmpl-grid">';
+  // "Create new" card
+  h+=`<div class="tmpl-card" id="tmpl-new" style="border-style:dashed;display:flex;align-items:center;justify-content:center;min-height:140px;flex-direction:column;gap:8px;opacity:.6">
+    <span class="material-icons-round" style="font-size:36px;color:var(--brand)">add_circle_outline</span>
+    <span style="font-size:13px;font-weight:500">Create Template</span>
+  </div>`;
+  tmpls.forEach(t=>{
+    h+=`<div class="tmpl-card" data-tid="${t.id}">
+      <div class="tmpl-head"><span class="tmpl-icon">${esc(t.icon)}</span><span class="tmpl-name">${esc(t.name)}</span><button class="tmpl-del material-icons-round" data-tid="${t.id}" title="Delete">delete_outline</button></div>
+      ${t.description?`<div class="tmpl-desc">${esc(t.description)}</div>`:''}
+      <div class="tmpl-tasks">${t.tasks.map(tk=>`<span>${esc(tk.title)}</span>`).join('')}</div>
+    </div>`;
+  });
+  h+='</div>';
+  c.innerHTML=h;
+  // Create new template
+  $('tmpl-new').addEventListener('click',openNewTemplateForm);
+  // Click to apply
+  c.querySelectorAll('.tmpl-card[data-tid]').forEach(card=>{
+    card.addEventListener('click',e=>{
+      if(e.target.closest('.tmpl-del'))return;
+      openApplyTemplate(Number(card.dataset.tid),tmpls.find(t=>t.id===Number(card.dataset.tid)));
+    });
+  });
+  // Delete template
+  c.querySelectorAll('.tmpl-del').forEach(btn=>{
+    btn.addEventListener('click',async e=>{
+      e.stopPropagation();
+      if(!confirm('Delete this template?'))return;
+      await api.del('/api/templates/'+btn.dataset.tid);
+      renderTemplates();
+    });
+  });
+}
+
+function openNewTemplateForm(){
+  const ov=$('tmpl-apply-ov'),box=$('tmpl-apply-box');
+  let h=`<h3>Create Template</h3>
+    <div style="margin:12px 0"><label style="font-size:11px;color:var(--txd);display:block;margin-bottom:3px">Template Name</label>
+    <input type="text" id="tmpl-f-name" placeholder="e.g., Sprint Planning" style="width:100%;padding:8px 10px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px;box-sizing:border-box"></div>
+    <div style="margin-bottom:12px"><label style="font-size:11px;color:var(--txd);display:block;margin-bottom:3px">Description</label>
+    <input type="text" id="tmpl-f-desc" placeholder="Optional description" style="width:100%;padding:8px 10px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px;box-sizing:border-box"></div>
+    <div style="margin-bottom:12px"><label style="font-size:11px;color:var(--txd);display:block;margin-bottom:3px">Icon</label>
+    <select id="tmpl-f-icon" style="padding:8px 10px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px"><option value="📋">📋</option><option value="🏃">🏃</option><option value="📅">📅</option><option value="🐛">🐛</option><option value="✍️">✍️</option><option value="🚀">🚀</option><option value="🔧">🔧</option><option value="📊">📊</option><option value="🎯">🎯</option><option value="💡">💡</option></select></div>
+    <div style="margin-bottom:12px"><label style="font-size:11px;color:var(--txd);display:block;margin-bottom:3px">Tasks (one per line)</label>
+    <textarea id="tmpl-f-tasks" rows="6" placeholder="Task 1\nTask 2\nTask 3" style="width:100%;padding:8px 10px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box"></textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn-c" id="tmpl-f-cancel" style="padding:8px 16px;border-radius:6px;border:1px solid var(--brd);cursor:pointer;font-family:inherit">Cancel</button>
+      <button class="btn-s" id="tmpl-f-save" style="padding:8px 16px;border-radius:6px;border:none;cursor:pointer;font-family:inherit">Create Template</button>
+    </div>`;
+  box.innerHTML=h;ov.classList.add('active');
+  $('tmpl-f-cancel').addEventListener('click',()=>ov.classList.remove('active'));
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('active')});
+  $('tmpl-f-save').addEventListener('click',async()=>{
+    const name=$('tmpl-f-name').value.trim();
+    const lines=$('tmpl-f-tasks').value.split('\n').map(l=>l.trim()).filter(Boolean);
+    if(!name){showToast('Template name required');return}
+    if(!lines.length){showToast('At least one task required');return}
+    await api.post('/api/templates',{name,description:$('tmpl-f-desc').value.trim(),icon:$('tmpl-f-icon').value,tasks:lines.map(l=>({title:l,priority:0,subtasks:[]}))});
+    ov.classList.remove('active');
+    renderTemplates();showToast('Template created!');
+  });
+}
+
+function openApplyTemplate(tid,tmpl){
+  const ov=$('tmpl-apply-ov'),box=$('tmpl-apply-box');
+  // Load goals first
+  loadAreasWithGoals().then(()=>{
+  let h=`<h3>${esc(tmpl.icon)} ${esc(tmpl.name)}</h3>
+    <p style="color:var(--tx2);font-size:12px;margin-bottom:12px">${tmpl.tasks.length} tasks will be created</p>
+    <div style="margin-bottom:12px"><label style="font-size:11px;color:var(--txd);display:block;margin-bottom:3px">Select Goal</label>
+    <select id="tmpl-a-goal" style="width:100%;padding:8px 10px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px;box-sizing:border-box">`;
+  areas.forEach(a=>{
+    const aGoals=(a.goals||[]);
+    aGoals.forEach(g=>{h+=`<option value="${g.id}">${esc(a.icon)} ${esc(a.name)} › ${esc(g.title)}</option>`});
+  });
+  h+=`</select></div>
+    <div style="max-height:200px;overflow-y:auto;margin-bottom:12px;background:var(--bg-c);border-radius:6px;padding:8px">`;
+  tmpl.tasks.forEach(t=>{
+    h+=`<div style="font-size:12px;padding:4px 0;display:flex;align-items:center;gap:6px"><span class="material-icons-round" style="font-size:14px;color:var(--txd)">task_alt</span>${esc(t.title)}${t.subtasks?.length?` <span style="color:var(--txd);font-size:10px">(${t.subtasks.length} subtasks)</span>`:''}</div>`;
+  });
+  h+=`</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn-c" id="tmpl-a-cancel" style="padding:8px 16px;border-radius:6px;border:1px solid var(--brd);cursor:pointer;font-family:inherit">Cancel</button>
+      <button class="btn-s" id="tmpl-a-apply" style="padding:8px 16px;border-radius:6px;border:none;cursor:pointer;font-family:inherit">Apply Template</button>
+    </div>`;
+  box.innerHTML=h;ov.classList.add('active');
+  $('tmpl-a-cancel').addEventListener('click',()=>ov.classList.remove('active'));
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('active')});
+  $('tmpl-a-apply').addEventListener('click',async()=>{
+    const goalId=Number($('tmpl-a-goal').value);
+    if(!goalId){showToast('Select a goal');return}
+    const r=await api.post('/api/templates/'+tid+'/apply',{goalId});
+    ov.classList.remove('active');
+    showToast(`✅ Created ${r.created.length} tasks from template`);
+    await loadAreas();render();
+  });
+  });
+}
+// Populate goals for template apply dropdown  
+async function loadAreasWithGoals(){
+  for(const a of areas){
+    a.goals=await api.get('/api/areas/'+a.id+'/goals');
+  }
+}
+
+// ─── VIM NAVIGATION ───
+let vimIdx=-1;
+function getVisibleCards(){return Array.from(document.querySelectorAll('#ct .tc[data-id]'))}
+function vimHighlight(idx){
+  const cards=getVisibleCards();
+  cards.forEach(c=>c.classList.remove('vim-focus'));
+  if(idx>=0&&idx<cards.length){
+    cards[idx].classList.add('vim-focus');
+    cards[idx].scrollIntoView({block:'nearest',behavior:'smooth'});
+  }
+}
+function vimMove(delta){
+  const cards=getVisibleCards();
+  if(!cards.length)return;
+  vimIdx=Math.max(0,Math.min(cards.length-1,vimIdx+delta));
+  vimHighlight(vimIdx);
+}
+
 // ─── KEYBOARD SHORTCUTS ───
 $('kb-btn').addEventListener('click',()=>$('kb-ov').classList.add('active'));
 $('kb-ov').addEventListener('click',e=>{if(e.target===$('kb-ov'))$('kb-ov').classList.remove('active')});
@@ -2202,12 +2381,40 @@ document.addEventListener('keydown',e=>{
   if(e.key==='9'){go('tags');return}
   if(e.key==='0'){go('focushistory');return}
   if(e.key==='m'||e.key==='M'){toggleMultiSelect();return}
+  // Vim navigation: j/k/x/Enter/gg/G
+  if(e.key==='j'){e.preventDefault();vimMove(1);return}
+  if(e.key==='k'&&!e.ctrlKey&&!e.metaKey){e.preventDefault();vimMove(-1);return}
+  if(e.key==='G'&&!e.shiftKey){/* handled by gg below */}
+  if(e.key==='G'&&e.shiftKey){const cards=getVisibleCards();if(cards.length){vimIdx=cards.length-1;vimHighlight(vimIdx)}return}
+  if(e.key==='g'){
+    // Wait for second 'g' (gg = go to first)
+    if(!window._vimG){window._vimG=true;setTimeout(()=>{window._vimG=false},400);return}
+    window._vimG=false;vimIdx=0;vimHighlight(0);return;
+  }
+  if(e.key==='x'){
+    // Complete focused task
+    const cards=getVisibleCards();
+    if(vimIdx>=0&&vimIdx<cards.length){
+      const tk=cards[vimIdx].querySelector('.tk');
+      if(tk)tk.click();
+    }
+    return;
+  }
+  if(e.key==='Enter'){
+    // Open focused task in detail panel
+    const cards=getVisibleCards();
+    if(vimIdx>=0&&vimIdx<cards.length){
+      const id=Number(cards[vimIdx].dataset.id);
+      if(id)openDP(id);
+    }
+    return;
+  }
   if(e.key==='f'||e.key==='F'){/* focus needs a task selected */return}
 });
 // Also handle Ctrl+K when in inputs
 document.addEventListener('keydown',e=>{if(e.key==='k'&&(e.ctrlKey||e.metaKey)){e.preventDefault();openSearch()}});
 
-function go(view){currentView=view;activeAreaId=null;activeGoalId=null;
+function go(view){currentView=view;activeAreaId=null;activeGoalId=null;vimIdx=-1;
   document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));
   document.querySelector(`.ni[data-view="${view}"]`)?.classList.add('active');render()}
 </script>

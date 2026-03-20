@@ -26,6 +26,7 @@ function cleanDb() {
   db.exec('DELETE FROM goals');
   db.exec('DELETE FROM life_areas');
   db.exec('DELETE FROM tags');
+  db.exec('DELETE FROM task_templates');
 }
 
 function teardown() {

@@ -85,6 +85,16 @@ db.exec(`CREATE TABLE IF NOT EXISTS task_deps (
   FOREIGN KEY (blocked_by_id) REFERENCES tasks(id) ON DELETE CASCADE
 )`);
 
+// ─── Task Templates table ───
+db.exec(`CREATE TABLE IF NOT EXISTS task_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  icon TEXT DEFAULT '📋',
+  tasks TEXT NOT NULL DEFAULT '[]',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
+
 // Seed
 const cnt = db.prepare('SELECT COUNT(*) as c FROM life_areas').get();
 if (cnt.c === 0) {
@@ -101,6 +111,51 @@ if (tc.c === 0) {
   const it = db.prepare('INSERT INTO tags (name,color) VALUES (?,?)');
   it.run('urgent','#EF4444'); it.run('blocked','#F59E0B'); it.run('quick-win','#22C55E');
   it.run('research','#7C3AED'); it.run('waiting','#64748B');
+}
+
+// Seed: built-in templates
+const tmplC = db.prepare('SELECT COUNT(*) as c FROM task_templates').get();
+if (tmplC.c === 0) {
+  const it = db.prepare('INSERT INTO task_templates (name, description, icon, tasks) VALUES (?, ?, ?, ?)');
+  it.run('Sprint Planning', 'Agile sprint setup checklist', '🏃', JSON.stringify([
+    { title: 'Review previous sprint retro', priority: 1, subtasks: [] },
+    { title: 'Groom & estimate backlog', priority: 2, subtasks: ['Clarify acceptance criteria', 'Break down large tickets', 'Add story point estimates'] },
+    { title: 'Set sprint goal', priority: 2, subtasks: [] },
+    { title: 'Assign stories to team', priority: 1, subtasks: [] },
+    { title: 'Schedule sprint ceremonies', priority: 1, subtasks: ['Daily standup', 'Mid-sprint check-in', 'Sprint review', 'Retro'] }
+  ]));
+  it.run('Weekly Review', 'GTD-style weekly review', '📅', JSON.stringify([
+    { title: 'Clear inbox to zero', priority: 2, subtasks: [] },
+    { title: 'Review calendar (next 2 weeks)', priority: 1, subtasks: [] },
+    { title: 'Review waiting-for list', priority: 1, subtasks: [] },
+    { title: 'Review someday/maybe', priority: 0, subtasks: [] },
+    { title: 'Define next week\'s top 3 priorities', priority: 3, subtasks: [] }
+  ]));
+  it.run('Bug Fix', 'Systematic debugging workflow', '🐛', JSON.stringify([
+    { title: 'Reproduce the bug', priority: 2, subtasks: ['Document steps to reproduce', 'Identify environment/browser'] },
+    { title: 'Identify root cause', priority: 2, subtasks: [] },
+    { title: 'Write failing test', priority: 2, subtasks: [] },
+    { title: 'Implement fix', priority: 2, subtasks: [] },
+    { title: 'Verify fix + run test suite', priority: 1, subtasks: [] },
+    { title: 'Update docs if needed', priority: 0, subtasks: [] }
+  ]));
+  it.run('Content Creation', 'Blog post or article pipeline', '✍️', JSON.stringify([
+    { title: 'Research & outline', priority: 1, subtasks: ['Gather references', 'Create outline structure'] },
+    { title: 'Write first draft', priority: 2, subtasks: [] },
+    { title: 'Edit & proofread', priority: 1, subtasks: [] },
+    { title: 'Add images / formatting', priority: 0, subtasks: [] },
+    { title: 'Publish & share', priority: 1, subtasks: ['Publish on platform', 'Share on social media'] }
+  ]));
+  it.run('Project Launch', 'Ship a feature or product', '🚀', JSON.stringify([
+    { title: 'Finalize scope & requirements', priority: 3, subtasks: [] },
+    { title: 'Complete implementation', priority: 3, subtasks: [] },
+    { title: 'Write tests', priority: 2, subtasks: ['Unit tests', 'Integration tests'] },
+    { title: 'Code review', priority: 2, subtasks: [] },
+    { title: 'QA / manual testing', priority: 2, subtasks: [] },
+    { title: 'Deploy to staging', priority: 1, subtasks: [] },
+    { title: 'Deploy to production', priority: 1, subtasks: [] },
+    { title: 'Monitor post-launch', priority: 1, subtasks: [] }
+  ]));
 }
 
 app.use(express.json());
@@ -823,6 +878,50 @@ app.put('/api/tasks/:id/deps', (req, res) => {
   const ins = db.prepare('INSERT OR IGNORE INTO task_deps (task_id, blocked_by_id) VALUES (?, ?)');
   valid.forEach(bid => ins.run(id, bid));
   res.json({ ok: true, blockedBy: db.prepare('SELECT t.id, t.title, t.status FROM tasks t JOIN task_deps d ON t.id=d.blocked_by_id WHERE d.task_id=?').all(id) });
+});
+
+// ─── Task Templates ───
+app.get('/api/templates', (req, res) => {
+  const rows = db.prepare('SELECT * FROM task_templates ORDER BY created_at DESC').all();
+  res.json(rows.map(r => ({ ...r, tasks: JSON.parse(r.tasks) })));
+});
+
+app.post('/api/templates', (req, res) => {
+  const { name, description, icon, tasks } = req.body;
+  if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  if (!Array.isArray(tasks) || !tasks.length) return res.status(400).json({ error: 'Tasks array required' });
+  const safeTasks = tasks.map(t => ({ title: String(t.title || '').slice(0, 500), priority: [0,1,2,3].includes(t.priority) ? t.priority : 0, subtasks: Array.isArray(t.subtasks) ? t.subtasks.map(s => String(s).slice(0, 500)) : [] }));
+  const r = db.prepare('INSERT INTO task_templates (name, description, icon, tasks) VALUES (?, ?, ?, ?)').run(name.trim().slice(0, 200), (description || '').slice(0, 500), (icon || '📋').slice(0, 10), JSON.stringify(safeTasks));
+  res.json({ id: r.lastInsertRowid, name: name.trim(), description, icon: icon || '📋', tasks: safeTasks });
+});
+
+app.delete('/api/templates/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  db.prepare('DELETE FROM task_templates WHERE id=?').run(id);
+  res.json({ ok: true });
+});
+
+app.post('/api/templates/:id/apply', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const { goalId } = req.body;
+  if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'goalId required' });
+  const tmpl = db.prepare('SELECT * FROM task_templates WHERE id=?').get(id);
+  if (!tmpl) return res.status(404).json({ error: 'Template not found' });
+  const tasks = JSON.parse(tmpl.tasks);
+  const created = [];
+  const insTask = db.prepare('INSERT INTO tasks (goal_id, title, priority, status) VALUES (?, ?, ?, ?)');
+  const insSub = db.prepare('INSERT INTO subtasks (task_id, title, position) VALUES (?, ?, ?)');
+  const txn = db.transaction(() => {
+    for (const t of tasks) {
+      const r = insTask.run(goalId, t.title, t.priority || 0, 'todo');
+      if (t.subtasks) t.subtasks.forEach((s, i) => insSub.run(r.lastInsertRowid, s, i));
+      created.push({ id: r.lastInsertRowid, title: t.title });
+    }
+  });
+  txn();
+  res.json({ ok: true, created });
 });
 
 // SPA fallback
