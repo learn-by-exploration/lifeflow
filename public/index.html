@@ -303,6 +303,42 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .qc-box input:focus{border-color:var(--brand)}.qc-row{display:flex;gap:8px}.qc-row>*{flex:1}
 .qc-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:4px}
 
+/* Inline task editing */
+.tt[contenteditable]{cursor:text;outline:none;border-radius:3px;padding:1px 4px;margin:-1px -4px}
+.tt[contenteditable]:focus{background:var(--bg-c);box-shadow:0 0 0 2px var(--brand)}
+
+/* Command palette */
+.cp-mode-label{display:flex;align-items:center;gap:6px;padding:8px 14px;font-size:11px;color:var(--brand);font-weight:600;border-bottom:1px solid var(--brd)}
+.cp-mode-label .material-icons-round{font-size:14px}
+.sr-item .cp-icon{font-size:16px;color:var(--txd);width:20px;text-align:center}
+.sr-item .cp-key{margin-left:auto;font-size:10px;color:var(--txd);background:var(--bg-c);padding:2px 6px;border-radius:3px;font-family:monospace}
+
+/* Daily review overlay */
+.dr-ov{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:250;display:none;align-items:center;justify-content:center}
+.dr-ov.active{display:flex}
+.dr-box{width:600px;max-width:95vw;max-height:85vh;background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--r);box-shadow:var(--shd);overflow:hidden;display:flex;flex-direction:column}
+.dr-header{padding:18px 20px 12px;border-bottom:1px solid var(--brd)}
+.dr-header h2{font-size:16px;font-weight:700;margin:0}
+.dr-header p{font-size:11px;color:var(--tx2);margin-top:4px}
+.dr-steps{display:flex;gap:0;padding:0 20px;border-bottom:1px solid var(--brd)}
+.dr-step{flex:1;padding:10px 0;text-align:center;font-size:11px;font-weight:600;color:var(--txd);border-bottom:2px solid transparent;cursor:pointer}
+.dr-step.active{color:var(--brand);border-bottom-color:var(--brand)}
+.dr-step.done{color:var(--ok)}
+.dr-body{flex:1;overflow-y:auto;padding:16px 20px}
+.dr-section{margin-bottom:16px}
+.dr-section h3{font-size:13px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.dr-task{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--rs);font-size:12px;border:1px solid var(--brd);margin-bottom:4px;cursor:pointer}
+.dr-task:hover{background:var(--bg-h)}
+.dr-task.selected{background:rgba(37,99,235,.1);border-color:var(--brand)}
+.dr-task .material-icons-round{font-size:14px;color:var(--txd)}
+.dr-stat{display:flex;gap:16px;flex-wrap:wrap}
+.dr-stat-card{background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);padding:12px;text-align:center;flex:1;min-width:100px}
+.dr-stat-card .num{font-size:22px;font-weight:700}
+.dr-stat-card .lab{font-size:10px;color:var(--txd);text-transform:uppercase}
+.dr-footer{padding:12px 20px;border-top:1px solid var(--brd);display:flex;justify-content:space-between;align-items:center}
+.dr-footer .btn-skip{font-size:12px;color:var(--txd);background:none;border:none;cursor:pointer;font-family:inherit}
+.dr-footer .btn-next{font-size:12px;padding:8px 20px}
+
 /* Dashboard */
 .ds-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:22px}
 .ds-card{background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--r);padding:16px;text-align:center}
@@ -558,6 +594,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <div class="ni" data-view="focushistory"><span class="material-icons-round">timer</span>Focus History</div>
     <div class="ni" data-view="settings"><span class="material-icons-round">settings</span>Settings</div>
   </div>
+  <div style="padding:8px 12px"><button class="ab" id="dr-btn" style="width:100%;background:var(--brand);color:#fff;border-color:var(--brand)"><span class="material-icons-round">self_improvement</span>Daily Review</button></div>
   <div class="ns"><div class="ns-label">Life Areas</div></div>
   <div class="al" id="area-list"></div>
   <div class="sb-bot">
@@ -621,7 +658,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
       <select id="sr-status" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--txp);border-radius:var(--rs)"><option value="">Any Status</option><option value="todo">To Do</option><option value="done">Done</option></select>
     </div>
     <div class="sr-results" id="sr-results"></div>
-    <div class="sr-hint"><span>↑↓ Navigate · Enter Open · Esc Close</span><span>Ctrl+K to search</span></div>
+    <div class="sr-hint"><span>↑↓ Navigate · Enter Select · Esc Close</span><span>Type &gt; for commands</span></div>
   </div>
 </div>
 
@@ -657,6 +694,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <div class="kb-row"><span>Matrix</span><span class="kb-key">7</span></div>
     <div class="kb-row"><span>Activity Log</span><span class="kb-key">8</span></div>
     <div class="kb-row"><span>Multi-select mode</span><span class="kb-key">M</span></div>
+    <div class="kb-row"><span>Daily Review</span><span class="kb-key">R</span></div>
+    <div class="kb-row"><span>Command Palette</span><span class="kb-key">Ctrl+K → &gt;</span></div>
     <div class="kb-row" style="margin-top:10px;font-size:10px;font-weight:600;color:var(--txd)"><span>Vim Navigation (task lists)</span><span></span></div>
     <div class="kb-row"><span>Move down / up</span><span class="kb-key">J</span> <span class="kb-key">K</span></div>
     <div class="kb-row"><span>Complete selected task</span><span class="kb-key">X</span></div>
@@ -754,6 +793,26 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
   <div class="tmpl-apply-box" id="tmpl-apply-box">
     <h3 style="margin-bottom:12px">Apply Template</h3>
     <div id="tmpl-apply-content"></div>
+  </div>
+</div>
+
+<!-- Daily Review overlay -->
+<div class="dr-ov" id="dr-ov">
+  <div class="dr-box">
+    <div class="dr-header">
+      <h2 id="dr-greeting">Good morning</h2>
+      <p id="dr-date"></p>
+    </div>
+    <div class="dr-steps">
+      <div class="dr-step active" data-step="1">1. Yesterday</div>
+      <div class="dr-step" data-step="2">2. Today's Plan</div>
+      <div class="dr-step" data-step="3">3. Pick from Backlog</div>
+    </div>
+    <div class="dr-body" id="dr-body"></div>
+    <div class="dr-footer">
+      <button class="btn-skip" id="dr-skip">Skip</button>
+      <button class="btn-s btn-next" id="dr-next">Next →</button>
+    </div>
   </div>
 </div>
 
@@ -1168,6 +1227,7 @@ function attachTE(){
   document.querySelectorAll('.et').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();openDP(Number(el.dataset.id))}));
   document.querySelectorAll('.dt').forEach(el=>el.addEventListener('click',async e=>{
     e.stopPropagation();const id=Number(el.dataset.id);
+    if(appSettings.confirmDelete==='true'&&!confirm('Delete this task?'))return;
     // Fetch task data first for undo
     let tk; try{ const r=await fetch('/api/tasks/'+id); tk=await r.json(); }catch{}
     await api.del('/api/tasks/'+id);
@@ -1193,8 +1253,35 @@ function attachTE(){
   }));
   // Click card to open detail
   document.querySelectorAll('.tc').forEach(card=>card.addEventListener('click',e=>{
-    if(e.target.closest('.tk,.ta,.tc-subs,.tc-expand'))return;openDP(Number(card.dataset.id));
+    if(e.target.closest('.tk,.ta,.tc-subs,.tc-expand,.tt[contenteditable]'))return;openDP(Number(card.dataset.id));
   }));
+  // Inline title editing
+  document.querySelectorAll('.tt').forEach(ttEl=>{
+    ttEl.addEventListener('dblclick',e=>{
+      e.stopPropagation();
+      const card=ttEl.closest('.tc');if(!card)return;
+      const id=Number(card.dataset.id);
+      ttEl.setAttribute('contenteditable','true');
+      ttEl.focus();
+      // Select all text
+      const range=document.createRange();range.selectNodeContents(ttEl);
+      const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+      const save=async()=>{
+        ttEl.removeAttribute('contenteditable');
+        const newTitle=ttEl.textContent.trim();
+        if(newTitle&&newTitle!==ttEl.dataset.orig){
+          await api.put('/api/tasks/'+id,{title:newTitle});
+          await loadAreas();
+        }
+      };
+      ttEl.dataset.orig=ttEl.textContent;
+      ttEl.addEventListener('blur',save,{once:true});
+      ttEl.addEventListener('keydown',ke=>{
+        if(ke.key==='Enter'){ke.preventDefault();ttEl.blur()}
+        if(ke.key==='Escape'){ttEl.textContent=ttEl.dataset.orig;ttEl.blur()}
+      });
+    });
+  });
   // Focus timer buttons
   document.querySelectorAll('.ft-start').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();startFocusTimer(Number(b.dataset.id))}));
   // Multi-select checkboxes
@@ -1817,17 +1904,59 @@ document.addEventListener('click',e=>{if(!e.target.closest('#bell-wrap'))$('bell
 // Refresh bell every 60 seconds
 setInterval(loadBellReminders,60000);
 
-// ─── SEARCH ───
-let srTimer=null,srIdx=-1;
-function openSearch(){
-  $('sr-ov').classList.add('active');$('sr-inp').value='';$('sr-results').innerHTML='<div class="sr-empty">Type to search tasks, notes, and subtasks</div>';$('sr-inp').focus();srIdx=-1;
-  // Populate filter dropdowns
+// ─── SEARCH + COMMAND PALETTE ───
+let srTimer=null,srIdx=-1,cpMode=false;
+const CP_COMMANDS=[
+  {id:'go-myday',label:'Go to My Day',icon:'wb_sunny',key:'1',action:()=>{closeSearch();go('myday')}},
+  {id:'go-all',label:'Go to All Tasks',icon:'list',key:'2',action:()=>{closeSearch();go('all')}},
+  {id:'go-board',label:'Go to Board',icon:'view_kanban',key:'3',action:()=>{closeSearch();go('board')}},
+  {id:'go-calendar',label:'Go to Calendar',icon:'calendar_month',key:'4',action:()=>{closeSearch();go('calendar')}},
+  {id:'go-dashboard',label:'Go to Dashboard',icon:'dashboard',key:'5',action:()=>{closeSearch();go('dashboard')}},
+  {id:'go-weekly',label:'Go to Weekly Plan',icon:'view_week',key:'6',action:()=>{closeSearch();go('weekly')}},
+  {id:'go-matrix',label:'Go to Eisenhower Matrix',icon:'grid_view',key:'7',action:()=>{closeSearch();go('matrix')}},
+  {id:'go-logbook',label:'Go to Activity Log',icon:'history',key:'8',action:()=>{closeSearch();go('logbook')}},
+  {id:'go-settings',label:'Go to Settings',icon:'settings',key:'',action:()=>{closeSearch();go('settings')}},
+  {id:'go-templates',label:'Go to Templates',icon:'content_copy',key:'',action:()=>{closeSearch();go('templates')}},
+  {id:'go-tags',label:'Go to Tag Manager',icon:'label',key:'9',action:()=>{closeSearch();go('tags')}},
+  {id:'add-task',label:'Quick Add Task',icon:'add_circle',key:'N',action:()=>{closeSearch();openQuickCapture()}},
+  {id:'daily-review',label:'Start Daily Review',icon:'self_improvement',key:'',action:()=>{closeSearch();openDailyReview()}},
+  {id:'focus-timer',label:'Start Focus Timer',icon:'timer',key:'',action:()=>{closeSearch();const t=tasks.find(x=>x.status!=='done');if(t)startFocusTimer(t.id)}},
+  {id:'toggle-theme',label:'Switch Theme',icon:'palette',key:'',action:()=>{closeSearch();go('settings')}},
+  {id:'export-data',label:'Export Data (JSON)',icon:'download',key:'',action:async()=>{closeSearch();go('settings');setTimeout(()=>$('set-export')?.click(),200)}},
+  {id:'multi-select',label:'Toggle Multi-Select Mode',icon:'checklist',key:'M',action:()=>{closeSearch();toggleMultiSelect()}},
+  {id:'shortcuts',label:'Show Keyboard Shortcuts',icon:'keyboard',key:'?',action:()=>{closeSearch();$('kb-ov').classList.add('active')}},
+];
+function openSearch(commandMode){
+  cpMode=!!commandMode;
+  $('sr-ov').classList.add('active');
+  $('sr-inp').value=cpMode?'>':'';
+  $('sr-inp').focus();srIdx=-1;
+  if(cpMode){renderCommands('')}
+  else{$('sr-results').innerHTML='<div class="sr-empty">Type to search · Press <b>&gt;</b> for commands</div>'}
+}
+function closeSearch(){$('sr-ov').classList.remove('active');cpMode=false}
+$('sr-ov').addEventListener('click',e=>{if(e.target===$('sr-ov'))closeSearch()});
+function renderCommands(filter){
+  const f=filter.toLowerCase();
+  const cmds=f?CP_COMMANDS.filter(c=>c.label.toLowerCase().includes(f)):CP_COMMANDS;
+  if(!cmds.length){$('sr-results').innerHTML='<div class="sr-empty">No matching commands</div>';srIdx=-1;return}
+  $('sr-results').innerHTML='<div class="cp-mode-label"><span class="material-icons-round">terminal</span>Commands</div>'+
+    cmds.map((c,i)=>`<div class="sr-item" data-cmd="${c.id}"><span class="material-icons-round cp-icon">${c.icon}</span><div class="sr-ti">${esc(c.label)}</div>${c.key?'<span class="cp-key">'+esc(c.key)+'</span>':''}</div>`).join('');
+  srIdx=-1;
+  $('sr-results').querySelectorAll('.sr-item').forEach(it=>it.addEventListener('click',()=>{
+    const cmd=CP_COMMANDS.find(c=>c.id===it.dataset.cmd);if(cmd)cmd.action();
+  }));
+}
 function runSearch(){
   clearTimeout(srTimer);
   srTimer=setTimeout(async()=>{
-    const q=$('sr-inp').value.trim();
+    const raw=$('sr-inp').value;
+    // Command palette mode
+    if(raw.startsWith('>')){cpMode=true;renderCommands(raw.slice(1).trim());return}
+    cpMode=false;
+    const q=raw.trim();
     const areaId=$('sr-area').value;const goalId=$('sr-goal').value;const status=$('sr-status').value;
-    if(!q&&!areaId&&!goalId&&!status){$('sr-results').innerHTML='<div class="sr-empty">Type to search tasks, notes, and subtasks</div>';srIdx=-1;return}
+    if(!q&&!areaId&&!goalId&&!status){$('sr-results').innerHTML='<div class="sr-empty">Type to search · Press <b>&gt;</b> for commands</div>';srIdx=-1;return}
     let url='/api/tasks/search?q='+encodeURIComponent(q);
     if(areaId)url+='&area_id='+areaId;if(goalId)url+='&goal_id='+goalId;if(status)url+='&status='+status;
     const r=await api.get(url);
@@ -1846,18 +1975,15 @@ function runSearch(){
 $('sr-inp').addEventListener('input',runSearch);
 $('sr-area').addEventListener('change',runSearch);
 $('sr-goal').addEventListener('change',runSearch);
-$('sr-status').addEventListener('change',runSearch       <div class="sr-ti">${esc(t.title)}</div>
-        <div class="sr-mt">${esc(t.area_icon||'')} ${esc(t.area_name||'')} › ${esc(t.goal_title||'')}${t.due_date?' · '+(od?'<span style="color:var(--err)">':'')+fmtDue(t.due_date)+(od?'</span>':''):''}</div>
-      </div>`}).join('');
-    srIdx=-1;
-    $('sr-results').querySelectorAll('.sr-item').forEach(it=>it.addEventListener('click',()=>{closeSearch();openDP(Number(it.dataset.id))}));
-  },200);
-});
+$('sr-status').addEventListener('change',runSearch);
 $('sr-inp').addEventListener('keydown',e=>{
   const items=$('sr-results').querySelectorAll('.sr-item');
   if(e.key==='ArrowDown'){e.preventDefault();srIdx=Math.min(srIdx+1,items.length-1);items.forEach((it,i)=>it.classList.toggle('sel',i===srIdx));items[srIdx]?.scrollIntoView({block:'nearest'})}
   else if(e.key==='ArrowUp'){e.preventDefault();srIdx=Math.max(srIdx-1,0);items.forEach((it,i)=>it.classList.toggle('sel',i===srIdx));items[srIdx]?.scrollIntoView({block:'nearest'})}
-  else if(e.key==='Enter'&&srIdx>=0&&items[srIdx]){closeSearch();openDP(Number(items[srIdx].dataset.id))}
+  else if(e.key==='Enter'&&srIdx>=0&&items[srIdx]){
+    if(cpMode){const cmd=CP_COMMANDS.find(c=>c.id===items[srIdx].dataset.cmd);if(cmd)cmd.action()}
+    else{closeSearch();openDP(Number(items[srIdx].dataset.id))}
+  }
   else if(e.key==='Escape')closeSearch();
 });
 
@@ -2493,6 +2619,125 @@ function applySettingsToTimer(){
   FT_MODES.focus.dur=fd*60;FT_MODES.short.dur=sb*60;FT_MODES.long.dur=lb*60;
 }
 
+// ─── DAILY REVIEW ───
+let drStep=1,drData={},drPickedIds=new Set();
+async function openDailyReview(){
+  drStep=1;drPickedIds=new Set();
+  // Load all needed data
+  const [stats,myDay,overdue,allTasks]=await Promise.all([
+    api.get('/api/stats'),api.get('/api/tasks/my-day'),api.get('/api/tasks/overdue'),api.get('/api/tasks/all')
+  ]);
+  drData={stats,myDay,overdue,allTasks,backlog:allTasks.filter(t=>t.status!=='done'&&!t.my_day)};
+  // Greeting
+  const h=new Date().getHours();
+  const greet=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+  $('dr-greeting').textContent=greet+' ☀️';
+  $('dr-date').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  renderDR();
+  $('dr-ov').classList.add('active');
+}
+function closeDR(){$('dr-ov').classList.remove('active')}
+function renderDR(){
+  // Update step tabs
+  document.querySelectorAll('.dr-step').forEach(s=>{
+    const n=Number(s.dataset.step);
+    s.classList.toggle('active',n===drStep);
+    s.classList.toggle('done',n<drStep);
+  });
+  const body=$('dr-body');
+  if(drStep===1)renderDRStep1(body);
+  else if(drStep===2)renderDRStep2(body);
+  else if(drStep===3)renderDRStep3(body);
+  $('dr-next').textContent=drStep===3?'Done ✓':'Next →';
+}
+function renderDRStep1(body){
+  const {stats}=drData;
+  const yesterday=stats.recentDone.filter(t=>{
+    if(!t.completed_at)return false;
+    const d=new Date(t.completed_at);const y=new Date();y.setDate(y.getDate()-1);
+    return d.toDateString()===y.toDateString();
+  });
+  let h=`<div class="dr-section"><h3><span class="material-icons-round" style="color:var(--ok)">check_circle</span>Yesterday's Accomplishments</h3>`;
+  if(yesterday.length){
+    yesterday.forEach(t=>h+=`<div class="dr-task" style="opacity:.8"><span class="material-icons-round" style="color:var(--ok)">done</span><span>${esc(t.title)}</span><span style="font-size:10px;color:var(--txd);margin-left:auto">${esc(t.goal_title||'')}</span></div>`);
+  }else{h+=`<p style="font-size:12px;color:var(--txd);padding:8px">No completed tasks yesterday. Fresh start today!</p>`}
+  h+=`</div>`;
+  h+=`<div class="dr-section"><h3><span class="material-icons-round" style="color:var(--brand)">insights</span>Weekly Snapshot</h3>`;
+  h+=`<div class="dr-stat">
+    <div class="dr-stat-card"><div class="num">${stats.thisWeek}</div><div class="lab">Done this week</div></div>
+    <div class="dr-stat-card"><div class="num">${stats.overdue}</div><div class="lab" style="color:${stats.overdue?'var(--err)':''}">Overdue</div></div>
+    <div class="dr-stat-card"><div class="num">${stats.dueToday}</div><div class="lab">Due today</div></div>
+  </div></div>`;
+  body.innerHTML=h;
+}
+function renderDRStep2(body){
+  const {myDay,overdue}=drData;
+  const todayTasks=myDay.filter(t=>t.status!=='done');
+  const overdueTasks=overdue.filter(t=>t.status!=='done');
+  let h='';
+  if(overdueTasks.length){
+    h+=`<div class="dr-section"><h3><span class="material-icons-round" style="color:var(--err)">warning</span>Overdue (${overdueTasks.length})</h3>`;
+    overdueTasks.forEach(t=>{
+      h+=`<div class="dr-task" data-id="${t.id}"><span class="material-icons-round" style="color:var(--err)">event_busy</span><span>${esc(t.title)}</span><span style="font-size:10px;color:var(--err);margin-left:auto">${fmtDue(t.due_date)}</span></div>`;
+    });
+    h+=`</div>`;
+  }
+  h+=`<div class="dr-section"><h3><span class="material-icons-round" style="color:var(--brand)">wb_sunny</span>Today's Plan (${todayTasks.length} tasks)</h3>`;
+  if(todayTasks.length){
+    todayTasks.forEach(t=>{
+      const od=t.due_date&&isOD(t.due_date);
+      h+=`<div class="dr-task" data-id="${t.id}"><span class="material-icons-round">${t.priority>=2?'priority_high':'task_alt'}</span><span>${esc(t.title)}</span>${t.due_date?'<span style="font-size:10px;color:'+(od?'var(--err)':'var(--txd)')+';margin-left:auto">'+fmtDue(t.due_date)+'</span>':''}</div>`;
+    });
+  }else{h+=`<p style="font-size:12px;color:var(--txd);padding:8px">No tasks planned for today yet. Pick some from backlog →</p>`}
+  h+=`</div>`;
+  body.innerHTML=h;
+  body.querySelectorAll('.dr-task[data-id]').forEach(el=>el.addEventListener('click',()=>openDP(Number(el.dataset.id))));
+}
+function renderDRStep3(body){
+  const {backlog}=drData;
+  const high=backlog.filter(t=>t.priority>=2);
+  const rest=backlog.filter(t=>t.priority<2).slice(0,15);
+  let h=`<div class="dr-section"><h3><span class="material-icons-round" style="color:var(--brand)">playlist_add</span>Pick tasks for today</h3>
+    <p style="font-size:11px;color:var(--txd);margin:-4px 0 10px">Click to add to My Day</p>`;
+  if(high.length){
+    h+=`<div style="font-size:10px;font-weight:600;color:var(--txd);margin-bottom:4px;text-transform:uppercase">High Priority</div>`;
+    high.forEach(t=>{
+      h+=`<div class="dr-task ${drPickedIds.has(t.id)?'selected':''}" data-pick="${t.id}"><span class="material-icons-round">${drPickedIds.has(t.id)?'check_circle':'radio_button_unchecked'}</span><span>${esc(t.title)}</span><span style="font-size:10px;color:${PC[t.priority]};margin-left:auto">${PL[t.priority]}</span></div>`;
+    });
+  }
+  if(rest.length){
+    h+=`<div style="font-size:10px;font-weight:600;color:var(--txd);margin:10px 0 4px;text-transform:uppercase">Backlog</div>`;
+    rest.forEach(t=>{
+      h+=`<div class="dr-task ${drPickedIds.has(t.id)?'selected':''}" data-pick="${t.id}"><span class="material-icons-round">${drPickedIds.has(t.id)?'check_circle':'radio_button_unchecked'}</span><span>${esc(t.title)}</span>${t.due_date?'<span style="font-size:10px;color:var(--txd);margin-left:auto">'+fmtDue(t.due_date)+'</span>':''}</div>`;
+    });
+  }
+  if(!high.length&&!rest.length){h+=`<p style="font-size:12px;color:var(--txd);padding:8px">Backlog is empty — great job!</p>`}
+  h+=`</div>`;
+  if(drPickedIds.size)h+=`<div style="font-size:11px;color:var(--brand);font-weight:600;padding:6px 0">${drPickedIds.size} task${drPickedIds.size>1?'s':''} selected for today</div>`;
+  body.innerHTML=h;
+  body.querySelectorAll('.dr-task[data-pick]').forEach(el=>el.addEventListener('click',()=>{
+    const id=Number(el.dataset.pick);
+    if(drPickedIds.has(id))drPickedIds.delete(id);else drPickedIds.add(id);
+    renderDR();
+  }));
+}
+$('dr-btn').addEventListener('click',openDailyReview);
+$('dr-ov').addEventListener('click',e=>{if(e.target===$('dr-ov'))closeDR()});
+$('dr-skip').addEventListener('click',closeDR);
+$('dr-next').addEventListener('click',async()=>{
+  if(drStep<3){drStep++;renderDR();return}
+  // Step 3 done — add picked tasks to My Day
+  for(const id of drPickedIds){
+    await api.put('/api/tasks/'+id,{my_day:true});
+  }
+  closeDR();
+  if(drPickedIds.size)showToast(drPickedIds.size+' task'+(drPickedIds.size>1?'s':'')+' added to My Day');
+  await loadAreas();render();loadOverdueBadge();
+});
+document.querySelectorAll('.dr-step').forEach(s=>s.addEventListener('click',()=>{
+  const n=Number(s.dataset.step);if(n>=1&&n<=3){drStep=n;renderDR()}
+}));
+
 // ─── KEYBOARD SHORTCUTS ───
 $('kb-btn').addEventListener('click',()=>$('kb-ov').classList.add('active'));
 $('kb-ov').addEventListener('click',e=>{if(e.target===$('kb-ov'))$('kb-ov').classList.remove('active')});
@@ -2503,6 +2748,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='k'&&(e.ctrlKey||e.metaKey)){e.preventDefault();openSearch();return}
   if(e.key==='Escape'){
     if($('ft-ov').classList.contains('active')){$('ft-stop').click();return}
+    if($('dr-ov').classList.contains('active')){closeDR();return}
     if($('sr-ov').classList.contains('active')){closeSearch();return}
     if($('qc-ov').classList.contains('active')){closeQC();return}
     if($('kb-ov').classList.contains('active')){$('kb-ov').classList.remove('active');return}
@@ -2510,7 +2756,7 @@ document.addEventListener('keydown',e=>{
     return;
   }
   // Don't trigger shortcuts when overlays are open
-  if($('sr-ov').classList.contains('active')||$('qc-ov').classList.contains('active')||$('kb-ov').classList.contains('active'))return;
+  if($('sr-ov').classList.contains('active')||$('qc-ov').classList.contains('active')||$('kb-ov').classList.contains('active')||$('dr-ov').classList.contains('active'))return;
   if(e.key==='n'||e.key==='N'){openQuickCapture();return}
   if(e.key==='?'){$('kb-ov').classList.add('active');return}
   if(e.key==='1'){go('myday');return}
@@ -2524,6 +2770,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='9'){go('tags');return}
   if(e.key==='0'){go('focushistory');return}
   if(e.key==='m'||e.key==='M'){toggleMultiSelect();return}
+  if(e.key==='r'||e.key==='R'){openDailyReview();return}
   // Vim navigation: j/k/x/Enter/gg/G
   if(e.key==='j'){e.preventDefault();vimMove(1);return}
   if(e.key==='k'&&!e.ctrlKey&&!e.metaKey){e.preventDefault();vimMove(-1);return}
