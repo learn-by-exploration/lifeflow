@@ -336,6 +336,75 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .md-note blockquote{border-left:3px solid var(--brd);padding-left:10px;margin:6px 0;color:var(--txd);font-style:italic}
 .md-note h1,.md-note h2,.md-note h3{font-weight:600;color:var(--tx);margin:8px 0 4px}
 .md-note h1{font-size:16px}.md-note h2{font-size:14px}.md-note h3{font-size:13px}
+
+/* Drag reorder */
+.tc.drag-over{border-top:2px solid var(--brand);margin-top:-2px}
+.tc.dragging{opacity:.35}
+
+/* Weekly Planning */
+.wp{display:grid;grid-template-columns:200px repeat(7,1fr);gap:6px;min-height:calc(100vh - 160px)}
+.wp-un{background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--r);padding:10px;overflow-y:auto;max-height:calc(100vh - 160px)}
+.wp-un .wp-h{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--txd);margin-bottom:8px;letter-spacing:.5px}
+.wp-day{background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--r);padding:8px;overflow-y:auto;max-height:calc(100vh - 160px);transition:border-color .15s}
+.wp-day.today{border-color:var(--brand);background:rgba(37,99,235,.04)}
+.wp-day.drag-target{border-color:var(--ok);background:rgba(34,197,94,.04)}
+.wp-dh{font-size:10px;font-weight:700;text-transform:uppercase;color:var(--txd);margin-bottom:4px;display:flex;align-items:center;gap:4px}
+.wp-dh .wp-dn{font-size:12px;font-weight:600;color:var(--tx)}
+.wp-dh .wp-cnt{font-size:9px;background:rgba(255,255,255,.06);padding:0 5px;border-radius:8px}
+.wp-tc{background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);padding:6px 8px;margin-bottom:4px;font-size:11px;cursor:grab;transition:all .12s}
+.wp-tc:hover{background:var(--bg-h)}
+.wp-tc.done{opacity:.5;text-decoration:line-through}
+.wp-tc .wp-tt{font-weight:500;margin-bottom:2px;word-break:break-word}
+.wp-tc .wp-tm{font-size:9px;color:var(--txd);display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.wp-tc.p3{border-left:2px solid var(--err)}.wp-tc.p2{border-left:2px solid var(--warn)}.wp-tc.p1{border-left:2px solid var(--brand)}
+
+/* Eisenhower Matrix */
+.em-grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:12px;min-height:calc(100vh - 200px)}
+.em-q{background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--r);padding:12px;overflow-y:auto}
+.em-q .em-h{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.em-q .em-cnt{font-size:10px;background:rgba(255,255,255,.06);padding:0 6px;border-radius:8px;color:var(--txd)}
+.em-q1{border-top:3px solid var(--err)}.em-q1 .em-h{color:var(--err)}
+.em-q2{border-top:3px solid var(--brand)}.em-q2 .em-h{color:var(--brand)}
+.em-q3{border-top:3px solid var(--warn)}.em-q3 .em-h{color:var(--warn)}
+.em-q4{border-top:3px solid var(--txd)}.em-q4 .em-h{color:var(--txd)}
+.em-labels{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px;text-align:center;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--txd)}
+.em-side{display:flex;flex-direction:column;justify-content:space-around;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--txd);writing-mode:vertical-lr;transform:rotate(180deg);text-align:center;padding-right:8px}
+.em-wrap{display:flex}
+
+/* Heatmap */
+.hm-wrap{margin-top:18px}
+.hm-grid{display:flex;gap:2px;flex-wrap:wrap;overflow:hidden}
+.hm-cell{width:12px;height:12px;border-radius:2px;background:var(--bg-c)}
+.hm-cell.l1{background:rgba(34,197,94,.2)}.hm-cell.l2{background:rgba(34,197,94,.4)}.hm-cell.l3{background:rgba(34,197,94,.65)}.hm-cell.l4{background:var(--ok)}
+.hm-legend{display:flex;align-items:center;gap:4px;margin-top:6px;font-size:10px;color:var(--txd);justify-content:flex-end}
+.streak-cards{display:flex;gap:10px;margin-bottom:12px}
+.streak-card{flex:1;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);padding:12px;text-align:center}
+.streak-card .s-num{font-size:24px;font-weight:700;color:var(--ok)}.streak-card .s-label{font-size:10px;color:var(--txd);text-transform:uppercase;font-weight:600}
+
+/* Multi-select */
+.ms-bar{position:fixed;bottom:0;left:256px;right:0;background:var(--bg-s);border-top:1px solid var(--brd);padding:10px 24px;display:flex;align-items:center;gap:12px;z-index:40;animation:slideUp .2s ease-out}
+.ms-bar .ms-cnt{font-size:13px;font-weight:600;flex:1}
+.ms-bar button{padding:7px 14px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-c);color:var(--tx);font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:4px}
+.ms-bar button:hover{background:var(--bg-h)}
+.ms-bar .ms-del{border-color:var(--err);color:var(--err)}
+.ms-bar .ms-del:hover{background:rgba(239,68,68,.1)}
+.tc.selected{background:var(--bg-h);border-color:var(--brand);box-shadow:inset 0 0 0 1px var(--brand)}
+.ms-chk{width:16px;height:16px;border-radius:3px;border:2px solid var(--txd);flex-shrink:0;cursor:pointer;display:none;align-items:center;justify-content:center;margin-right:-4px}
+.ms-mode .ms-chk{display:flex}
+.tc.selected .ms-chk{background:var(--brand);border-color:var(--brand)}
+.tc.selected .ms-chk::after{content:'✓';color:#fff;font-size:10px;font-weight:700}
+
+/* Confetti */
+.confetti-wrap{position:fixed;inset:0;pointer-events:none;z-index:500;overflow:hidden}
+.confetti-piece{position:absolute;width:8px;height:8px;border-radius:1px;animation:confettiFall 2.5s ease-out forwards;opacity:0}
+@keyframes confettiFall{0%{transform:translateY(0) rotate(0deg) scale(1);opacity:1}50%{opacity:1}100%{transform:translateY(100vh) rotate(720deg) scale(.3);opacity:0}}
+
+@media(max-width:768px){
+  .wp{grid-template-columns:1fr;grid-template-rows:auto}
+  .wp-un{max-height:200px}
+  .em-grid{grid-template-columns:1fr;grid-template-rows:auto auto auto auto}
+  .ms-bar{left:0}
+}
 </style>
 </head>
 <body>
@@ -353,6 +422,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <div class="ni" data-view="calendar"><span class="material-icons-round">calendar_month</span>Calendar</div>
     <div class="ni" data-view="overdue"><span class="material-icons-round">warning</span>Overdue<span class="badge" id="overdue-badge">0</span></div>
     <div class="ni" data-view="dashboard"><span class="material-icons-round">dashboard</span>Dashboard</div>
+    <div class="ni" data-view="weekly"><span class="material-icons-round">view_week</span>Weekly Plan</div>
+    <div class="ni" data-view="matrix"><span class="material-icons-round">grid_view</span>Matrix</div>
     <div class="ni" data-view="logbook"><span class="material-icons-round">history</span>Activity Log</div>
   </div>
   <div class="ns"><div class="ns-label">Life Areas</div></div>
@@ -438,7 +509,10 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <div class="kb-row"><span>Board</span><span class="kb-key">3</span></div>
     <div class="kb-row"><span>Calendar</span><span class="kb-key">4</span></div>
     <div class="kb-row"><span>Dashboard</span><span class="kb-key">5</span></div>
-    <div class="kb-row"><span>Activity Log</span><span class="kb-key">6</span></div>
+    <div class="kb-row"><span>Weekly Plan</span><span class="kb-key">6</span></div>
+    <div class="kb-row"><span>Matrix</span><span class="kb-key">7</span></div>
+    <div class="kb-row"><span>Activity Log</span><span class="kb-key">8</span></div>
+    <div class="kb-row"><span>Multi-select mode</span><span class="kb-key">M</span></div>
     <div class="kb-row"><span>Close panel / overlay</span><span class="kb-key">Esc</span></div>
     <div class="kb-row"><span>Show this help</span><span class="kb-key">?</span></div>
   </div>
@@ -536,12 +610,15 @@ function renderAreas(){
 
 async function render(){
   $('vt').style.display=(currentView==='goal')?'flex':'none';
+  hideMultiSelectBar();selectedIds.clear();msMode=false;document.body.classList.remove('ms-mode');
   if(currentView==='myday')await renderMyDay();
   else if(currentView==='all')await renderAll();
   else if(currentView==='board')await renderGlobalBoard();
   else if(currentView==='calendar')await renderCal();
   else if(currentView==='overdue')await renderOverdue();
   else if(currentView==='dashboard')await renderDashboard();
+  else if(currentView==='weekly')await renderWeekly();
+  else if(currentView==='matrix')await renderMatrix();
   else if(currentView==='logbook')await renderLogbook();
   else if(currentView==='area')await renderArea();
   else if(currentView==='goal')await renderGoal();
@@ -556,6 +633,8 @@ function updateBC(){
   else if(currentView==='calendar'){pt.textContent='Calendar';bc.innerHTML=''}
   else if(currentView==='overdue'){pt.textContent='Overdue';bc.innerHTML=''}
   else if(currentView==='logbook'){pt.textContent='Activity Log';bc.innerHTML=''}
+  else if(currentView==='weekly'){pt.textContent='Weekly Plan';bc.innerHTML=''}
+  else if(currentView==='matrix'){pt.textContent='Eisenhower Matrix';bc.innerHTML=''}
   else if(currentView==='dashboard'){pt.textContent='Dashboard';bc.innerHTML=''}
   else if(currentView==='area'){
     const a=areas.find(x=>x.id===activeAreaId);
@@ -759,7 +838,8 @@ function tcHtml(t,ctx){
       <span class="stx-inline">${esc(s.title)}</span>${s.note?`<span class="material-icons-round" style="font-size:11px;color:var(--txd);margin-left:2px" title="${escA(s.note)}">sticky_note_2</span>`:''}
     </div>`).join('')+`</div>`
   }
-  return`<div class="${cls.join(' ')}" data-id="${t.id}" draggable="true">
+  return`<div class="${cls.join(' ')} ${selectedIds.has(t.id)?'selected':''}" data-id="${t.id}" draggable="true">
+    <div class="ms-chk" data-id="${t.id}"></div>
     <div class="tk" data-id="${t.id}"><span class="material-icons-round">check</span></div>
     <div class="tb2"><div class="tt">${esc(t.title)}</div>${meta?`<div class="tm">${meta}</div>`:''}${stBar}${stList}</div>
     <div class="ta"><button class="material-icons-round ft-start" data-id="${t.id}" title="Focus timer">timer</button><button class="material-icons-round et" data-id="${t.id}">edit</button><button class="material-icons-round dt" data-id="${t.id}">delete_outline</button></div>
@@ -782,6 +862,13 @@ function attachTE(){
       showToast('Task completed'+(tk.recurring?' · Next '+tk.recurring+' task created':''), async()=>{
         await api.put('/api/tasks/'+id,{status:'todo'});await loadAreas();render();loadOverdueBadge();
       });
+      // Check if goal is now 100% complete
+      if(tk.goal_id){
+        try{const gt=await api.get('/api/goals/'+tk.goal_id+'/tasks');
+        const allDone=gt.length>0&&gt.every(t=>t.status==='done'||(t.id===id));
+        if(allDone){fireConfetti();showToast('🎉 Goal complete!')}
+        }catch{}
+      }
     }
     await loadAreas();render();loadOverdueBadge();
   }));
@@ -817,7 +904,90 @@ function attachTE(){
   }));
   // Focus timer buttons
   document.querySelectorAll('.ft-start').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();startFocusTimer(Number(b.dataset.id))}));
+  // Multi-select checkboxes
+  document.querySelectorAll('.ms-chk').forEach(ck=>ck.addEventListener('click',e=>{
+    e.stopPropagation();const id=Number(ck.dataset.id);
+    if(selectedIds.has(id))selectedIds.delete(id);else selectedIds.add(id);
+    ck.closest('.tc').classList.toggle('selected');
+    updateMultiSelectBar();
+  }));
+  // Drag-and-drop reorder in list views
+  attachDragReorder();
 }
+
+// ─── DRAG REORDER ───
+function attachDragReorder(){
+  let dragId=null;
+  document.querySelectorAll('.tc[draggable]').forEach(card=>{
+    card.addEventListener('dragstart',e=>{
+      if(msMode)return e.preventDefault();
+      dragId=Number(card.dataset.id);card.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(dragId));
+    });
+    card.addEventListener('dragend',()=>{card.classList.remove('dragging');document.querySelectorAll('.tc.drag-over').forEach(c=>c.classList.remove('drag-over'))});
+    card.addEventListener('dragover',e=>{
+      e.preventDefault();e.dataTransfer.dropEffect='move';
+      document.querySelectorAll('.tc.drag-over').forEach(c=>c.classList.remove('drag-over'));
+      card.classList.add('drag-over');
+    });
+    card.addEventListener('dragleave',()=>card.classList.remove('drag-over'));
+    card.addEventListener('drop',async e=>{
+      e.preventDefault();card.classList.remove('drag-over');
+      const fromId=Number(e.dataTransfer.getData('text/plain'));
+      const toId=Number(card.dataset.id);
+      if(fromId===toId||!fromId||!toId)return;
+      // Collect current order from DOM, reinsert
+      const allCards=[...document.querySelectorAll('.tc[data-id]')];
+      const ids=allCards.map(c=>Number(c.dataset.id));
+      const fromIdx=ids.indexOf(fromId),toIdx=ids.indexOf(toId);
+      if(fromIdx<0||toIdx<0)return;
+      ids.splice(fromIdx,1);ids.splice(toIdx,0,fromId);
+      const items=ids.map((id,i)=>({id,position:i}));
+      await api.put('/api/tasks/reorder',{items});
+      await loadAreas();render();
+    });
+  });
+}
+
+// ─── MULTI-SELECT ───
+let selectedIds=new Set(),msMode=false;
+function toggleMultiSelect(){
+  msMode=!msMode;
+  document.body.classList.toggle('ms-mode',msMode);
+  if(!msMode){selectedIds.clear();document.querySelectorAll('.tc.selected').forEach(c=>c.classList.remove('selected'));hideMultiSelectBar()}
+}
+function updateMultiSelectBar(){
+  if(selectedIds.size===0){hideMultiSelectBar();return}
+  let bar=document.getElementById('ms-bar');
+  if(!bar){
+    bar=document.createElement('div');bar.className='ms-bar';bar.id='ms-bar';
+    bar.innerHTML=`<span class="ms-cnt"></span>
+      <button id="ms-done"><span class="material-icons-round" style="font-size:15px">check_circle</span>Complete</button>
+      <button id="ms-pri"><span class="material-icons-round" style="font-size:15px">flag</span>Priority</button>
+      <button class="ms-del" id="ms-del"><span class="material-icons-round" style="font-size:15px">delete_outline</span>Delete</button>
+      <button id="ms-clear"><span class="material-icons-round" style="font-size:15px">close</span>Clear</button>`;
+    document.body.appendChild(bar);
+    document.getElementById('ms-done').addEventListener('click',async()=>{
+      for(const id of selectedIds)await api.put('/api/tasks/'+id,{status:'done'});
+      showToast(selectedIds.size+' tasks completed');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
+    });
+    document.getElementById('ms-del').addEventListener('click',async()=>{
+      if(!confirm('Delete '+selectedIds.size+' tasks?'))return;
+      for(const id of selectedIds)await api.del('/api/tasks/'+id);
+      showToast(selectedIds.size+' tasks deleted');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
+    });
+    document.getElementById('ms-pri').addEventListener('click',async()=>{
+      const p=prompt('Set priority (0=None, 1=Normal, 2=High, 3=Critical):','2');
+      if(p===null)return;const pn=Number(p);if(![0,1,2,3].includes(pn))return;
+      for(const id of selectedIds)await api.put('/api/tasks/'+id,{priority:pn});
+      showToast(selectedIds.size+' tasks updated');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();
+    });
+    document.getElementById('ms-clear').addEventListener('click',()=>{selectedIds.clear();document.querySelectorAll('.tc.selected').forEach(c=>c.classList.remove('selected'));hideMultiSelectBar()});
+  }
+  bar.querySelector('.ms-cnt').textContent=selectedIds.size+' selected';
+  bar.style.display='flex';
+}
+function hideMultiSelectBar(){const b=document.getElementById('ms-bar');if(b)b.style.display='none'}
 function attachBD(){
   document.querySelectorAll('.tc').forEach(card=>{
     card.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',card.dataset.id);card.style.opacity='.4'});
@@ -830,6 +1000,125 @@ function attachBD(){
       const id=Number(e.dataTransfer.getData('text/plain'));
       await api.put('/api/tasks/'+id,{status:col.dataset.s});await loadAreas();renderGoal()});
   });
+}
+
+// ─── WEEKLY PLANNING ───
+async function renderWeekly(){
+  const allT=await api.get('/api/tasks/all');
+  const c=$('ct');
+  // Get Mon-Sun of current week
+  const today=new Date();today.setHours(0,0,0,0);
+  const dow=today.getDay()||7;// Mon=1
+  const mon=new Date(today);mon.setDate(today.getDate()-(dow-1));
+  const days=[];for(let i=0;i<7;i++){const d=new Date(mon);d.setDate(mon.getDate()+i);days.push(d)}
+  const dayStrs=days.map(d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');return`${y}-${m}-${dd}`});
+  const todayStr=dayStrs.find((_,i)=>days[i].toDateString()===today.toDateString());
+  // Bucket tasks
+  const unscheduled=allT.filter(t=>t.status!=='done'&&!t.due_date);
+  const byDay={};dayStrs.forEach(d=>byDay[d]=[]);
+  allT.filter(t=>t.status!=='done').forEach(t=>{if(t.due_date&&byDay[t.due_date]!==undefined)byDay[t.due_date].push(t)});
+  const dayNames=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  let h=`<div class="wp">`;
+  h+=`<div class="wp-un" data-date=""><div class="wp-h">Unscheduled <span style="font-size:9px;color:var(--txd)">(${unscheduled.length})</span></div>`;
+  unscheduled.forEach(t=>h+=wpCard(t));
+  h+=`</div>`;
+  days.forEach((d,i)=>{
+    const ds=dayStrs[i],isToday=ds===todayStr;
+    const ts=byDay[ds]||[];
+    h+=`<div class="wp-day ${isToday?'today':''}" data-date="${ds}">
+      <div class="wp-dh"><span class="wp-dn">${d.getDate()}</span>${dayNames[i]}<span class="wp-cnt">${ts.length}</span></div>`;
+    ts.forEach(t=>h+=wpCard(t));
+    h+=`</div>`;
+  });
+  h+=`</div>`;
+  c.innerHTML=h;
+  // Drag between days
+  document.querySelectorAll('.wp-tc').forEach(card=>{
+    card.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',card.dataset.id);card.style.opacity='.4'});
+    card.addEventListener('dragend',()=>{card.style.opacity='1'});
+    card.addEventListener('click',()=>openDP(Number(card.dataset.id)));
+  });
+  document.querySelectorAll('.wp-day,.wp-un').forEach(col=>{
+    col.addEventListener('dragover',e=>{e.preventDefault();col.classList.add('drag-target')});
+    col.addEventListener('dragleave',()=>col.classList.remove('drag-target'));
+    col.addEventListener('drop',async e=>{
+      e.preventDefault();col.classList.remove('drag-target');
+      const id=Number(e.dataTransfer.getData('text/plain'));
+      const newDate=col.dataset.date||null;
+      await api.put('/api/tasks/'+id,{due_date:newDate});
+      await loadAreas();renderWeekly();
+    });
+  });
+}
+function wpCard(t){
+  const cls=['wp-tc'];if(t.status==='done')cls.push('done');
+  if(t.priority===3)cls.push('p3');else if(t.priority===2)cls.push('p2');else if(t.priority===1)cls.push('p1');
+  let meta='';
+  if(t.priority>0)meta+=`<span style="color:${PC[t.priority]}">${PL[t.priority]}</span>`;
+  if(t.tags&&t.tags.length)t.tags.forEach(tg=>meta+=`<span class="tag" style="background:${escA(tg.color)};font-size:8px;padding:0 4px">${esc(tg.name)}</span>`);
+  meta+=`<span style="color:var(--txd)">${esc(t.goal_title||'')}</span>`;
+  return`<div class="${cls.join(' ')}" data-id="${t.id}" draggable="true"><div class="wp-tt">${esc(t.title)}</div><div class="wp-tm">${meta}</div></div>`;
+}
+
+// ─── EISENHOWER MATRIX ───
+async function renderMatrix(){
+  const allT=await api.get('/api/tasks/all');
+  const active=allT.filter(t=>t.status!=='done');
+  const c=$('ct');
+  // Q1: Urgent+Important (p3 or p2+overdue), Q2: Important (p2+not overdue or p3+far due)
+  // Q3: Urgent (p1+overdue or p0+overdue), Q4: Neither (p0 or p1 not overdue)
+  // Simpler: importance = priority >= 2, urgency = overdue or due within 3 days
+  const isUrgent=t=>{if(!t.due_date)return false;const df=Math.round((new Date(t.due_date+'T00:00:00')-new Date(new Date().toDateString()))/864e5);return df<=2};
+  const isImportant=t=>t.priority>=2;
+  const q1=active.filter(t=>isUrgent(t)&&isImportant(t));
+  const q2=active.filter(t=>!isUrgent(t)&&isImportant(t));
+  const q3=active.filter(t=>isUrgent(t)&&!isImportant(t));
+  const q4=active.filter(t=>!isUrgent(t)&&!isImportant(t));
+  let h=`<div class="em-labels"><span>Urgent</span><span>Not Urgent</span></div>`;
+  h+=`<div class="em-wrap"><div class="em-side"><span>Not Important</span><span style="margin-top:auto">Important</span></div>`;
+  h+=`<div class="em-grid" style="flex:1">`;
+  h+=emQuadrant('em-q1','🔥 Do First','Urgent & Important',q1);
+  h+=emQuadrant('em-q2','📋 Schedule','Important, Not Urgent',q2);
+  h+=emQuadrant('em-q3','👤 Delegate','Urgent, Not Important',q3);
+  h+=emQuadrant('em-q4','🗑️ Eliminate','Neither',q4);
+  h+=`</div></div>`;
+  c.innerHTML=h;
+  c.querySelectorAll('.tc').forEach(card=>card.addEventListener('click',e=>{if(!e.target.closest('.tk'))openDP(Number(card.dataset.id))}));
+  c.querySelectorAll('.tk').forEach(el=>el.addEventListener('click',async e=>{
+    e.stopPropagation();const id=Number(el.dataset.id);
+    await api.put('/api/tasks/'+id,{status:'done'});
+    showToast('Task completed');await loadAreas();renderMatrix();loadOverdueBadge();
+  }));
+}
+function emQuadrant(cls,title,sub,tasks){
+  let h=`<div class="em-q ${cls}"><div class="em-h">${title}<span class="em-cnt">${tasks.length}</span></div><div style="font-size:10px;color:var(--txd);margin-bottom:8px">${sub}</div>`;
+  tasks.forEach(t=>{
+    const isDone=t.status==='done';
+    h+=`<div class="tc ${isDone?'done':''}" data-id="${t.id}" style="margin-bottom:4px">
+      <div class="tk" data-id="${t.id}"><span class="material-icons-round">check</span></div>
+      <div class="tb2"><div class="tt">${esc(t.title)}</div><div class="tm">${t.due_date?'<span'+(isOD(t.due_date)?' class="od"':'')+'><span class="material-icons-round">event</span>'+fmtDue(t.due_date)+'</span>':''}${t.priority>0?'<span style="color:'+PC[t.priority]+'">'+PL[t.priority]+'</span>':''}<span class="tag" style="background:${escA(t.goal_color||'var(--brand)')}">${esc(t.goal_title||'')}</span></div></div>
+    </div>`;
+  });
+  h+=`</div>`;return h;
+}
+
+// ─── CONFETTI ───
+function fireConfetti(){
+  const wrap=document.createElement('div');wrap.className='confetti-wrap';
+  const colors=['#D50000','#F6BF26','#33B679','#039BE5','#7986CB','#8E24AA','#F4511E','#0B8043'];
+  for(let i=0;i<80;i++){
+    const p=document.createElement('div');p.className='confetti-piece';
+    p.style.left=Math.random()*100+'%';
+    p.style.top=-10-Math.random()*20+'px';
+    p.style.background=colors[Math.floor(Math.random()*colors.length)];
+    p.style.animationDelay=Math.random()*1.5+'s';
+    p.style.transform='rotate('+Math.random()*360+'deg)';
+    const sz=4+Math.random()*8;p.style.width=sz+'px';p.style.height=sz+'px';
+    if(Math.random()>.5)p.style.borderRadius='50%';
+    wrap.appendChild(p);
+  }
+  document.body.appendChild(wrap);
+  setTimeout(()=>wrap.remove(),4000);
 }
 
 // ─── DETAIL PANEL ───
@@ -1127,29 +1416,34 @@ async function renderOverdue(){
 
 // ─── DASHBOARD ───
 async function renderDashboard(){
-  const s=await api.get('/api/stats');
+  const [s,streakData]=await Promise.all([api.get('/api/stats'),api.get('/api/stats/streaks')]);
   const c=$('ct');
   const pct=s.total?Math.round(s.done/s.total*100):0;
-  let h=`<div class="ds-grid">
+  let h=`<div class="streak-cards">
+    <div class="streak-card"><div class="s-num">🔥 ${streakData.streak}</div><div class="s-label">Day Streak</div></div>
+    <div class="streak-card"><div class="s-num">🏆 ${streakData.bestStreak}</div><div class="s-label">Best Streak</div></div>
+    <div class="streak-card"><div class="s-num" style="color:var(--brand)">${s.thisWeek}</div><div class="s-label">This Week</div></div>
+    <div class="streak-card"><div class="s-num" style="color:var(--warn)">${s.dueToday}</div><div class="s-label">Due Today</div></div>
+  </div>`;
+  h+=`<div class="ds-grid">
     <div class="ds-card clickable" data-go="all"><div class="ds-num">${s.total}</div><div class="ds-label">Total Tasks</div></div>
     <div class="ds-card clickable" data-go="logbook"><div class="ds-num" style="color:var(--ok)">${s.done}</div><div class="ds-label">Completed</div></div>
     <div class="ds-card clickable" data-go="overdue"><div class="ds-num" style="color:var(--err)">${s.overdue}</div><div class="ds-label">Overdue</div></div>
     <div class="ds-card clickable" data-go="myday"><div class="ds-num" style="color:var(--warn)">${s.dueToday}</div><div class="ds-label">Due Today</div></div>
-    <div class="ds-card"><div class="ds-num" style="color:var(--brand)">${s.thisWeek}</div><div class="ds-label">Done This Week</div></div>
-    <div class="ds-card"><div class="ds-num">${pct}%</div><div class="ds-label">Completion Rate</div></div>
+    <div class="ds-card"><div class="ds-num" style="color:var(--brand)">${pct}%</div><div class="ds-label">Completion Rate</div></div>
   </div>`;
-  // Progress bar
-  h+=`<div style="margin-bottom:22px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="font-weight:600">Overall Progress</span><span style="color:var(--txd)">${s.done} / ${s.total}</span></div>
+  h+=`<div class="hm-wrap"><div class="sl">Activity Heatmap<span class="c">365 days</span></div>`;
+  h+=buildHeatmap(streakData.heatmap);
+  h+=`</div>`;
+  h+=`<div style="margin-bottom:22px;margin-top:18px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="font-weight:600">Overall Progress</span><span style="color:var(--txd)">${s.done} / ${s.total}</span></div>
     <div style="height:10px;background:var(--bg-c);border:1px solid var(--brd);border-radius:5px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--ok);border-radius:5px;transition:width .3s"></div></div></div>`;
-  // By area
   h+=`<div class="sl">By Life Area</div>`;
   s.byArea.forEach(a=>{
     const ap=a.total?Math.round(a.done/a.total*100):0;
     h+=`<div class="ds-area"><span style="font-size:20px">${esc(a.icon)}</span>
       <div class="ds-ainfo"><div class="ds-aname">${esc(a.name)}</div><div class="ds-aprog"><div class="ds-apbar" style="width:${ap}%;background:${escA(a.color)}"></div></div>
-      <div class="ds-ameta">${a.done||0}/${a.total||0} tasks · ${ap}%</div></div></div>`;
+      <div class="ds-ameta">${a.done||0}/${a.total||0} tasks \u00b7 ${ap}%</div></div></div>`;
   });
-  // By priority
   h+=`<div class="sl" style="margin-top:18px">By Priority</div><div style="display:flex;gap:8px;flex-wrap:wrap">`;
   const pNames=['None','Normal','High','Critical'];const pColors=['var(--txd)','var(--brand)','var(--warn)','var(--err)'];
   s.byPriority.forEach(p=>{
@@ -1158,18 +1452,16 @@ async function renderDashboard(){
       <div style="font-size:10px;color:var(--txd)">${pNames[p.priority]}</div></div>`;
   });
   h+=`</div>`;
-  // Recent completions
   if(s.recentDone&&s.recentDone.length){
     h+=`<div class="sl" style="margin-top:18px">Recently Completed</div>`;
     s.recentDone.forEach(t=>{
       const ago=t.completed_at?timeAgo(t.completed_at):'';
       h+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;border-bottom:1px solid var(--brd)">
         <span class="material-icons-round" style="font-size:16px;color:var(--ok)">check_circle</span>
-        <span style="flex:1">${esc(t.title)}</span><span style="font-size:10px;color:var(--txd)">${esc(t.goal_title)} · ${ago}</span></div>`;
+        <span style="flex:1">${esc(t.title)}</span><span style="font-size:10px;color:var(--txd)">${esc(t.goal_title)} \u00b7 ${ago}</span></div>`;
     });
   }
   c.innerHTML=h;
-  // Dashboard drill-down
   c.querySelectorAll('.ds-card.clickable').forEach(card=>card.addEventListener('click',()=>{go(card.dataset.go)}));
   c.querySelectorAll('.ds-area').forEach(el=>{el.addEventListener('click',()=>{
     const a=areas.find(x=>x.name===el.querySelector('.ds-aname')?.textContent);
@@ -1178,7 +1470,21 @@ async function renderDashboard(){
 }
 function timeAgo(iso){const d=new Date(iso),n=Date.now(),s=Math.floor((n-d)/1e3);if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago'}
 
-// ─── ACTIVITY LOG / LOGBOOK ───
+function buildHeatmap(data){
+  const map={};data.forEach(d=>map[d.day]=d.count);
+  const today=new Date();today.setHours(0,0,0,0);
+  let h=`<div class="hm-grid">`;
+  for(let i=364;i>=0;i--){
+    const d=new Date(today);d.setDate(today.getDate()-i);
+    const ds=d.toISOString().slice(0,10);
+    const cnt=map[ds]||0;
+    let lvl='';if(cnt>=4)lvl='l4';else if(cnt>=3)lvl='l3';else if(cnt>=2)lvl='l2';else if(cnt>=1)lvl='l1';
+    h+=`<div class="hm-cell ${lvl}" title="${ds}: ${cnt} task${cnt!==1?'s':''}"></div>`;
+  }
+  h+=`</div><div class="hm-legend">Less <div class="hm-cell" style="display:inline-block"></div><div class="hm-cell l1" style="display:inline-block"></div><div class="hm-cell l2" style="display:inline-block"></div><div class="hm-cell l3" style="display:inline-block"></div><div class="hm-cell l4" style="display:inline-block"></div> More</div>`;
+  return h;
+}
+
 async function renderLogbook(){
   const c=$('ct');
   const r=await api.get('/api/activity?limit=100');
@@ -1338,7 +1644,10 @@ document.addEventListener('keydown',e=>{
   if(e.key==='3'){go('board');return}
   if(e.key==='4'){go('calendar');return}
   if(e.key==='5'){go('dashboard');return}
-  if(e.key==='6'){go('logbook');return}
+  if(e.key==='6'){go('weekly');return}
+  if(e.key==='7'){go('matrix');return}
+  if(e.key==='8'){go('logbook');return}
+  if(e.key==='m'||e.key==='M'){toggleMultiSelect();return}
   if(e.key==='f'||e.key==='F'){/* focus needs a task selected */return}
 });
 // Also handle Ctrl+K when in inputs

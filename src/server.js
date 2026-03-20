@@ -310,6 +310,20 @@ app.post('/api/goals/:goalId/tasks', (req, res) => {
   }
   res.status(201).json(enrichTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(taskId)));
 });
+// ─── Task Reorder (must be before :id routes) ───
+app.put('/api/tasks/reorder', (req, res) => {
+  const { items } = req.body;
+  if (!Array.isArray(items)) return res.status(400).json({ error: 'items array required' });
+  const upd = db.prepare('UPDATE tasks SET position=?, due_date=COALESCE(?,due_date) WHERE id=?');
+  const tx = db.transaction(() => {
+    items.forEach(({ id, position, due_date }) => {
+      if (Number.isInteger(id) && Number.isInteger(position)) upd.run(position, due_date !== undefined ? due_date : null, id);
+    });
+  });
+  tx();
+  res.json({ ok: true });
+});
+
 // Single task GET
 app.get('/api/tasks/:id', (req, res) => {
   const id = Number(req.params.id);
@@ -455,6 +469,40 @@ app.get('/api/focus/stats', (req, res) => {
     GROUP BY f.task_id ORDER BY total_sec DESC LIMIT 10
   `).all();
   res.json({ today, week, sessions, byTask });
+});
+
+// ─── Streak & Heatmap ───
+app.get('/api/stats/streaks', (req, res) => {
+  // Heatmap: completions per day for last 365 days
+  const heatmap = db.prepare(`
+    SELECT date(completed_at) as day, COUNT(*) as count
+    FROM tasks WHERE status='done' AND completed_at IS NOT NULL
+      AND completed_at >= date('now','-365 days')
+    GROUP BY date(completed_at) ORDER BY day
+  `).all();
+  // Streak: consecutive days with at least 1 completion ending today
+  let streak = 0;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dayMs = 86400000;
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today - i * dayMs);
+    const ds = d.toISOString().slice(0,10);
+    const cnt = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='done' AND date(completed_at)=?").get(ds).c;
+    if (cnt > 0) streak++;
+    else break;
+  }
+  const bestStreak = (() => {
+    let best = 0, cur = 0;
+    for (let i = 365; i >= 0; i--) {
+      const d = new Date(today - i * dayMs);
+      const ds = d.toISOString().slice(0,10);
+      const found = heatmap.find(h => h.day === ds);
+      if (found && found.count > 0) { cur++; if (cur > best) best = cur; }
+      else cur = 0;
+    }
+    return best;
+  })();
+  res.json({ streak, bestStreak, heatmap });
 });
 
 // ─── NLP Quick Capture Parser ───
