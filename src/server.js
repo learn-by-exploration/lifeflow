@@ -324,6 +324,31 @@ app.put('/api/tasks/reorder', (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── Search (before :id to avoid param capture) ───
+app.get('/api/tasks/search', (req, res) => {
+  const q = req.query.q;
+  if (!q || !q.trim()) return res.json([]);
+  const term = '%' + q.trim() + '%';
+  res.json(enrichTasks(db.prepare(`
+    SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    LEFT JOIN subtasks s ON s.task_id=t.id
+    WHERE t.title LIKE ? OR t.note LIKE ? OR s.title LIKE ?
+    ORDER BY CASE t.status WHEN 'doing' THEN 0 WHEN 'todo' THEN 1 WHEN 'done' THEN 2 END, t.priority DESC
+    LIMIT 50
+  `).all(term, term, term)));
+});
+
+// ─── Overdue (before :id to avoid param capture) ───
+app.get('/api/tasks/overdue', (req, res) => {
+  res.json(enrichTasks(db.prepare(`
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.due_date < date('now') AND t.status != 'done'
+    ORDER BY t.due_date, t.priority DESC
+  `).all()));
+});
+
 // Single task GET
 app.get('/api/tasks/:id', (req, res) => {
   const id = Number(req.params.id);
@@ -382,31 +407,6 @@ app.delete('/api/tasks/:id', (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   db.prepare('DELETE FROM tasks WHERE id=?').run(id);
   res.json({ ok: true });
-});
-
-// ─── Search ───
-app.get('/api/tasks/search', (req, res) => {
-  const q = req.query.q;
-  if (!q || !q.trim()) return res.json([]);
-  const term = '%' + q.trim() + '%';
-  res.json(enrichTasks(db.prepare(`
-    SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
-    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
-    LEFT JOIN subtasks s ON s.task_id=t.id
-    WHERE t.title LIKE ? OR t.note LIKE ? OR s.title LIKE ?
-    ORDER BY CASE t.status WHEN 'doing' THEN 0 WHEN 'todo' THEN 1 WHEN 'done' THEN 2 END, t.priority DESC
-    LIMIT 50
-  `).all(term, term, term)));
-});
-
-// ─── Overdue ───
-app.get('/api/tasks/overdue', (req, res) => {
-  res.json(enrichTasks(db.prepare(`
-    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
-    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
-    WHERE t.due_date < date('now') AND t.status != 'done'
-    ORDER BY t.due_date, t.priority DESC
-  `).all()));
 });
 
 // ─── Stats / Dashboard ───
@@ -521,8 +521,8 @@ app.post('/api/tasks/parse', (req, res) => {
   const today = new Date(); today.setHours(0,0,0,0);
   const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
   input = input.replace(/\b(today)\b/gi, () => { due_date = fmt(today); return ''; });
-  input = input.replace(/\b(tomorrow)\b/gi, () => { const d = new Date(today); d.setDate(d.getDate()+1); due_date = fmt(d); return ''; });
   input = input.replace(/\bday\s*after\s*tomorrow\b/gi, () => { const d = new Date(today); d.setDate(d.getDate()+2); due_date = fmt(d); return ''; });
+  input = input.replace(/\b(tomorrow)\b/gi, () => { const d = new Date(today); d.setDate(d.getDate()+1); due_date = fmt(d); return ''; });
   input = input.replace(/\bin\s+(\d+)\s*days?\b/gi, (_, n) => { const d = new Date(today); d.setDate(d.getDate()+Number(n)); due_date = fmt(d); return ''; });
   input = input.replace(/\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi, (_, day) => {
     const targetDay = dayNames.indexOf(day.toLowerCase());
@@ -612,4 +612,9 @@ app.get('/{*splat}', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-app.listen(PORT, () => console.log(`\n  LifeFlow running at http://localhost:${PORT}\n`));
+// Export for testing; start server only when run directly
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`\n  LifeFlow running at http://localhost:${PORT}\n`));
+}
+
+module.exports = { app, db };
