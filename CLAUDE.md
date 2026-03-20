@@ -10,7 +10,7 @@ Express.js backend + vanilla JS single-page app frontend. SQLite via better-sqli
 ```bash
 npm install
 node src/server.js          # http://localhost:3456
-npm test                    # 185 tests via node:test
+npm test                    # 207 tests via node:test
 # or with Docker:
 docker compose up -d
 ```
@@ -151,7 +151,7 @@ All foreign keys use `ON DELETE CASCADE`.
 src/server.js          — Backend (all logic in one file, ~620 lines)
 public/index.html      — Frontend SPA (CSS + HTML + JS, ~1661 lines)
 tests/helpers.js       — Test factories, DB setup/teardown, supertest agent
-tests/*.test.js        — 10 test files, 185 tests (node:test + assert/strict)
+tests/*.test.js        — 11 test files, 207 tests (node:test + assert/strict)
 Dockerfile             — node:22-slim, npm ci, EXPOSE 3456
 docker-compose.yml     — Single service, persistent volume
 docs/design/           — Brainstorm spec documents (3 perspectives)
@@ -161,7 +161,7 @@ backups/               — Auto-generated JSON backups (gitignored)
 ## Testing
 
 ```bash
-npm test                    # Run all 185 tests
+npm test                    # Run all 207 tests
 ```
 
 **Runner:** `node --test --test-force-exit` with `node:assert/strict` + `supertest`
@@ -234,17 +234,20 @@ npm test                    # Run all 185 tests
 - Keyboard shortcuts: 9 = Tag Manager, 0 = Focus History
 - 17 new tests (185 total across 10 test files)
 
+### Batch 5 — Reminders, Dependencies & Search
+- Notification bell with dropdown — overdue/today/upcoming reminders with 60s auto-refresh
+- Task dependencies — `task_deps` table, `GET/PUT /api/tasks/:id/deps`, blocked-by chips in detail panel, lock indicator on task cards
+- Subtask drag reorder — drag handles in detail panel, `PUT /api/subtasks/reorder` transactional endpoint
+- Enhanced recurring — yearly, weekdays, every-N-days, every-N-weeks, custom interval picker in detail panel
+- Search filters — area, goal, status dropdowns in search overlay, filter-only search (no query required)
+- `GET /api/reminders` endpoint with overdue/today/upcoming categories
+- 22 new tests (207 total across 11 test files)
+
 ## What Needs to Be Done (Roadmap)
 
 ### High Priority
-- **Task due-date reminders** — Browser notification API or in-app notification bell
-- **Task dependencies** — "blocked by" relationships between tasks
-
-### Medium Priority
-- **Drag-and-drop for subtasks** — Reorder subtasks within a task (currently only tasks support drag)
 - **Task templates** — Save/apply common task structures (e.g., "Sprint Planning" with preset subtasks)
-- **Recurring task improvements** — Custom intervals (every 2 weeks, specific days), skip/snooze
-- **Search improvements** — Search within specific area/goal, filter by date range, saved searches
+- **Saved searches** — Save filter combinations for quick access
 
 ### Low Priority / Nice to Have
 - **PWA support** — Service worker for offline, add-to-homescreen

@@ -76,6 +76,15 @@ db.exec(`
 // Migrate: add note column to subtasks if missing
 try { db.prepare("SELECT note FROM subtasks LIMIT 0").run(); } catch { db.exec("ALTER TABLE subtasks ADD COLUMN note TEXT DEFAULT ''"); }
 
+// ─── Task Dependencies table ───
+db.exec(`CREATE TABLE IF NOT EXISTS task_deps (
+  task_id INTEGER NOT NULL,
+  blocked_by_id INTEGER NOT NULL,
+  PRIMARY KEY (task_id, blocked_by_id),
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+  FOREIGN KEY (blocked_by_id) REFERENCES tasks(id) ON DELETE CASCADE
+)`);
+
 // Seed
 const cnt = db.prepare('SELECT COUNT(*) as c FROM life_areas').get();
 if (cnt.c === 0) {
@@ -104,11 +113,15 @@ function getTaskTags(taskId) {
 function getSubtasks(taskId) {
   return db.prepare('SELECT * FROM subtasks WHERE task_id=? ORDER BY position').all(taskId);
 }
+function getBlockedBy(taskId) {
+  return db.prepare('SELECT t.id, t.title, t.status FROM tasks t JOIN task_deps d ON t.id=d.blocked_by_id WHERE d.task_id=?').all(taskId);
+}
 function enrichTask(t) {
   t.tags = getTaskTags(t.id);
   t.subtasks = getSubtasks(t.id);
   t.subtask_done = t.subtasks.filter(s => s.done).length;
   t.subtask_total = t.subtasks.length;
+  t.blocked_by = getBlockedBy(t.id);
   return t;
 }
 function enrichTasks(tasks) { return tasks.map(enrichTask); }
@@ -159,6 +172,19 @@ app.post('/api/tasks/:taskId/subtasks', (req, res) => {
   const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM subtasks WHERE task_id=?').get(taskId);
   const r = db.prepare('INSERT INTO subtasks (task_id,title,position) VALUES (?,?,?)').run(taskId, title.trim(), mp.p);
   res.status(201).json(db.prepare('SELECT * FROM subtasks WHERE id=?').get(r.lastInsertRowid));
+});
+// Subtask reorder (must be before :id route)
+app.put('/api/subtasks/reorder', (req, res) => {
+  const { items } = req.body;
+  if (!Array.isArray(items)) return res.status(400).json({ error: 'items array required' });
+  const upd = db.prepare('UPDATE subtasks SET position=? WHERE id=?');
+  const tx = db.transaction(() => {
+    items.forEach(({ id, position }) => {
+      if (Number.isInteger(id) && Number.isInteger(position)) upd.run(position, id);
+    });
+  });
+  tx();
+  res.json({ ok: true });
 });
 app.put('/api/subtasks/:id', (req, res) => {
   const id = Number(req.params.id);
@@ -327,16 +353,27 @@ app.put('/api/tasks/reorder', (req, res) => {
 // ─── Search (before :id to avoid param capture) ───
 app.get('/api/tasks/search', (req, res) => {
   const q = req.query.q;
-  if (!q || !q.trim()) return res.json([]);
-  const term = '%' + q.trim() + '%';
+  const hasQ = q && q.trim();
+  const hasFilters = req.query.area_id || req.query.goal_id || req.query.status;
+  if (!hasQ && !hasFilters) return res.json([]);
+  let whereParts = [], params = [];
+  if (hasQ) {
+    const term = '%' + q.trim() + '%';
+    whereParts.push('(t.title LIKE ? OR t.note LIKE ? OR s.title LIKE ?)');
+    params.push(term, term, term);
+  }
+  if (req.query.area_id) { whereParts.push('a.id=?'); params.push(Number(req.query.area_id)); }
+  if (req.query.goal_id) { whereParts.push('g.id=?'); params.push(Number(req.query.goal_id)); }
+  if (req.query.status) { whereParts.push('t.status=?'); params.push(req.query.status); }
+  const whereClause = whereParts.length ? 'WHERE ' + whereParts.join(' AND ') : '';
   res.json(enrichTasks(db.prepare(`
     SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     LEFT JOIN subtasks s ON s.task_id=t.id
-    WHERE t.title LIKE ? OR t.note LIKE ? OR s.title LIKE ?
+    ${whereClause}
     ORDER BY CASE t.status WHEN 'doing' THEN 0 WHEN 'todo' THEN 1 WHEN 'done' THEN 2 END, t.priority DESC
     LIMIT 50
-  `).all(term, term, term)));
+  `).all(...params)));
 });
 
 // ─── Overdue (before :id to avoid param capture) ───
@@ -368,7 +405,18 @@ function nextDueDate(dueDate, recurrence) {
   if (recurrence === 'daily') d.setDate(d.getDate() + 1);
   else if (recurrence === 'weekly') d.setDate(d.getDate() + 7);
   else if (recurrence === 'monthly') d.setMonth(d.getMonth() + 1);
-  else return null;
+  else if (recurrence === 'yearly') d.setFullYear(d.getFullYear() + 1);
+  else {
+    // Custom: "every-N-days", "every-N-weeks", "weekdays"
+    const evDays = recurrence.match(/^every-(\d+)-days$/);
+    const evWeeks = recurrence.match(/^every-(\d+)-weeks$/);
+    if (evDays) d.setDate(d.getDate() + Number(evDays[1]));
+    else if (evWeeks) d.setDate(d.getDate() + Number(evWeeks[1]) * 7);
+    else if (recurrence === 'weekdays') {
+      do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
+    }
+    else return null;
+  }
   const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
   return `${y}-${m}-${day}`;
 }
@@ -730,6 +778,51 @@ app.get('/api/focus/history', (req, res) => {
     GROUP BY date(started_at) ORDER BY day
   `).all();
   res.json({ total, page, pages: Math.ceil(total / limit), items, daily });
+});
+
+// ─── Reminders (upcoming + overdue summary) ───
+app.get('/api/reminders', (req, res) => {
+  const overdue = enrichTasks(db.prepare(`
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.due_date < date('now') AND t.status != 'done'
+    ORDER BY t.due_date, t.priority DESC
+  `).all());
+  const today = enrichTasks(db.prepare(`
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.due_date = date('now') AND t.status != 'done'
+    ORDER BY t.priority DESC
+  `).all());
+  const upcoming = enrichTasks(db.prepare(`
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.due_date > date('now') AND t.due_date <= date('now', '+3 days') AND t.status != 'done'
+    ORDER BY t.due_date, t.priority DESC
+  `).all());
+  res.json({ overdue, today, upcoming, total: overdue.length + today.length + upcoming.length });
+});
+
+// ─── Task Dependencies ───
+app.get('/api/tasks/:id/deps', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const blockedBy = db.prepare('SELECT t.id, t.title, t.status FROM tasks t JOIN task_deps d ON t.id=d.blocked_by_id WHERE d.task_id=?').all(id);
+  const blocking = db.prepare('SELECT t.id, t.title, t.status FROM tasks t JOIN task_deps d ON t.id=d.task_id WHERE d.blocked_by_id=?').all(id);
+  res.json({ blockedBy, blocking });
+});
+
+app.put('/api/tasks/:id/deps', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const { blockedByIds } = req.body;
+  if (!Array.isArray(blockedByIds)) return res.status(400).json({ error: 'blockedByIds array required' });
+  // Prevent self-dependency
+  const valid = blockedByIds.filter(bid => Number.isInteger(bid) && bid !== id);
+  db.prepare('DELETE FROM task_deps WHERE task_id=?').run(id);
+  const ins = db.prepare('INSERT OR IGNORE INTO task_deps (task_id, blocked_by_id) VALUES (?, ?)');
+  valid.forEach(bid => ins.run(id, bid));
+  res.json({ ok: true, blockedBy: db.prepare('SELECT t.id, t.title, t.status FROM tasks t JOIN task_deps d ON t.id=d.blocked_by_id WHERE d.task_id=?').all(id) });
 });
 
 // SPA fallback

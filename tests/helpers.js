@@ -20,6 +20,7 @@ function cleanDb() {
   const { db } = setup();
   db.exec('DELETE FROM focus_sessions');
   db.exec('DELETE FROM task_tags');
+  db.exec('DELETE FROM task_deps');
   db.exec('DELETE FROM subtasks');
   db.exec('DELETE FROM tasks');
   db.exec('DELETE FROM goals');

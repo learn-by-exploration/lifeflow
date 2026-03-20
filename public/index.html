@@ -405,6 +405,34 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
   .em-grid{grid-template-columns:1fr;grid-template-rows:auto auto auto auto}
   .ms-bar{left:0}
 }
+
+/* Notification bell */
+.bell-wrap{position:relative;margin-left:auto;flex-shrink:0}
+.bell-btn{background:none;border:none;color:var(--tx2);cursor:pointer;padding:6px;border-radius:50%;position:relative;font-size:22px;display:flex;align-items:center;justify-content:center}
+.bell-btn:hover{background:var(--bg-h);color:var(--tx)}
+.bell-badge{position:absolute;top:2px;right:2px;background:var(--err);color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px}
+.bell-badge:empty,.bell-badge[data-c="0"]{display:none}
+.bell-dd{position:absolute;right:0;top:100%;margin-top:6px;width:360px;max-height:440px;overflow-y:auto;background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--r);box-shadow:var(--shd);z-index:100;display:none;padding:8px 0}
+.bell-dd.open{display:block}
+.bell-dd .bell-sec{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--txd);padding:8px 14px 4px}
+.bell-dd .bell-item{display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;font-size:13px;transition:background .1s}
+.bell-dd .bell-item:hover{background:var(--bg-h)}
+.bell-dd .bell-due{font-size:10px;color:var(--txd);white-space:nowrap}
+.bell-dd .bell-empty{padding:24px;text-align:center;font-size:12px;color:var(--txd)}
+
+/* Dependency chip */
+.dep-chip{display:inline-flex;align-items:center;gap:3px;font-size:10px;background:var(--bg-c);border:1px solid var(--brd);border-radius:4px;padding:1px 6px;color:var(--txd)}
+.dep-chip.done{text-decoration:line-through;opacity:.6}
+.dep-chip .dep-x{cursor:pointer;font-size:12px;opacity:.7;margin-left:2px}
+.dep-chip .dep-x:hover{opacity:1;color:var(--err)}
+.blocked-indicator{display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--warn)}
+
+/* Subtask drag reorder */
+.sti{transition:background .1s}
+.sti.drag-over-sub{border-top:2px solid var(--brand)}
+.sti .st-handle{cursor:grab;color:var(--txd);font-size:14px;opacity:.4}
+.sti:hover .st-handle{opacity:1}
+.sti.dragging-sub{opacity:.35}
 </style>
 </head>
 <body>
@@ -442,7 +470,12 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 </aside>
 
 <main class="mn">
-  <div class="tb"><div class="bc" id="bc"></div><h2 id="pt">My Day</h2></div>
+  <div class="tb"><div class="bc" id="bc"></div><h2 id="pt">My Day</h2>
+    <div class="bell-wrap" id="bell-wrap">
+      <button class="bell-btn" id="bell-btn"><span class="material-icons-round">notifications</span><span class="bell-badge" id="bell-badge"></span></button>
+      <div class="bell-dd" id="bell-dd"></div>
+    </div>
+  </div>
   <div class="vt" id="vt" style="display:none">
     <button class="vt-btn active" data-tab="list">List</button>
     <button class="vt-btn" data-tab="board">Board</button>
@@ -480,6 +513,11 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 <div class="sr-ov" id="sr-ov">
   <div class="sr-box">
     <div style="position:relative"><span class="material-icons-round sr-icon">search</span><input class="sr-inp" id="sr-inp" placeholder="Search tasks, notes, subtasks..." autocomplete="off"></div>
+    <div style="display:flex;gap:6px;margin:6px 0 2px;flex-wrap:wrap">
+      <select id="sr-area" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--txp);border-radius:var(--rs)"><option value="">All Areas</option></select>
+      <select id="sr-goal" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--txp);border-radius:var(--rs)"><option value="">All Goals</option></select>
+      <select id="sr-status" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--txp);border-radius:var(--rs)"><option value="">Any Status</option><option value="todo">To Do</option><option value="done">Done</option></select>
+    </div>
     <div class="sr-results" id="sr-results"></div>
     <div class="sr-hint"><span>↑↓ Navigate · Enter Open · Esc Close</span><span>Ctrl+K to search</span></div>
   </div>
@@ -874,6 +912,7 @@ function tcHtml(t,ctx){
   if(t.priority>0)meta+=`<span style="color:${PC[t.priority]}">${PL[t.priority]}</span>`;
   if(t.assigned_to)meta+=`<span>👤 ${esc(t.assigned_to)}</span>`;
   if(t.recurring)meta+=`<span>🔁 ${esc(t.recurring)}</span>`;
+  if(t.blocked_by&&t.blocked_by.some(b=>b.status!=='done'))meta+=`<span class="blocked-indicator"><span class="material-icons-round" style="font-size:12px">lock</span>Blocked</span>`;
   if(t.my_day&&currentView!=='myday')meta+=`<span>☀️</span>`;
   if(t.tags&&t.tags.length)t.tags.forEach(tg=>meta+=`<span class="tag" style="background:${escA(tg.color)}">${esc(tg.name)}</span>`);
   if(ctx){meta+=`<span class="tag" style="background:${escA(t.goal_color||'var(--brand)')}">${esc(t.goal_title||'')}</span>`;
@@ -1191,15 +1230,19 @@ function renderDPBody(){
     <div class="dp-row"><div><label>Due Date</label><input type="date" id="dp-due" value="${t.due_date||''}"></div>
     <div><label>Priority</label><select id="dp-pri"><option value="0" ${t.priority===0?'selected':''}>None</option><option value="1" ${t.priority===1?'selected':''}>Normal</option><option value="2" ${t.priority===2?'selected':''}>High</option><option value="3" ${t.priority===3?'selected':''}>Critical</option></select></div></div>
     <div class="dp-row"><div><label>Assigned To</label><input type="text" id="dp-asg" value="${escA(t.assigned_to||'')}"></div>
-    <div><label>Recurring</label><select id="dp-rec"><option value="">None</option><option value="daily" ${t.recurring==='daily'?'selected':''}>Daily</option><option value="weekly" ${t.recurring==='weekly'?'selected':''}>Weekly</option><option value="monthly" ${t.recurring==='monthly'?'selected':''}>Monthly</option></select></div></div>
+    <div><label>Recurring</label><select id="dp-rec"><option value="">None</option><option value="daily" ${t.recurring==='daily'?'selected':''}>Daily</option><option value="weekdays" ${t.recurring==='weekdays'?'selected':''}>Weekdays</option><option value="weekly" ${t.recurring==='weekly'?'selected':''}>Weekly</option><option value="every-2-weeks" ${t.recurring==='every-2-weeks'?'selected':''}>Every 2 Weeks</option><option value="monthly" ${t.recurring==='monthly'?'selected':''}>Monthly</option><option value="yearly" ${t.recurring==='yearly'?'selected':''}>Yearly</option><option value="custom" ${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)?'selected':''}>Custom…</option></select><div id="dp-rec-custom" style="display:${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)&&t.recurring!=='every-2-weeks'?'flex':'none'};gap:6px;margin-top:4px;align-items:center"><span style="font-size:11px">Every</span><input type="number" id="dp-rec-n" min="1" max="365" style="width:60px" value="${(t.recurring?.match(/^every-(\d+)/)||[])[1]||'3'}"><select id="dp-rec-unit" style="width:80px"><option value="days" ${t.recurring?.endsWith('-days')?'selected':''}>Days</option><option value="weeks" ${t.recurring?.endsWith('-weeks')?'selected':''}>Weeks</option></select></div></div></div>
     <div><label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:10px"><input type="checkbox" id="dp-md" ${t.my_day?'checked':''} style="width:auto;margin:0">Add to My Day</label></div>
     <label>Tags</label><div class="tg-wrap" id="tg-wrap"><div class="tgi" id="tgi"></div></div>
-    <label>Subtasks</label><div class="sta"><input type="text" id="st-input" placeholder="Add subtask..."><button id="st-add">Add</button></div><div class="stl" id="stl"></div>`;
+    <label>Subtasks</label><div class="sta"><input type="text" id="st-input" placeholder="Add subtask..."><button id="st-add">Add</button></div><div class="stl" id="stl"></div>
+    <label>Dependencies</label><div id="dp-deps"></div>`;
   $('dp-body').innerHTML=h;
   renderTagInput();
   renderSubtasks();
+  renderDeps();
   $('st-add').addEventListener('click',addSubtask);
   $('st-input').addEventListener('keydown',e=>{if(e.key==='Enter')addSubtask()});
+  // Custom recurring toggle
+  $('dp-rec').addEventListener('change',()=>{$('dp-rec-custom').style.display=$('dp-rec').value==='custom'?'flex':'none'});
   // Markdown preview toggle
   const noteEl=$('dp-note'),prevEl=$('dp-note-preview');
   function updateNotePrev(){const v=noteEl.value.trim();if(v){prevEl.innerHTML=renderMd(v);prevEl.style.display='block'}else{prevEl.style.display='none'}}
@@ -1240,7 +1283,8 @@ function showTagDD(q){
 }
 function renderSubtasks(){
   const el=$('stl');
-  el.innerHTML=dpSubtasks.map(s=>`<div class="sti ${s.done?'stdone':''}" data-id="${s.id}" style="display:flex;align-items:center;gap:7px;padding:5px 0">
+  el.innerHTML=dpSubtasks.map((s,i)=>`<div class="sti ${s.done?'stdone':''}" data-id="${s.id}" data-idx="${i}" draggable="true" style="display:flex;align-items:center;gap:7px;padding:5px 0">
+    <span class="st-handle material-icons-round" style="cursor:grab;font-size:14px;color:var(--txd);flex-shrink:0">drag_indicator</span>
     <div class="stk" data-id="${s.id}" style="width:16px;height:16px;border-radius:50%;border:2px solid ${s.done?'var(--ok)':'var(--ck-bd,var(--txd))'};background:${s.done?'var(--ok)':'var(--ck-bg,transparent)'};cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">
       <span class="material-icons-round" style="font-size:10px;color:#fff;display:${s.done?'block':'none'}">check</span>
     </div>
@@ -1249,6 +1293,18 @@ function renderSubtasks(){
   </div>
   <div class="stn" data-id="${s.id}" contenteditable="true" title="Click to add note" style="font-size:10px;color:var(--txd);margin:0 0 4px 28px;padding:2px 4px;border-radius:3px;outline:none;font-style:italic;min-height:14px;border:1px solid transparent;cursor:text" onfocus="this.style.borderColor='var(--brd)'" onblur="this.style.borderColor='transparent'">${esc(s.note||'')}</div>`).join('');
   if(!dpSubtasks.length) el.innerHTML='';
+  // Drag reorder
+  let dragIdx=null;
+  el.querySelectorAll('.sti[draggable]').forEach(row=>{
+    row.addEventListener('dragstart',e=>{dragIdx=Number(row.dataset.idx);row.classList.add('dragging-sub');e.dataTransfer.effectAllowed='move'});
+    row.addEventListener('dragend',()=>{row.classList.remove('dragging-sub');el.querySelectorAll('.sti').forEach(r=>r.classList.remove('drag-over-sub'))});
+    row.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';el.querySelectorAll('.sti').forEach(r=>r.classList.remove('drag-over-sub'));row.classList.add('drag-over-sub')});
+    row.addEventListener('drop',async e=>{e.preventDefault();const toIdx=Number(row.dataset.idx);if(dragIdx===null||dragIdx===toIdx)return;
+      const [moved]=dpSubtasks.splice(dragIdx,1);dpSubtasks.splice(toIdx,0,moved);
+      renderSubtasks();
+      await api.put('/api/subtasks/reorder',{items:dpSubtasks.map((s,i)=>({id:s.id,position:i}))});
+    });
+  });
   el.querySelectorAll('.stk').forEach(ck=>ck.addEventListener('click',async()=>{
     const sid=Number(ck.dataset.id);const s=dpSubtasks.find(x=>x.id===sid);
     if(!s)return;await api.put('/api/subtasks/'+sid,{done:s.done?0:1});
@@ -1269,16 +1325,51 @@ async function addSubtask(){
   dpSubtasks.push(s);inp.value='';renderSubtasks();
 }
 
+// ─── DEPENDENCIES ───
+let dpDeps=[];
+async function renderDeps(){
+  const el=$('dp-deps');if(!el||!dpTask)return;
+  try{const r=await api.get('/api/tasks/'+dpTask.id+'/deps');dpDeps=r.blockedBy||[]}catch{dpDeps=[]}
+  let h='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">';
+  dpDeps.forEach(d=>h+=`<span class="dep-chip ${d.status==='done'?'done':''}" data-id="${d.id}">${esc(d.title)}<span class="dep-x" data-id="${d.id}">×</span></span>`);
+  h+='</div>';
+  h+=`<div style="position:relative"><input type="text" id="dep-search" placeholder="Search tasks to add as dependency..." style="font-size:12px"><div id="dep-dd" style="position:absolute;top:100%;left:0;right:0;background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--rs);max-height:150px;overflow-y:auto;display:none;z-index:5"></div></div>`;
+  el.innerHTML=h;
+  el.querySelectorAll('.dep-x').forEach(x=>x.addEventListener('click',async()=>{
+    const bid=Number(x.dataset.id);dpDeps=dpDeps.filter(d=>d.id!==bid);
+    await api.put('/api/tasks/'+dpTask.id+'/deps',{blockedByIds:dpDeps.map(d=>d.id)});
+    renderDeps();
+  }));
+  let depTimer=null;
+  const depInp=$('dep-search'),depDD=$('dep-dd');
+  depInp.addEventListener('input',()=>{clearTimeout(depTimer);depTimer=setTimeout(async()=>{
+    const q=depInp.value.trim();if(!q){depDD.style.display='none';return}
+    const r=await api.get('/api/tasks/search?q='+encodeURIComponent(q));
+    const filtered=r.filter(t=>t.id!==dpTask.id&&!dpDeps.some(d=>d.id===t.id));
+    if(!filtered.length){depDD.innerHTML='<div style="padding:8px;font-size:11px;color:var(--txd)">No matches</div>';depDD.style.display='block';return}
+    depDD.innerHTML=filtered.slice(0,8).map(t=>`<div class="dep-opt" data-id="${t.id}" style="padding:6px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--brd)">${esc(t.title)}<span style="font-size:10px;color:var(--txd);margin-left:6px">${esc(t.goal_title||'')}</span></div>`).join('');
+    depDD.style.display='block';
+    depDD.querySelectorAll('.dep-opt').forEach(opt=>opt.addEventListener('click',async()=>{
+      dpDeps.push({id:Number(opt.dataset.id),title:opt.textContent,status:'todo'});
+      await api.put('/api/tasks/'+dpTask.id+'/deps',{blockedByIds:dpDeps.map(d=>d.id)});
+      depInp.value='';depDD.style.display='none';renderDeps();
+    }));
+  },250)});
+  depInp.addEventListener('blur',()=>setTimeout(()=>{depDD.style.display='none'},200));
+}
+
 $('dp-close').addEventListener('click',()=>$('dp').classList.remove('open'));
 $('dp-cancel').addEventListener('click',()=>$('dp').classList.remove('open'));
 $('dp-save').addEventListener('click',async()=>{
-  if(!dpTask)return;
+  let rec=$('dp-rec').value||null;
+  if(rec==='custom'){const n=parseInt($('dp-rec-n').value)||3;const u=$('dp-rec-unit').value;rec='every-'+n+'-'+u}
   await api.put('/api/tasks/'+dpTask.id,{
     title:$('dp-ttl').value, note:$('dp-note').value, due_date:$('dp-due').value||null,
     priority:Number($('dp-pri').value), assigned_to:$('dp-asg').value,
-    recurring:$('dp-rec').value||null, my_day:$('dp-md').checked
+    recurring:rec, my_day:$('dp-md').checked
   });
   await api.put('/api/tasks/'+dpTask.id+'/tags',{tagIds:dpTags});
+  $('dp').classList.remove('open');showToast('Task saved');await loadAreas();render();loadBellReminders
   $('dp').classList.remove('open');showToast('Task saved');await loadAreas();render();
 });
 
@@ -1354,25 +1445,67 @@ $('sb-ov').addEventListener('click', () => { $('sb').classList.remove('open'); $
 function closeMobileSb() { $('sb').classList.remove('open'); $('sb-ov').classList.remove('open'); }
 
 // Boot
-Promise.all([loadAreas(),loadTags()]).then(()=>{render();loadOverdueBadge()});
+Promise.all([loadAreas(),loadTags()]).then(()=>{render();loadOverdueBadge();loadBellReminders()});
+
+// ─── NOTIFICATION BELL ───
+async function loadBellReminders(){
+  try{
+    const r=await api.get('/api/reminders');
+    const badge=$('bell-badge');
+    badge.textContent=r.total;badge.dataset.c=r.total;
+    const dd=$('bell-dd');
+    let h='';
+    if(!r.total){h='<div class="bell-empty"><span class="material-icons-round" style="font-size:32px;opacity:.3;display:block;margin-bottom:6px">check_circle</span>All clear! No upcoming deadlines</div>';dd.innerHTML=h;return}
+    if(r.overdue.length){h+=`<div class="bell-sec" style="color:var(--err)">Overdue (${r.overdue.length})</div>`;
+      r.overdue.forEach(t=>h+=bellItem(t,'od'))}
+    if(r.today.length){h+=`<div class="bell-sec" style="color:var(--warn)">Due Today (${r.today.length})</div>`;
+      r.today.forEach(t=>h+=bellItem(t,'today'))}
+    if(r.upcoming.length){h+=`<div class="bell-sec">Coming Up (${r.upcoming.length})</div>`;
+      r.upcoming.forEach(t=>h+=bellItem(t,'soon'))}
+    dd.innerHTML=h;
+    dd.querySelectorAll('.bell-item').forEach(it=>it.addEventListener('click',()=>{dd.classList.remove('open');openDP(Number(it.dataset.id))}));
+  }catch{}
+}
+function bellItem(t,type){
+  const icon=type==='od'?'error':'event';
+  const color=type==='od'?'var(--err)':type==='today'?'var(--warn)':'var(--txd)';
+  return`<div class="bell-item" data-id="${t.id}"><span class="material-icons-round" style="font-size:16px;color:${color}">${icon}</span><span style="flex:1;font-weight:500">${esc(t.title)}</span><span class="bell-due">${fmtDue(t.due_date)}</span></div>`;
+}
+$('bell-btn').addEventListener('click',e=>{e.stopPropagation();$('bell-dd').classList.toggle('open');loadBellReminders()});
+document.addEventListener('click',e=>{if(!e.target.closest('#bell-wrap'))$('bell-dd').classList.remove('open')});
+// Refresh bell every 60 seconds
+setInterval(loadBellReminders,60000);
 
 // ─── SEARCH ───
 let srTimer=null,srIdx=-1;
-function openSearch(){$('sr-ov').classList.add('active');$('sr-inp').value='';$('sr-results').innerHTML='<div class="sr-empty">Type to search tasks, notes, and subtasks</div>';$('sr-inp').focus();srIdx=-1}
-function closeSearch(){$('sr-ov').classList.remove('active')}
-$('sr-ov').addEventListener('click',e=>{if(e.target===$('sr-ov'))closeSearch()});
-$('sr-inp').addEventListener('input',()=>{
+function openSearch(){
+  $('sr-ov').classList.add('active');$('sr-inp').value='';$('sr-results').innerHTML='<div class="sr-empty">Type to search tasks, notes, and subtasks</div>';$('sr-inp').focus();srIdx=-1;
+  // Populate filter dropdowns
+function runSearch(){
   clearTimeout(srTimer);
   srTimer=setTimeout(async()=>{
     const q=$('sr-inp').value.trim();
-    if(!q){$('sr-results').innerHTML='<div class="sr-empty">Type to search tasks, notes, and subtasks</div>';srIdx=-1;return}
-    const r=await api.get('/api/tasks/search?q='+encodeURIComponent(q));
-    if(!r.length){$('sr-results').innerHTML='<div class="sr-empty">No results for "'+esc(q)+'"</div>';srIdx=-1;return}
+    const areaId=$('sr-area').value;const goalId=$('sr-goal').value;const status=$('sr-status').value;
+    if(!q&&!areaId&&!goalId&&!status){$('sr-results').innerHTML='<div class="sr-empty">Type to search tasks, notes, and subtasks</div>';srIdx=-1;return}
+    let url='/api/tasks/search?q='+encodeURIComponent(q);
+    if(areaId)url+='&area_id='+areaId;if(goalId)url+='&goal_id='+goalId;if(status)url+='&status='+status;
+    const r=await api.get(url);
+    if(!r.length){$('sr-results').innerHTML='<div class="sr-empty">No results'+(q?' for "'+esc(q)+'"':'')+'</div>';srIdx=-1;return}
     $('sr-results').innerHTML=r.map((t,i)=>{
       const od=isOD(t.due_date)&&t.status!=='done';
       return`<div class="sr-item ${i===srIdx?'sel':''}" data-id="${t.id}">
         <div class="tk" style="width:14px;height:14px;border-width:1.5px;${t.status==='done'?'background:var(--ok);border-color:var(--ok)':''}"><span class="material-icons-round" style="font-size:9px;${t.status==='done'?'display:block':'display:none'}">check</span></div>
         <div class="sr-ti">${esc(t.title)}</div>
+        <div class="sr-mt">${esc(t.area_icon||'')} ${esc(t.area_name||'')} › ${esc(t.goal_title||'')}${t.due_date?' · '+(od?'<span style="color:var(--err)">':'')+fmtDue(t.due_date)+(od?'</span>':''):''}</div>
+      </div>`}).join('');
+    srIdx=-1;
+    $('sr-results').querySelectorAll('.sr-item').forEach(it=>it.addEventListener('click',()=>{closeSearch();openDP(Number(it.dataset.id))}));
+  },200);
+}
+$('sr-inp').addEventListener('input',runSearch);
+$('sr-area').addEventListener('change',runSearch);
+$('sr-goal').addEventListener('change',runSearch);
+$('sr-status').addEventListener('change',runSearch       <div class="sr-ti">${esc(t.title)}</div>
         <div class="sr-mt">${esc(t.area_icon||'')} ${esc(t.area_name||'')} › ${esc(t.goal_title||'')}${t.due_date?' · '+(od?'<span style="color:var(--err)">':'')+fmtDue(t.due_date)+(od?'</span>':''):''}</div>
       </div>`}).join('');
     srIdx=-1;
