@@ -47,13 +47,47 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
   .tb{padding:18px 16px 0;padding-left:52px}
   .ct{padding:16px 16px 28px}
   .vt{padding:10px 16px 0}
-  .fab{bottom:20px;right:20px}
+  .fab{bottom:20px;right:20px;width:56px;height:56px;font-size:28px}
   .board{flex-direction:column}
   .bcol{min-width:100% !important;max-width:100% !important}
   .dp{width:100vw;right:-100vw}
   .dp.open{right:0}
   .cg{font-size:9px}
   .cc{min-height:70px}
+  /* Mobile touch-friendly targets */
+  .tc{padding:14px 16px;min-height:48px}
+  .tc .ta button{min-width:40px;min-height:40px;font-size:18px}
+  .qa input{font-size:16px;padding:12px}
+  .qa button{min-height:44px;padding:8px 16px}
+  .gc{min-height:56px}
+  .gc .ga button{min-width:36px;min-height:36px}
+  /* Bell dropdown full-width on mobile */
+  .bell-dd{width:calc(100vw - 32px);right:-8px;max-height:60vh}
+  .bell-dd .bell-item{padding:12px 14px}
+  /* Focus timer fullscreen on mobile */
+  .ft-box{width:100%;padding:0 16px}
+  .ft-ring{width:180px;height:180px}
+  .ft-ring svg{width:180px;height:180px}
+  .ft-ring circle{r:80}
+  .ft-ring .ft-time-inner{font-size:40px}
+  .ft-btns{flex-wrap:wrap}
+  .ft-btn{padding:12px 24px;font-size:14px;flex:1;min-width:120px}
+  /* Onboarding responsive */
+  .onb-box{padding:28px 20px;width:95%}
+  .onb-step h2{font-size:18px}
+  .onb-btn-next,.onb-btn-skip{padding:14px;font-size:14px}
+  /* Search overlay */
+  .sr-ov .sr-box{width:95%;margin:16px auto}
+  .sr-inp{font-size:16px;padding:12px 12px 12px 40px}
+  /* Detail panel mobile-friendly */
+  .dp .di{font-size:14px;padding:10px 12px}
+  .dp .dp-btns button{min-height:44px;padding:10px 16px;font-size:14px}
+  /* Quick capture mobile */
+  .qc-box{width:95%;padding:20px}
+  .qc-box .qc-input input{font-size:16px;padding:12px}
+  .qc-box .qc-input button{min-height:44px}
+  /* KB shortcuts hide on mobile */
+  .kb-wrap{display:none}
 }
 
 /* Sidebar */
@@ -309,6 +343,20 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .ft-ring{width:220px;height:220px;margin:0 auto 20px;position:relative}
 .ft-ring svg{transform:rotate(-90deg)}
 .ft-ring .ft-time-inner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;font-weight:300;font-variant-numeric:tabular-nums}
+
+/* Onboarding Wizard */
+.onb-ov{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:300;display:none;align-items:center;justify-content:center}
+.onb-ov.active{display:flex}
+.onb-box{background:var(--bg-s);border-radius:var(--r);padding:40px;max-width:460px;width:90%;box-shadow:var(--shd)}
+.onb-step{animation:slideUp .3s ease-out}
+.onb-step h2{font-size:20px;font-weight:600;margin-bottom:12px;color:var(--tx)}
+.onb-step p{color:var(--tx2);font-size:13px;line-height:1.6}
+.onb-btn-next,.onb-btn-skip{width:100%;padding:12px;border-radius:var(--rs);border:none;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;transition:all .15s;margin-top:12px}
+.onb-btn-next{background:var(--brand);color:white}
+.onb-btn-next:hover{background:var(--brand-h);transform:translateY(-1px)}
+.onb-btn-skip{background:transparent;border:1px solid var(--brd);color:var(--tx2)}
+.onb-btn-skip:hover{background:var(--bg-c);color:var(--tx)}
+@keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 
 /* Activity Log */
 .al-day{margin-bottom:18px}
@@ -579,6 +627,68 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
       <button class="ft-btn" id="ft-mode">Short Break</button>
       <button class="ft-btn primary" id="ft-toggle">Start</button>
       <button class="ft-btn danger" id="ft-stop">End Session</button>
+    </div>
+  </div>
+</div>
+
+<!-- Onboarding Wizard overlay -->
+<div class="onb-ov" id="onb-ov">
+  <div class="onb-box">
+    <div class="onb-step-1 onb-step">
+      <div style="text-align:center">
+        <span class="material-icons-round" style="font-size:64px;color:var(--brand);margin-bottom:16px;display:block">emoji_events</span>
+        <h2>Welcome to LifeFlow</h2>
+        <p style="font-size:13px;color:var(--tx2);margin-top:8px">The task manager that lives on your machine.<br/>Fast, local, and yours.</p>
+      </div>
+      <div style="margin-top:24px;background:var(--bg-c);padding:12px;border-radius:8px;font-size:12px;line-height:1.6;border-left:3px solid var(--brand)">
+        <strong>3-step setup takes 2 minutes:</strong><br/>
+        1️⃣ Create a life area (e.g., "Work", "Health")<br/>
+        2️⃣ Add a goal to that area<br/>
+        3️⃣ Create your first task
+      </div>
+      <button class="onb-btn-next" id="onb-next-1">Let's Get Started →</button>
+    </div>
+
+    <div class="onb-step-2 onb-step" style="display:none">
+      <h2>Step 1: Create a Life Area</h2>
+      <p style="color:var(--tx2);font-size:13px;margin-bottom:12px">Areas organize your life into categories. Example: <strong>Work</strong>, <strong>Health</strong>, <strong>Finances</strong></p>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input type="text" id="onb-area-input" placeholder="e.g., Work" style="flex:1;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px">
+        <select id="onb-area-icon" style="padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px;cursor:pointer">
+          <option value="💼">💼 Work</option>
+          <option value="💪">💪 Health</option>
+          <option value="📚">📚 Learning</option>
+          <option value="❤️">❤️ Personal</option>
+          <option value="🏠">🏠 Home</option>
+          <option value="💰">💰 Finance</option>
+          <option value="🎯">🎯 Goals</option>
+        </select>
+      </div>
+      <button class="onb-btn-next" id="onb-next-2">Create Area →</button>
+      <button class="onb-btn-skip" id="onb-skip-2">Skip Step</button>
+    </div>
+
+    <div class="onb-step-3 onb-step" style="display:none">
+      <h2>Step 2: Add a Goal</h2>
+      <p style="color:var(--tx2);font-size:13px;margin-bottom:12px">Goals are what you want to achieve. Example: <strong>Complete Q1 project</strong>, <strong>Run 3x per week</strong></p>
+      <input type="text" id="onb-goal-input" placeholder="What do you want to achieve?" style="width:100%;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px;margin-bottom:12px;box-sizing:border-box">
+      <button class="onb-btn-next" id="onb-next-3">Add Goal →</button>
+      <button class="onb-btn-skip" id="onb-skip-3">Skip Step</button>
+    </div>
+
+    <div class="onb-step-4 onb-step" style="display:none">
+      <h2>Step 3: Create Your First Task</h2>
+      <p style="color:var(--tx2);font-size:13px;margin-bottom:12px">Tasks are concrete actions. Example: <strong>Email client proposal</strong>, <strong>Buy groceries</strong></p>
+      <input type="text" id="onb-task-input" placeholder="What's your first action?" style="width:100%;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px;margin-bottom:12px;box-sizing:border-box">
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <select id="onb-task-priority" style="flex:1;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px">
+          <option value="1">Normal Priority</option>
+          <option value="2">High Priority</option>
+          <option value="3">Critical</option>
+        </select>
+        <input type="date" id="onb-task-due" style="flex:1;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px">
+      </div>
+      <button class="onb-btn-next" id="onb-next-4">Complete Setup 🎉</button>
     </div>
   </div>
 </div>
@@ -1448,7 +1558,11 @@ $('sb-ov').addEventListener('click', () => { $('sb').classList.remove('open'); $
 function closeMobileSb() { $('sb').classList.remove('open'); $('sb-ov').classList.remove('open'); }
 
 // Boot
-Promise.all([loadAreas(),loadTags()]).then(()=>{render();loadOverdueBadge();loadBellReminders();initServiceWorker();requestNotificationPermission()});
+Promise.all([loadAreas(),loadTags()]).then(()=>{
+  render();loadOverdueBadge();loadBellReminders();initServiceWorker();requestNotificationPermission();
+  // Check for first-time user onboarding
+  if(!localStorage.getItem('lf-onboarded')&&!areas.length){$('onb-ov').classList.add('active')}
+});
 
 // ─── SERVICE WORKER ───
 async function initServiceWorker(){
@@ -1504,6 +1618,69 @@ if('Notification' in window&&Notification.permission==='granted'){
   setInterval(scheduleNotifications,5*60*1000);
   window.addEventListener('focus',scheduleNotifications);
 }
+
+// ─── ONBOARDING WIZARD ───
+(function initOnboarding(){
+  let onbAreaId=null,onbGoalId=null;
+  const ov=$('onb-ov');
+
+  function showStep(n){
+    ov.querySelectorAll('.onb-step').forEach(s=>s.style.display='none');
+    ov.querySelector('.onb-step-'+n).style.display='block';
+  }
+
+  $('onb-next-1').addEventListener('click',()=>showStep(2));
+
+  $('onb-next-2').addEventListener('click',async()=>{
+    const name=$('onb-area-input').value.trim();
+    if(!name){$('onb-area-input').style.borderColor='var(--err)';return}
+    const icon=$('onb-area-icon').value;
+    const color=COLORS[Math.floor(Math.random()*COLORS.length)];
+    try{
+      const area=await api.post('/api/areas',{name,icon,color});
+      onbAreaId=area.id;
+      await loadAreas();render();
+      showStep(3);
+    }catch(e){showToast('Failed to create area')}
+  });
+
+  $('onb-skip-2').addEventListener('click',()=>{
+    localStorage.setItem('lf-onboarded','true');
+    ov.classList.remove('active');
+  });
+
+  $('onb-next-3').addEventListener('click',async()=>{
+    const title=$('onb-goal-input').value.trim();
+    if(!title){$('onb-goal-input').style.borderColor='var(--err)';return}
+    if(!onbAreaId){showToast('Please create an area first');showStep(2);return}
+    try{
+      const goal=await api.post('/api/areas/'+onbAreaId+'/goals',{title,description:'',color:COLORS[0]});
+      onbGoalId=goal.id;
+      showStep(4);
+    }catch(e){showToast('Failed to create goal')}
+  });
+
+  $('onb-skip-3').addEventListener('click',()=>{
+    localStorage.setItem('lf-onboarded','true');
+    ov.classList.remove('active');
+    loadAreas().then(render);
+  });
+
+  $('onb-next-4').addEventListener('click',async()=>{
+    const title=$('onb-task-input').value.trim();
+    if(!title){$('onb-task-input').style.borderColor='var(--err)';return}
+    if(!onbGoalId){showToast('Please add a goal first');showStep(3);return}
+    const priority=Number($('onb-task-priority').value);
+    const due=$('onb-task-due').value||null;
+    try{
+      await api.post('/api/goals/'+onbGoalId+'/tasks',{title,priority,due_date:due,status:'todo',my_day:1});
+      localStorage.setItem('lf-onboarded','true');
+      ov.classList.remove('active');
+      await loadAreas();render();
+      showToast('🎉 Welcome to LifeFlow! Your first task is ready.');
+    }catch(e){showToast('Failed to create task')}
+  });
+})();
 
 // ─── NOTIFICATION BELL ───
 async function loadBellReminders(){
