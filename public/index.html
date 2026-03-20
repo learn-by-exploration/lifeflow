@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LifeFlow</title>
+<meta name="theme-color" content="#1e293b">
+<meta name="description" content="LifeFlow: The task manager that lives on your machine.">
+<link rel="manifest" href="/manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 <style>
@@ -1445,7 +1448,62 @@ $('sb-ov').addEventListener('click', () => { $('sb').classList.remove('open'); $
 function closeMobileSb() { $('sb').classList.remove('open'); $('sb-ov').classList.remove('open'); }
 
 // Boot
-Promise.all([loadAreas(),loadTags()]).then(()=>{render();loadOverdueBadge();loadBellReminders()});
+Promise.all([loadAreas(),loadTags()]).then(()=>{render();loadOverdueBadge();loadBellReminders();initServiceWorker();requestNotificationPermission()});
+
+// ─── SERVICE WORKER ───
+async function initServiceWorker(){
+  if(!('serviceWorker' in navigator))return;
+  try{
+    const reg=await navigator.serviceWorker.register('/sw.js',{scope:'/'});
+    // Listen for messages from SW (e.g., notification click with taskId)
+    navigator.serviceWorker.addEventListener('message',e=>{
+      if(e.data?.action==='openTask'&&e.data?.taskId){openDP(e.data.taskId)}
+    });
+    // Set up periodic sync for reminders (syncs every 60 min if app closed)
+    if('periodicSync' in reg){try{await reg.periodicSync.register('lifeflow-sync-reminders',{minInterval:60*60*1000})}catch(e){}}
+  }catch(err){console.error('SW registration failed:',err)}
+}
+
+// ─── NOTIFICATION PERMISSION ───
+async function requestNotificationPermission(){
+  if(!('Notification' in window)||Notification.permission==='denied')return;
+  if(Notification.permission==='granted'){scheduleNotifications();return}
+  // Show toast suggesting permission
+  const asked=localStorage.getItem('lf-notification-asked');
+  if(asked)return;
+  showToast('💬 Enable notifications to never miss a deadline',async()=>{
+    localStorage.setItem('lf-notification-asked','true');
+    const perm=await Notification.requestPermission();
+    if(perm==='granted'){showToast('✅ Notifications enabled!');scheduleNotifications()}
+  },8000);
+  localStorage.setItem('lf-notification-asked','true');
+}
+
+// Send reminders via Notification API
+async function scheduleNotifications(){
+  try{
+    const r=await api.get('/api/reminders');
+    const tasks=[...(r.overdue||[]),...(r.today||[])];
+    if(!tasks.length)return;
+    // Show summary notification if not already shown (use timestamp to avoid duplicates)
+    const lastNotif=localStorage.getItem('lf-last-notif-time');
+    const now=Date.now();
+    if(lastNotif&&now-parseInt(lastNotif)<300000)return; // Only once per 5 min
+    const count=tasks.length;
+    if('serviceWorker' in navigator&&navigator.serviceWorker.controller){
+      navigator.serviceWorker.controller.postMessage({
+        type:'show-notification',
+        notification:{title:'LifeFlow Reminders',body:`${count} task${count>1?'s':''} due`,tag:'reminders'}
+      });
+    }
+    localStorage.setItem('lf-last-notif-time',String(now));
+  }catch(err){console.error('Notification schedule error:',err)}
+}
+// Call scheduleNotifications every 5 min when window is focused
+if('Notification' in window&&Notification.permission==='granted'){
+  setInterval(scheduleNotifications,5*60*1000);
+  window.addEventListener('focus',scheduleNotifications);
+}
 
 // ─── NOTIFICATION BELL ───
 async function loadBellReminders(){

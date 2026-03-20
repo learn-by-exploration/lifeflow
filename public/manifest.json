@@ -1,0 +1,72 @@
+{
+  "name": "LifeFlow",
+  "short_name": "LifeFlow",
+  "description": "The task manager that lives on your machine. Fast, local, yours.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#6366f1",
+  "background_color": "#ffffff",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%236366f1'/><text x='96' y='120' font-size='80' font-weight='bold' text-anchor='middle' fill='white' font-family='system-ui'>✓</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%236366f1'/><text x='96' y='120' font-size='80' font-weight='bold' text-anchor='middle' fill='white' font-family='system-ui'>✓</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 540 720'><rect width='540' height='720' fill='%23f5f5f5'/><text x='20' y='60' font-size='32' font-weight='bold' fill='%23333'>LifeFlow</text><line x1='20' y1='80' x2='520' y2='80' stroke='%23ddd' stroke-width='1'/><text x='20' y='120' font-size='16' fill='%23666'>Tasks • Focus • Progress</text></svg>",
+      "sizes": "540x720",
+      "type": "image/svg+xml",
+      "form_factor": "narrow"
+    }
+  ],
+  "categories": ["productivity"],
+  "shortcuts": [
+    {
+      "name": "New Task",
+      "short_name": "New Task",
+      "description": "Create a new task",
+      "url": "/?action=new-task",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%236366f1'/><text x='96' y='100' font-size='96' text-anchor='middle' dominant-baseline='middle' fill='white'>+</text></svg>",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Focus Session",
+      "short_name": "Focus",
+      "description": "Start a focus session",
+      "url": "/?action=focus-timer",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%236366f1'/><circle cx='96' cy='96' r='60' stroke='white' stroke-width='8' fill='none'/><text x='96' y='110' font-size='48' text-anchor='middle' fill='white'>25</text></svg>",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
+}
