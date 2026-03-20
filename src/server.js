@@ -95,6 +95,12 @@ db.exec(`CREATE TABLE IF NOT EXISTS task_templates (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`);
 
+// ─── Settings table (key-value) ───
+db.exec(`CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY NOT NULL,
+  value TEXT NOT NULL
+)`);
+
 // Seed
 const cnt = db.prepare('SELECT COUNT(*) as c FROM life_areas').get();
 if (cnt.c === 0) {
@@ -922,6 +928,57 @@ app.post('/api/templates/:id/apply', (req, res) => {
   });
   txn();
   res.json({ ok: true, created });
+});
+
+// ─── Settings ───
+const SETTINGS_DEFAULTS = {
+  defaultView: 'myday',
+  theme: 'midnight',
+  focusDuration: '25',
+  shortBreak: '5',
+  longBreak: '15',
+  weekStart: '0',           // 0=Sunday, 1=Monday
+  defaultPriority: '0',     // 0=None, 1=Normal, 2=High, 3=Critical
+  showCompleted: 'true',
+  confirmDelete: 'true',
+  dateFormat: 'relative',   // relative, iso, us, eu
+  autoMyDay: 'false',       // auto-add new tasks to My Day
+};
+
+const SETTINGS_KEYS = new Set(Object.keys(SETTINGS_DEFAULTS));
+
+app.get('/api/settings', (req, res) => {
+  const rows = db.prepare('SELECT key, value FROM settings').all();
+  const settings = { ...SETTINGS_DEFAULTS };
+  for (const r of rows) {
+    if (SETTINGS_KEYS.has(r.key)) settings[r.key] = r.value;
+  }
+  res.json(settings);
+});
+
+app.put('/api/settings', (req, res) => {
+  const updates = req.body;
+  if (!updates || typeof updates !== 'object') return res.status(400).json({ error: 'Object required' });
+  const upsert = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value');
+  const txn = db.transaction(() => {
+    for (const [k, v] of Object.entries(updates)) {
+      if (!SETTINGS_KEYS.has(k)) continue;
+      upsert.run(k, String(v));
+    }
+  });
+  txn();
+  // Return full settings
+  const rows = db.prepare('SELECT key, value FROM settings').all();
+  const settings = { ...SETTINGS_DEFAULTS };
+  for (const r of rows) {
+    if (SETTINGS_KEYS.has(r.key)) settings[r.key] = r.value;
+  }
+  res.json(settings);
+});
+
+app.post('/api/settings/reset', (req, res) => {
+  db.prepare('DELETE FROM settings').run();
+  res.json(SETTINGS_DEFAULTS);
 });
 
 // SPA fallback

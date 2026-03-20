@@ -407,6 +407,36 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 /* Vim-style focus indicator */
 .tc.vim-focus{outline:2px solid var(--brand);outline-offset:-2px;background:var(--bg-h)}
 
+/* Settings */
+.settings-grid{display:grid;gap:24px;max-width:640px}
+.settings-section{background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--r);padding:20px;transition:border-color .15s}
+.settings-section:hover{border-color:color-mix(in srgb,var(--brand) 40%,transparent)}
+.settings-section h3{font-size:14px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.settings-section h3 .material-icons-round{font-size:18px;color:var(--brand)}
+.set-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--brd)}
+.set-row:last-child{border-bottom:none}
+.set-row label{font-size:13px;font-weight:500;flex:1}
+.set-row .set-desc{font-size:11px;color:var(--txd);margin-top:2px}
+.set-row select,.set-row input[type=number]{padding:6px 10px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg);color:var(--tx);font-size:12px;font-family:inherit;min-width:140px}
+.set-row input[type=number]{width:80px;min-width:80px}
+.set-toggle{position:relative;width:42px;height:24px;flex-shrink:0}
+.set-toggle input{opacity:0;width:0;height:0}
+.set-toggle .slider{position:absolute;inset:0;background:var(--bg-c);border:1px solid var(--brd);border-radius:12px;cursor:pointer;transition:all .2s}
+.set-toggle .slider::before{content:'';position:absolute;width:18px;height:18px;border-radius:50%;background:var(--tx2);left:2px;top:2px;transition:all .2s}
+.set-toggle input:checked+.slider{background:var(--brand);border-color:var(--brand)}
+.set-toggle input:checked+.slider::before{transform:translateX(18px);background:#fff}
+.set-danger{border-color:var(--err)}
+.set-danger h3{color:var(--err)}
+.set-danger h3 .material-icons-round{color:var(--err)}
+.set-btn{padding:8px 16px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-c);color:var(--tx);font-size:12px;font-family:inherit;cursor:pointer;transition:all .15s}
+.set-btn:hover{background:var(--bg-h);border-color:var(--brand)}
+.set-btn.danger{border-color:var(--err);color:var(--err)}
+.set-btn.danger:hover{background:rgba(239,68,68,.1)}
+.set-btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+.set-btn.primary:hover{background:var(--brand-h)}
+.set-saved{font-size:11px;color:var(--ok);opacity:0;transition:opacity .3s}
+.set-saved.show{opacity:1}
+
 /* Drag reorder */
 .tc.drag-over{border-top:2px solid var(--brand);margin-top:-2px}
 .tc.dragging{opacity:.35}
@@ -526,6 +556,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <div class="ni" data-view="tags"><span class="material-icons-round">label</span>Tag Manager</div>
     <div class="ni" data-view="templates"><span class="material-icons-round">content_copy</span>Templates</div>
     <div class="ni" data-view="focushistory"><span class="material-icons-round">timer</span>Focus History</div>
+    <div class="ni" data-view="settings"><span class="material-icons-round">settings</span>Settings</div>
   </div>
   <div class="ns"><div class="ns-label">Life Areas</div></div>
   <div class="al" id="area-list"></div>
@@ -743,7 +774,7 @@ const api={
 };
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function escA(s){return String(s).replace(/[&"'<>]/g,m=>({'&':'&amp;','"':'&quot;',"'":'&#39;','<':'&lt;','>':'&gt;'})[m])}
-function fmtDue(d){if(!d)return'';const dt=new Date(d+'T00:00:00'),td=new Date();td.setHours(0,0,0,0);const df=Math.round((dt-td)/864e5);if(df===0)return'Today';if(df===1)return'Tomorrow';if(df===-1)return'Yesterday';if(df===-2)return'2 days ago';if(df>1&&df<=6)return'in '+df+' days';if(df<-1&&df>=-7)return Math.abs(df)+'d overdue';if(df===7)return'Next week';const wd=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];if(df>1&&df<=13)return'Next '+wd[dt.getDay()];return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+function fmtDue(d){if(!d)return'';const dt=new Date(d+'T00:00:00'),td=new Date();td.setHours(0,0,0,0);const df=Math.round((dt-td)/864e5);const fmt=appSettings.dateFormat||'relative';if(fmt==='relative'){if(df===0)return'Today';if(df===1)return'Tomorrow';if(df===-1)return'Yesterday';if(df===-2)return'2 days ago';if(df>1&&df<=6)return'in '+df+' days';if(df<-1&&df>=-7)return Math.abs(df)+'d overdue';if(df===7)return'Next week';const wd=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];if(df>1&&df<=13)return'Next '+wd[dt.getDay()];return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})}if(fmt==='iso')return d;if(fmt==='us')return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});if(fmt==='eu'){const dd=String(dt.getDate()).padStart(2,'0'),mm=String(dt.getMonth()+1).padStart(2,'0');return dd+'/'+mm+'/'+dt.getFullYear()}return d}
 function isOD(d){return d&&new Date(d+'T00:00:00')<new Date(new Date().toDateString())}
 const PL=['','Normal','High','Critical'],PC=['','var(--brand)','var(--warn)','var(--err)'];
 
@@ -763,6 +794,16 @@ let currentView='myday',activeAreaId=null,activeGoalId=null,goalTab='list';
 let calY,calM;{const n=new Date();calY=n.getFullYear();calM=n.getMonth()}
 let editingId=null;
 const expandedTasks=new Set();
+
+// ─── SETTINGS STATE ───
+let appSettings={defaultView:'myday',theme:'midnight',focusDuration:'25',shortBreak:'5',longBreak:'15',weekStart:'0',defaultPriority:'0',showCompleted:'true',confirmDelete:'true',dateFormat:'relative',autoMyDay:'false'};
+async function loadSettings(){
+  try{appSettings=await api.get('/api/settings')}catch(e){console.error('Failed to load settings:',e)}
+}
+async function saveSetting(key,value){
+  appSettings[key]=String(value);
+  try{await api.put('/api/settings',{[key]:String(value)})}catch(e){console.error('Failed to save setting:',e)}
+}
 
 // Sidebar nav
 document.querySelectorAll('.ni').forEach(el=>el.addEventListener('click',()=>{
@@ -826,6 +867,7 @@ async function render(){
   else if(currentView==='tags')await renderTags();
   else if(currentView==='focushistory')await renderFocusHistory();
   else if(currentView==='templates')await renderTemplates();
+  else if(currentView==='settings')await renderSettings();
   else if(currentView==='area')await renderArea();
   else if(currentView==='goal')await renderGoal();
   updateBC();
@@ -845,6 +887,7 @@ function updateBC(){
   else if(currentView==='tags'){pt.textContent='Tag Manager';bc.innerHTML=''}
   else if(currentView==='focushistory'){pt.textContent='Focus History';bc.innerHTML=''}
   else if(currentView==='templates'){pt.textContent='Templates';bc.innerHTML=''}
+  else if(currentView==='settings'){pt.textContent='Settings';bc.innerHTML=''}
   else if(currentView==='area'){
     const a=areas.find(x=>x.id===activeAreaId);
     pt.textContent=a?`${a.icon} ${a.name}`:'';
@@ -871,7 +914,7 @@ async function renderMyDay(){
   if(!t.length){h+=emptyS('wb_sunny','No tasks for today','Mark tasks as "My Day" or set a due date for today');c.innerHTML=h;return}
   const p=t.filter(x=>x.status!=='done'),d=t.filter(x=>x.status==='done');
   if(p.length){h+=`<div class="sl">To Do <span class="c">${p.length}</span></div>`;p.forEach(tk=>h+=tcHtml(tk,true))}
-  if(d.length){h+=`<div class="sl" style="color:var(--ok)">Done <span class="c">${d.length}</span></div>`;d.forEach(tk=>h+=tcHtml(tk,true))}
+  if(d.length&&appSettings.showCompleted!=='false'){h+=`<div class="sl" style="color:var(--ok)">Done <span class="c">${d.length}</span></div>`;d.forEach(tk=>h+=tcHtml(tk,true))}
   c.innerHTML=h;attachTE();
 }
 
@@ -883,7 +926,7 @@ async function renderAll(){
   const p=t.filter(x=>x.status!=='done'),d=t.filter(x=>x.status==='done');
   let h='';
   if(p.length){h+=`<div class="sl">Active <span class="c">${p.length}</span></div>`;p.forEach(tk=>h+=tcHtml(tk,true))}
-  if(d.length){h+=`<div class="sl" style="color:var(--ok)">Completed <span class="c">${d.length}</span></div>`;d.forEach(tk=>h+=tcHtml(tk,true))}
+  if(d.length&&appSettings.showCompleted!=='false'){h+=`<div class="sl" style="color:var(--ok)">Completed <span class="c">${d.length}</span></div>`;d.forEach(tk=>h+=tcHtml(tk,true))}
   c.innerHTML=h;attachTE();
 }
 
@@ -1028,9 +1071,10 @@ function renderBoard(){
 // ─── CALENDAR ───
 async function renderCal(){
   const c=$('ct');
+  const ws=Number(appSettings.weekStart)||0;
   const f=new Date(calY,calM,1),l=new Date(calY,calM+1,0);
-  const sd=new Date(f);sd.setDate(sd.getDate()-sd.getDay());
-  const ed=new Date(l);ed.setDate(ed.getDate()+(6-ed.getDay()));
+  const sd=new Date(f);while(sd.getDay()!==ws)sd.setDate(sd.getDate()-1);
+  const ed=new Date(l);while(ed.getDay()!==(ws+6)%7)ed.setDate(ed.getDate()+1);
   const ss=sd.toISOString().slice(0,10),es=ed.toISOString().slice(0,10);
   const ct2=await api.get(`/api/tasks/calendar?start=${ss}&end=${es}`);
   const bd={};ct2.forEach(t=>{if(!bd[t.due_date])bd[t.due_date]=[];bd[t.due_date].push(t)});
@@ -1038,7 +1082,8 @@ async function renderCal(){
   const ts=new Date().toISOString().slice(0,10);
   const isCurrentMonth=calY===new Date().getFullYear()&&calM===new Date().getMonth();
   let h=`<div class="ch"><button class="material-icons-round" id="cp">chevron_left</button><span class="ctt">${mn}</span><button class="material-icons-round" id="cn">chevron_right</button>${!isCurrentMonth?'<button id="cal-today" style="margin-left:8px;padding:4px 12px;border-radius:6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx);font-size:11px;cursor:pointer;font-family:inherit">Today</button>':''}</div><div class="cg">`;
-  ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d=>h+=`<div class="cdh">${d}</div>`);
+  const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  for(let i=0;i<7;i++)h+=`<div class="cdh">${dayNames[(ws+i)%7]}</div>`;
   const cur=new Date(sd);while(cur<=ed){
     const ds=cur.toISOString().slice(0,10);const dt=bd[ds]||[];
     h+=`<div class="cc ${ds===ts?'today':''} ${cur.getMonth()!==calM?'om':''}" data-date="${ds}"><div class="cd">${cur.getDate()}</div>`;
@@ -1096,7 +1141,7 @@ function tcHtml(t,ctx){
 
 function attachTA(){
   const i=$('ti'),b=$('tab');if(!i||!b)return;
-  const add=async()=>{const t=i.value.trim();if(!t||!activeGoalId)return;await api.post('/api/goals/'+activeGoalId+'/tasks',{title:t});i.value='';await loadAreas();renderGoal()};
+  const add=async()=>{const t=i.value.trim();if(!t||!activeGoalId)return;const dp=Number(appSettings.defaultPriority)||0;const md=appSettings.autoMyDay==='true'?1:0;await api.post('/api/goals/'+activeGoalId+'/tasks',{title:t,priority:dp,my_day:md});i.value='';await loadAreas();renderGoal()};
   b.addEventListener('click',add);i.addEventListener('keydown',e=>{if(e.key==='Enter')add()});
 }
 function attachTE(){
@@ -1609,7 +1654,17 @@ $('sb-ov').addEventListener('click', () => { $('sb').classList.remove('open'); $
 function closeMobileSb() { $('sb').classList.remove('open'); $('sb-ov').classList.remove('open'); }
 
 // Boot
-Promise.all([loadAreas(),loadTags()]).then(()=>{
+Promise.all([loadSettings(),loadAreas(),loadTags()]).then(()=>{
+  // Apply settings on load
+  if(appSettings.theme){
+    document.documentElement.setAttribute('data-theme',appSettings.theme);
+    localStorage.setItem('lf-theme',appSettings.theme);
+  }
+  if(appSettings.defaultView&&!localStorage.getItem('lf-onboarded-skip-default')){
+    currentView=appSettings.defaultView;
+    document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));
+    document.querySelector(`.ni[data-view="${appSettings.defaultView}"]`)?.classList.add('active');
+  }
   render();loadOverdueBadge();loadBellReminders();initServiceWorker();requestNotificationPermission();
   // Check for first-time user onboarding
   if(!localStorage.getItem('lf-onboarded')&&!areas.length){$('onb-ov').classList.add('active')}
@@ -1990,6 +2045,7 @@ let ftTask=null,ftInterval=null,ftRemaining=25*60,ftTotal=25*60,ftRunning=false,
 const FT_MODES={focus:{label:'Focus Time',dur:25*60},short:{label:'Short Break',dur:5*60},long:{label:'Long Break',dur:15*60}};
 
 function startFocusTimer(taskId){
+  applySettingsToTimer();
   let tk=tasks.find(t=>t.id===taskId);
   if(!tk){api.get('/api/tasks/'+taskId).then(t=>{ftTask=t;showFocusUI()}).catch(()=>{});return}
   ftTask=tk;showFocusUI();
@@ -2348,6 +2404,93 @@ function vimMove(delta){
   if(!cards.length)return;
   vimIdx=Math.max(0,Math.min(cards.length-1,vimIdx+delta));
   vimHighlight(vimIdx);
+}
+
+// ─── SETTINGS PAGE ───
+async function renderSettings(){
+  await loadSettings();
+  const c=$('cp-body');
+  const themes=[['midnight','Midnight'],['ocean','Ocean'],['forest','Forest'],['sunset','Sunset'],['lavender','Lavender'],['nord','Nord']];
+  const views=[['myday','My Day'],['upcoming','Upcoming'],['calendar','Calendar'],['areas','Areas']];
+  const priorities=[['0','None'],['1','Normal'],['2','High'],['3','Critical']];
+  const dateFormats=[['relative','Relative (Today, Tomorrow)'],['iso','ISO (2026-03-20)'],['us','US (Mar 20, 2026)'],['eu','EU (20/03/2026)']];
+  const weekDays=[['0','Sunday'],['1','Monday']];
+
+  function selOpts(opts,cur){return opts.map(([v,l])=>`<option value="${v}"${String(cur)===String(v)?' selected':''}>${esc(l)}</option>`).join('')}
+  function tog(key,cur){return `<label class="set-toggle"><input type="checkbox" data-key="${key}" ${cur==='true'?'checked':''}><span class="set-slider"></span></label>`}
+
+  c.innerHTML=`<div class="settings-grid">
+  <section class="settings-section">
+    <h3>General</h3>
+    <div class="set-row"><label>Default View</label><select data-key="defaultView">${selOpts(views,appSettings.defaultView)}</select></div>
+    <div class="set-row"><label>Theme</label><select data-key="theme">${selOpts(themes,appSettings.theme)}</select></div>
+    <div class="set-row"><label>Date Format</label><select data-key="dateFormat">${selOpts(dateFormats,appSettings.dateFormat)}</select></div>
+    <div class="set-row"><label>Week Starts On</label><select data-key="weekStart">${selOpts(weekDays,appSettings.weekStart)}</select></div>
+  </section>
+  <section class="settings-section">
+    <h3>Focus Timer</h3>
+    <div class="set-row"><label>Focus Duration (min)</label><input type="number" min="1" max="120" data-key="focusDuration" value="${esc(appSettings.focusDuration)}"></div>
+    <div class="set-row"><label>Short Break (min)</label><input type="number" min="1" max="30" data-key="shortBreak" value="${esc(appSettings.shortBreak)}"></div>
+    <div class="set-row"><label>Long Break (min)</label><input type="number" min="1" max="60" data-key="longBreak" value="${esc(appSettings.longBreak)}"></div>
+  </section>
+  <section class="settings-section">
+    <h3>Tasks</h3>
+    <div class="set-row"><label>Default Priority</label><select data-key="defaultPriority">${selOpts(priorities,appSettings.defaultPriority)}</select></div>
+    <div class="set-row"><label>Auto-add to My Day</label>${tog('autoMyDay',appSettings.autoMyDay)}</div>
+    <div class="set-row"><label>Show Completed Tasks</label>${tog('showCompleted',appSettings.showCompleted)}</div>
+    <div class="set-row"><label>Confirm Before Delete</label>${tog('confirmDelete',appSettings.confirmDelete)}</div>
+  </section>
+  <section class="settings-section set-danger">
+    <h3>Data</h3>
+    <div class="set-row"><button class="set-btn" id="set-export">Export Data (JSON)</button></div>
+    <div class="set-row"><button class="set-btn danger" id="set-reset">Reset All Settings</button></div>
+  </section>
+</div>`;
+
+  // Auto-save on change for selects and number inputs
+  c.querySelectorAll('select[data-key], input[type="number"][data-key]').forEach(el=>{
+    el.addEventListener('change',async()=>{
+      await saveSetting(el.dataset.key,el.value);
+      if(el.dataset.key==='theme'){
+        document.documentElement.setAttribute('data-theme',el.value);
+        localStorage.setItem('lf-theme',el.value);
+      }
+      applySettingsToTimer();
+      showSavedIndicator(el);
+    });
+  });
+  // Toggle switches
+  c.querySelectorAll('.set-toggle input[data-key]').forEach(el=>{
+    el.addEventListener('change',async()=>{
+      await saveSetting(el.dataset.key,el.checked?'true':'false');
+      showSavedIndicator(el.closest('.set-toggle'));
+    });
+  });
+  // Export
+  $('set-export')?.addEventListener('click',async()=>{
+    try{
+      const data={areas:await api.get('/api/areas'),settings:appSettings};
+      for(const a of data.areas){a.goals=await api.get('/api/areas/'+a.id+'/goals');for(const g of a.goals){g.tasks=await api.get('/api/goals/'+g.id+'/tasks')}}
+      const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;a.download='lifeflow-export-'+new Date().toISOString().slice(0,10)+'.json';a.click();
+      URL.revokeObjectURL(url);showToast('Data exported!');
+    }catch(e){showToast('Export failed')}
+  });
+  // Reset
+  $('set-reset')?.addEventListener('click',async()=>{
+    if(!confirm('Reset all settings to defaults?'))return;
+    try{appSettings=await api.post('/api/settings/reset',{});renderSettings();showToast('Settings reset to defaults')}catch(e){showToast('Reset failed')}
+  });
+}
+function showSavedIndicator(el){
+  const ind=document.createElement('span');ind.className='set-saved';ind.textContent='Saved ✓';
+  el.parentElement.appendChild(ind);
+  setTimeout(()=>ind.remove(),1500);
+}
+function applySettingsToTimer(){
+  const fd=Number(appSettings.focusDuration)||25,sb=Number(appSettings.shortBreak)||5,lb=Number(appSettings.longBreak)||15;
+  FT_MODES.focus.dur=fd*60;FT_MODES.short.dur=sb*60;FT_MODES.long.dur=lb*60;
 }
 
 // ─── KEYBOARD SHORTCUTS ───
