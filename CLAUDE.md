@@ -10,7 +10,7 @@ Express.js backend + vanilla JS single-page app frontend. SQLite via better-sqli
 ```bash
 npm install
 node src/server.js          # http://localhost:3456
-npm test                    # 168 tests via node:test
+npm test                    # 185 tests via node:test
 # or with Docker:
 docker compose up -d
 ```
@@ -151,7 +151,7 @@ All foreign keys use `ON DELETE CASCADE`.
 src/server.js          — Backend (all logic in one file, ~620 lines)
 public/index.html      — Frontend SPA (CSS + HTML + JS, ~1661 lines)
 tests/helpers.js       — Test factories, DB setup/teardown, supertest agent
-tests/*.test.js        — 9 test files, 168 tests (node:test + assert/strict)
+tests/*.test.js        — 10 test files, 185 tests (node:test + assert/strict)
 Dockerfile             — node:22-slim, npm ci, EXPOSE 3456
 docker-compose.yml     — Single service, persistent volume
 docs/design/           — Brainstorm spec documents (3 perspectives)
@@ -161,7 +161,7 @@ backups/               — Auto-generated JSON backups (gitignored)
 ## Testing
 
 ```bash
-npm test                    # Run all 168 tests
+npm test                    # Run all 185 tests
 ```
 
 **Runner:** `node --test --test-force-exit` with `node:assert/strict` + `supertest`
@@ -220,22 +220,30 @@ npm test                    # Run all 168 tests
 - Route ordering bugfix: `/search` and `/overdue` before `/:id`
 - NLP bugfix: "day after tomorrow" processed before "tomorrow"
 
+### Batch 4 — Management & History Features
+- Data import/restore (`POST /api/import`) — full transactional import with ID remapping
+- Import button in sidebar with file picker and confirmation dialog
+- Undo for area deletion — snapshots goals+tasks, restores on undo via toast
+- Undo for goal deletion improved — now also restores child tasks on undo
+- Tag Manager view — dedicated page to rename, recolor, delete tags with usage counts
+- `PUT /api/tags/:id` endpoint for renaming/recoloring tags
+- `GET /api/tags/stats` endpoint for tags with usage counts
+- Focus Session History view — stats bar, 14-day bar chart, top tasks, session list
+- `GET /api/focus/history` endpoint with pagination and daily aggregates
+- Goal archiving UI — archive/unarchive buttons, collapsible archived section
+- Keyboard shortcuts: 9 = Tag Manager, 0 = Focus History
+- 17 new tests (185 total across 10 test files)
+
 ## What Needs to Be Done (Roadmap)
 
 ### High Priority
-- **Data import/restore** — Currently export-only; need `POST /api/import` to restore from backup JSON
 - **Task due-date reminders** — Browser notification API or in-app notification bell
-- **Goal progress tracking** — Visual progress bar on goal cards (% tasks done)
-- **Undo for destructive actions** — Delete area/goal currently has no undo (tasks have toast undo)
 - **Task dependencies** — "blocked by" relationships between tasks
 
 ### Medium Priority
 - **Drag-and-drop for subtasks** — Reorder subtasks within a task (currently only tasks support drag)
 - **Task templates** — Save/apply common task structures (e.g., "Sprint Planning" with preset subtasks)
 - **Recurring task improvements** — Custom intervals (every 2 weeks, specific days), skip/snooze
-- **Goal archiving UI** — Backend supports `archived` status but no frontend way to archive/view archived goals
-- **Tag management view** — Dedicated page to rename/recolor/merge tags (currently tag CRUD only via API)
-- **Focus session history view** — See past Pomodoro sessions by day/week (data exists, no UI)
 - **Search improvements** — Search within specific area/goal, filter by date range, saved searches
 
 ### Low Priority / Nice to Have

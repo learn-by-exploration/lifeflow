@@ -425,12 +425,16 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <div class="ni" data-view="weekly"><span class="material-icons-round">view_week</span>Weekly Plan</div>
     <div class="ni" data-view="matrix"><span class="material-icons-round">grid_view</span>Matrix</div>
     <div class="ni" data-view="logbook"><span class="material-icons-round">history</span>Activity Log</div>
+    <div class="ni" data-view="tags"><span class="material-icons-round">label</span>Tag Manager</div>
+    <div class="ni" data-view="focushistory"><span class="material-icons-round">timer</span>Focus History</div>
   </div>
   <div class="ns"><div class="ns-label">Life Areas</div></div>
   <div class="al" id="area-list"></div>
   <div class="sb-bot">
     <button class="ab" id="add-area-btn"><span class="material-icons-round">add_circle_outline</span>New Life Area</button>
     <button class="ab" id="export-btn"><span class="material-icons-round">download</span>Export Data</button>
+    <button class="ab" id="import-btn"><span class="material-icons-round">upload</span>Import Data</button>
+    <input type="file" id="import-file" accept=".json" style="display:none">
     <button class="ab" id="kb-btn"><span class="material-icons-round">keyboard</span>Shortcuts <span style="margin-left:auto;font-size:10px;opacity:.5">?</span></button>
     <div class="ns" style="padding-top:4px"><div class="ns-label">Theme</div></div>
     <div class="tp" id="tp"></div>
@@ -599,12 +603,27 @@ function renderAreas(){
     document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));item.classList.add('active');closeMobileSb();render();
   }));
   el.querySelectorAll('.da').forEach(btn=>btn.addEventListener('click',async e=>{
-    e.stopPropagation();if(!confirm('Delete this life area and everything in it?'))return;
-    const aid=Number(btn.dataset.id);const area=areas.find(a=>a.id===aid);
+    e.stopPropagation();
+    const aid=Number(btn.dataset.id);const area=areas.find(a=>a.id===aid);if(!area)return;
+    // Snapshot goals and tasks for undo
+    const aGoals=await api.get('/api/areas/'+aid+'/goals');
+    const aTaskSets=await Promise.all(aGoals.map(g=>api.get('/api/goals/'+g.id+'/tasks')));
     await api.del('/api/areas/'+aid);
-    showToast('Area deleted'+(area?' — "'+area.name+'"':''));
     if(aid===activeAreaId){activeAreaId=null;currentView='myday'}
     await loadAreas();render();
+    showToast('Area deleted — "'+area.name+'"', async()=>{
+      // Restore area
+      const ra=await api.post('/api/areas',{name:area.name,icon:area.icon,color:area.color});
+      // Restore goals + tasks
+      for(let i=0;i<aGoals.length;i++){
+        const g=aGoals[i];
+        const rg=await api.post('/api/areas/'+ra.id+'/goals',{title:g.title,description:g.description||'',due_date:g.due_date||null,color:g.color||'#6C63FF'});
+        for(const t of aTaskSets[i]){
+          await api.post('/api/goals/'+rg.id+'/tasks',{title:t.title,notes:t.notes||'',status:t.status,priority:t.priority,due_date:t.due_date||null,my_day:t.my_day?1:0,recurring:t.recurring||null});
+        }
+      }
+      await loadAreas();render();
+    });
   }));
 }
 
@@ -620,6 +639,8 @@ async function render(){
   else if(currentView==='weekly')await renderWeekly();
   else if(currentView==='matrix')await renderMatrix();
   else if(currentView==='logbook')await renderLogbook();
+  else if(currentView==='tags')await renderTags();
+  else if(currentView==='focushistory')await renderFocusHistory();
   else if(currentView==='area')await renderArea();
   else if(currentView==='goal')await renderGoal();
   updateBC();
@@ -636,6 +657,8 @@ function updateBC(){
   else if(currentView==='weekly'){pt.textContent='Weekly Plan';bc.innerHTML=''}
   else if(currentView==='matrix'){pt.textContent='Eisenhower Matrix';bc.innerHTML=''}
   else if(currentView==='dashboard'){pt.textContent='Dashboard';bc.innerHTML=''}
+  else if(currentView==='tags'){pt.textContent='Tag Manager';bc.innerHTML=''}
+  else if(currentView==='focushistory'){pt.textContent='Focus History';bc.innerHTML=''}
   else if(currentView==='area'){
     const a=areas.find(x=>x.id===activeAreaId);
     pt.textContent=a?`${a.icon} ${a.name}`:'';
@@ -728,30 +751,58 @@ async function renderArea(){
   const c=$('ct');
   let h=`<div class="qa"><input type="text" id="gi" placeholder="Add a new goal..."><button id="gab"><span class="material-icons-round" style="font-size:15px">add</span>Add Goal</button></div>`;
   if(!goals.length){h+=emptyS('flag','No goals yet','What do you want to achieve?');c.innerHTML=h;attachGA();return}
-  const ac=goals.filter(g=>g.status==='active'),co=goals.filter(g=>g.status==='completed');
+  const ac=goals.filter(g=>g.status==='active'),co=goals.filter(g=>g.status==='completed'),ar=goals.filter(g=>g.status==='archived');
   if(ac.length){h+=`<div class="sl">Active Goals <span class="c">${ac.length}</span></div><div class="gg">`;
     ac.forEach(g=>{const pct=g.total_tasks?Math.round(g.done_tasks/g.total_tasks*100):0;
       h+=`<div class="gc" data-id="${g.id}" style="border-left-color:${escA(g.color)}">
-        <div class="ga"><button class="material-icons-round eg" data-id="${g.id}">edit</button><button class="material-icons-round dg" data-id="${g.id}">delete_outline</button></div>
+        <div class="ga"><button class="material-icons-round eg" data-id="${g.id}" title="Edit">edit</button><button class="material-icons-round ag" data-id="${g.id}" title="Archive">archive</button><button class="material-icons-round dg" data-id="${g.id}" title="Delete">delete_outline</button></div>
         <div class="gt">${esc(g.title)}</div>${g.description?`<div class="gd">${esc(g.description)}</div>`:''}
         <div class="gp"><div class="gpb" style="width:${pct}%;background:${escA(g.color)}"></div></div>
         <div class="gm"><span>${g.done_tasks}/${g.total_tasks} tasks</span><span>${pct}%</span>${g.due_date?`<span>📅 ${fmtDue(g.due_date)}</span>`:''}</div>
       </div>`});h+=`</div>`}
   if(co.length){h+=`<div class="sl">Completed <span class="c">${co.length}</span></div><div class="gg">`;
-    co.forEach(g=>h+=`<div class="gc" data-id="${g.id}" style="border-left-color:var(--ok);opacity:.6"><div class="gt" style="text-decoration:line-through">${esc(g.title)}</div><div class="gm"><span>${g.total_tasks} done</span></div></div>`);h+=`</div>`}
+    co.forEach(g=>h+=`<div class="gc" data-id="${g.id}" style="border-left-color:var(--ok);opacity:.6"><div class="ga"><button class="material-icons-round ag" data-id="${g.id}" title="Archive">archive</button></div><div class="gt" style="text-decoration:line-through">${esc(g.title)}</div><div class="gm"><span>${g.total_tasks} done</span></div></div>`);h+=`</div>`}
+  if(ar.length){h+=`<div class="sl" style="cursor:pointer" id="arch-toggle">Archived <span class="c">${ar.length}</span> <span class="material-icons-round" style="font-size:16px;vertical-align:middle" id="arch-arrow">expand_more</span></div><div class="gg" id="arch-section" style="display:none">`;
+    ar.forEach(g=>h+=`<div class="gc" data-id="${g.id}" style="border-left-color:var(--tx2);opacity:.5">
+      <div class="ga"><button class="material-icons-round ug" data-id="${g.id}" title="Unarchive">unarchive</button><button class="material-icons-round dg" data-id="${g.id}" title="Delete">delete_outline</button></div>
+      <div class="gt">${esc(g.title)}</div><div class="gm"><span>${g.total_tasks||0} tasks</span></div>
+    </div>`);h+=`</div>`}
   c.innerHTML=h;attachGA();
   c.querySelectorAll('.gc').forEach(card=>card.addEventListener('click',e=>{if(e.target.closest('.ga'))return;activeGoalId=Number(card.dataset.id);currentView='goal';render()}));
   c.querySelectorAll('.eg').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();openGM(Number(b.dataset.id))}));
   c.querySelectorAll('.dg').forEach(b=>b.addEventListener('click',async e=>{
     e.stopPropagation();const gid=Number(b.dataset.id);
-    const g=goals.find(x=>x.id===gid);
+    const g=goals.find(x=>x.id===gid);if(!g)return;
+    // Snapshot tasks for undo
+    const gTasks=await api.get('/api/goals/'+gid+'/tasks');
     await api.del('/api/goals/'+gid);
-    showToast('Goal deleted'+(g?' — "'+g.title+'"':''), g ? async()=>{
-      await api.post('/api/areas/'+activeAreaId+'/goals',{title:g.title,description:g.description||'',due_date:g.due_date||null,color:g.color||'#6C63FF'});
+    await loadAreas();render();
+    showToast('Goal deleted — "'+g.title+'"', async()=>{
+      const rg=await api.post('/api/areas/'+activeAreaId+'/goals',{title:g.title,description:g.description||'',due_date:g.due_date||null,color:g.color||'#6C63FF'});
+      for(const t of gTasks){
+        await api.post('/api/goals/'+rg.id+'/tasks',{title:t.title,notes:t.notes||'',status:t.status,priority:t.priority,due_date:t.due_date||null,my_day:t.my_day?1:0,recurring:t.recurring||null});
+      }
       await loadAreas();render();
-    } : null);
+    });
     await loadAreas();render();
   }));
+  // Archive goal
+  c.querySelectorAll('.ag').forEach(b=>b.addEventListener('click',async e=>{
+    e.stopPropagation();const gid=Number(b.dataset.id);
+    await api.put('/api/goals/'+gid,{status:'archived'});showToast('Goal archived');await loadAreas();render();
+  }));
+  // Unarchive goal
+  c.querySelectorAll('.ug').forEach(b=>b.addEventListener('click',async e=>{
+    e.stopPropagation();const gid=Number(b.dataset.id);
+    await api.put('/api/goals/'+gid,{status:'active'});showToast('Goal restored');await loadAreas();render();
+  }));
+  // Toggle archived section
+  const archToggle=$('arch-toggle');
+  if(archToggle)archToggle.addEventListener('click',()=>{
+    const sec=$('arch-section'),arr=$('arch-arrow');
+    if(sec.style.display==='none'){sec.style.display='';arr.textContent='expand_less'}
+    else{sec.style.display='none';arr.textContent='expand_more'}
+  });
 }
 function attachGA(){
   const i=$('gi'),b=$('gab');if(!i||!b)return;
@@ -1619,6 +1670,139 @@ $('export-btn').addEventListener('click',async()=>{
   document.body.appendChild(a);a.click();document.body.removeChild(a);
 });
 
+// ─── IMPORT ───
+$('import-btn').addEventListener('click',()=>$('import-file').click());
+$('import-file').addEventListener('change',async e=>{
+  const file=e.target.files[0];if(!file)return;
+  try{
+    const text=await file.text();
+    const data=JSON.parse(text);
+    if(!data.areas||!data.goals||!data.tasks){showToast('Invalid file: missing areas, goals, or tasks');return}
+    if(!confirm(`Import ${data.areas.length} areas, ${data.goals.length} goals, ${data.tasks.length} tasks? This will REPLACE all current data.`))return;
+    const r=await api.post('/api/import',data);
+    if(r.ok){showToast('Import successful!');await loadAreas();await loadTags();render()}
+    else showToast('Import failed: '+(r.error||'Unknown error'));
+  }catch(err){showToast('Import failed: '+err.message)}
+  $('import-file').value='';
+});
+
+// ─── TAG MANAGEMENT VIEW ───
+async function renderTags(){
+  const tags=await api.get('/api/tags/stats');
+  const c=$('ct');
+  let h=`<div class="qa"><input type="text" id="new-tag-name" placeholder="New tag name..."><button id="new-tag-btn"><span class="material-icons-round" style="font-size:15px">add</span>Add Tag</button></div>`;
+  if(!tags.length){h+=emptyS('label','No tags yet','Create tags to categorize tasks');c.innerHTML=h;attachNewTag();return}
+  h+=`<div style="display:grid;gap:8px;margin-top:8px">`;
+  tags.forEach(t=>{
+    h+=`<div class="tc" style="cursor:default;padding:10px 12px;display:flex;align-items:center;gap:10px" data-tag-id="${t.id}">
+      <div class="sw swatch-pick" data-tid="${t.id}" style="background:${escA(t.color)};width:24px;height:24px;border-radius:50%;cursor:pointer;flex-shrink:0" title="Change color"></div>
+      <input type="text" class="tag-name-inp" data-tid="${t.id}" value="${escA(t.name)}" style="flex:1;border:1px solid var(--bd);border-radius:6px;padding:4px 8px;font-size:13px;background:var(--bg);color:var(--tx)">
+      <span style="font-size:11px;color:var(--tx2);white-space:nowrap">${t.usage_count} task${t.usage_count!==1?'s':''}</span>
+      <button class="material-icons-round tag-save" data-tid="${t.id}" style="font-size:18px;color:var(--brand);cursor:pointer;border:none;background:none" title="Save">check</button>
+      <button class="material-icons-round tag-del" data-tid="${t.id}" style="font-size:18px;color:var(--err);cursor:pointer;border:none;background:none" title="Delete">delete_outline</button>
+    </div>`;
+  });
+  h+=`</div>`;
+  // Color picker popover
+  h+=`<div id="tag-color-picker" style="display:none;position:fixed;z-index:200;background:var(--crd);border:1px solid var(--bd);border-radius:8px;padding:8px;box-shadow:0 4px 12px rgba(0,0,0,.15)">
+    <div style="display:flex;gap:4px;flex-wrap:wrap;max-width:160px">${COLORS.map(cl=>`<div class="sw tcp-sw" data-c="${cl}" style="background:${cl};cursor:pointer"></div>`).join('')}</div>
+  </div>`;
+  c.innerHTML=h;
+  attachNewTag();
+  let pickingTagId=null;
+  // Color picker
+  c.querySelectorAll('.swatch-pick').forEach(sw=>sw.addEventListener('click',e=>{
+    e.stopPropagation();
+    pickingTagId=Number(sw.dataset.tid);
+    const picker=$('tag-color-picker');
+    const rect=sw.getBoundingClientRect();
+    picker.style.left=rect.right+8+'px';picker.style.top=rect.top+'px';picker.style.display='block';
+  }));
+  document.querySelectorAll('.tcp-sw').forEach(sw=>sw.addEventListener('click',async()=>{
+    if(!pickingTagId)return;
+    await api.put('/api/tags/'+pickingTagId,{color:sw.dataset.c});
+    $('tag-color-picker').style.display='none';pickingTagId=null;renderTags();
+  }));
+  document.addEventListener('click',e=>{if(!e.target.closest('#tag-color-picker')&&!e.target.classList.contains('swatch-pick'))$('tag-color-picker').style.display='none'},{once:false});
+  // Save name
+  c.querySelectorAll('.tag-save').forEach(btn=>btn.addEventListener('click',async()=>{
+    const tid=Number(btn.dataset.tid);
+    const inp=c.querySelector(`.tag-name-inp[data-tid="${tid}"]`);
+    if(!inp)return;
+    const r=await api.put('/api/tags/'+tid,{name:inp.value});
+    if(r.error){showToast(r.error)}else{showToast('Tag updated');await loadTags();renderTags()}
+  }));
+  // Delete
+  c.querySelectorAll('.tag-del').forEach(btn=>btn.addEventListener('click',async()=>{
+    const tid=Number(btn.dataset.tid);
+    if(!confirm('Delete this tag?'))return;
+    await api.del('/api/tags/'+tid);showToast('Tag deleted');await loadTags();renderTags();
+  }));
+  // Enter key to save
+  c.querySelectorAll('.tag-name-inp').forEach(inp=>inp.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){c.querySelector(`.tag-save[data-tid="${inp.dataset.tid}"]`)?.click()}
+  }));
+}
+function attachNewTag(){
+  const inp=$('new-tag-name'),btn=$('new-tag-btn');if(!inp||!btn)return;
+  const add=async()=>{const n=inp.value.trim();if(!n)return;await api.post('/api/tags',{name:n});inp.value='';await loadTags();renderTags()};
+  btn.addEventListener('click',add);inp.addEventListener('keydown',e=>{if(e.key==='Enter')add()});
+}
+
+// ─── FOCUS SESSION HISTORY VIEW ───
+async function renderFocusHistory(){
+  const [hist,stats]=await Promise.all([api.get('/api/focus/history'),api.get('/api/focus/stats')]);
+  const c=$('ct');
+  let h='';
+  // Stats bar
+  h+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px">
+    <div class="tc" style="padding:14px;text-align:center"><div style="font-size:24px;font-weight:700;color:var(--brand)">${Math.floor(stats.today/60)}m</div><div style="font-size:11px;color:var(--tx2)">Today</div></div>
+    <div class="tc" style="padding:14px;text-align:center"><div style="font-size:24px;font-weight:700;color:var(--brand)">${Math.floor(stats.week/60)}m</div><div style="font-size:11px;color:var(--tx2)">This Week</div></div>
+    <div class="tc" style="padding:14px;text-align:center"><div style="font-size:24px;font-weight:700;color:var(--brand)">${stats.sessions}</div><div style="font-size:11px;color:var(--tx2)">Sessions Today</div></div>
+  </div>`;
+  // Daily chart (last 14 days)
+  if(hist.daily&&hist.daily.length){
+    const maxSec=Math.max(...hist.daily.map(d=>d.total_sec),1);
+    h+=`<div class="sl">Last 14 Days</div>`;
+    h+=`<div style="display:flex;align-items:flex-end;gap:4px;height:100px;margin-bottom:16px;padding:8px;background:var(--crd);border-radius:8px">`;
+    // Fill in missing days
+    const days=[];const now=new Date();
+    for(let i=13;i>=0;i--){const d=new Date(now);d.setDate(d.getDate()-i);days.push(d.toISOString().slice(0,10))}
+    days.forEach(day=>{
+      const entry=hist.daily.find(d=>d.day===day);
+      const sec=entry?entry.total_sec:0;
+      const pct=Math.max(2,sec/maxSec*100);
+      const lbl=new Date(day+'T00:00:00').toLocaleDateString('en-US',{weekday:'short'});
+      h+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+        <div style="width:100%;background:${sec>0?'var(--brand)':'var(--bd)'};border-radius:3px;height:${pct}%;min-height:2px" title="${Math.floor(sec/60)}m on ${day}"></div>
+        <span style="font-size:9px;color:var(--tx2)">${lbl.slice(0,2)}</span>
+      </div>`;
+    });
+    h+=`</div>`;
+  }
+  // Top tasks this week
+  if(stats.byTask&&stats.byTask.length){
+    h+=`<div class="sl">Top Tasks This Week</div>`;
+    stats.byTask.forEach(t=>{
+      h+=`<div class="tc" style="padding:8px 12px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px">${esc(t.title)}</span>
+        <span style="font-size:12px;color:var(--tx2)">${Math.floor(t.total_sec/60)}m · ${t.sessions} session${t.sessions!==1?'s':''}</span>
+      </div>`;
+    });
+  }
+  // Session list
+  h+=`<div class="sl" style="margin-top:12px">Recent Sessions</div>`;
+  if(!hist.items||!hist.items.length){h+=emptyS('timer','No focus sessions','Use the Pomodoro timer to track focus')}
+  else{hist.items.forEach(s=>{
+    const dt=new Date(s.started_at);
+    h+=`<div class="tc" style="padding:8px 12px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center">
+      <div><span style="font-size:13px;font-weight:500">${esc(s.task_title)}</span><br><span style="font-size:11px;color:var(--tx2)">${esc(s.area_name)} → ${esc(s.goal_title)}</span></div>
+      <div style="text-align:right"><span style="font-size:13px;font-weight:500">${Math.floor(s.duration_sec/60)}m</span><br><span style="font-size:11px;color:var(--tx2)">${dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})} ${dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span></div>
+    </div>`;
+  })}
+  c.innerHTML=h;
+}
+
 // ─── KEYBOARD SHORTCUTS ───
 $('kb-btn').addEventListener('click',()=>$('kb-ov').classList.add('active'));
 $('kb-ov').addEventListener('click',e=>{if(e.target===$('kb-ov'))$('kb-ov').classList.remove('active')});
@@ -1647,6 +1831,8 @@ document.addEventListener('keydown',e=>{
   if(e.key==='6'){go('weekly');return}
   if(e.key==='7'){go('matrix');return}
   if(e.key==='8'){go('logbook');return}
+  if(e.key==='9'){go('tags');return}
+  if(e.key==='0'){go('focushistory');return}
   if(e.key==='m'||e.key==='M'){toggleMultiSelect();return}
   if(e.key==='f'||e.key==='F'){/* focus needs a task selected */return}
 });

@@ -607,6 +607,131 @@ app.get('/api/export', (req, res) => {
   res.json({ exportDate: new Date().toISOString(), areas, goals, tasks, tags });
 });
 
+// ─── Import ───
+app.post('/api/import', (req, res) => {
+  const { areas, goals, tasks, tags } = req.body;
+  if (!areas || !goals || !tasks) return res.status(400).json({ error: 'Invalid import data: areas, goals, and tasks required' });
+  const importTx = db.transaction(() => {
+    // Clear existing data in dependency order
+    db.prepare('DELETE FROM focus_sessions').run();
+    db.prepare('DELETE FROM task_tags').run();
+    db.prepare('DELETE FROM subtasks').run();
+    db.prepare('DELETE FROM tasks').run();
+    db.prepare('DELETE FROM goals').run();
+    db.prepare('DELETE FROM life_areas').run();
+    db.prepare('DELETE FROM tags').run();
+
+    // Map old IDs to new IDs
+    const areaMap = {}, goalMap = {}, tagMap = {};
+
+    // Import tags
+    if (Array.isArray(tags)) {
+      const insTag = db.prepare('INSERT INTO tags (name, color) VALUES (?, ?)');
+      tags.forEach(t => {
+        const r = insTag.run(t.name, t.color || '#64748B');
+        tagMap[t.id] = r.lastInsertRowid;
+      });
+    }
+
+    // Import areas
+    const insArea = db.prepare('INSERT INTO life_areas (name, icon, color, position) VALUES (?, ?, ?, ?)');
+    areas.forEach(a => {
+      const r = insArea.run(a.name, a.icon || '📂', a.color || '#2563EB', a.position || 0);
+      areaMap[a.id] = r.lastInsertRowid;
+    });
+
+    // Import goals
+    const insGoal = db.prepare('INSERT INTO goals (area_id, title, description, due_date, color, status, position) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    goals.forEach(g => {
+      const newAreaId = areaMap[g.area_id];
+      if (!newAreaId) return; // skip orphan goals
+      const r = insGoal.run(newAreaId, g.title, g.description || '', g.due_date || null, g.color || '#6C63FF', g.status || 'active', g.position || 0);
+      goalMap[g.id] = r.lastInsertRowid;
+    });
+
+    // Import tasks
+    const insTask = db.prepare('INSERT INTO tasks (goal_id, title, note, status, priority, due_date, my_day, position, recurring, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const insSubtask = db.prepare('INSERT INTO subtasks (task_id, title, done, position) VALUES (?, ?, ?, ?)');
+    const insTaskTag = db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?, ?)');
+    tasks.forEach(t => {
+      const newGoalId = goalMap[t.goal_id];
+      if (!newGoalId) return; // skip orphan tasks
+      const r = insTask.run(newGoalId, t.title, t.notes || t.note || '', t.status || 'todo', t.priority || 0, t.due_date || null, t.my_day ? 1 : 0, t.position || 0, t.recurring || null, t.completed_at || null);
+      const newTaskId = r.lastInsertRowid;
+      // Subtasks
+      if (Array.isArray(t.subtasks)) {
+        t.subtasks.forEach(s => insSubtask.run(newTaskId, s.title, s.done ? 1 : 0, s.position || 0));
+      }
+      // Tags
+      if (Array.isArray(t.tags)) {
+        t.tags.forEach(tag => {
+          const newTagId = tagMap[tag.id];
+          if (newTagId) insTaskTag.run(newTaskId, newTagId);
+        });
+      }
+    });
+  });
+  try {
+    importTx();
+    res.json({ ok: true, message: 'Import successful' });
+  } catch (e) {
+    res.status(500).json({ error: 'Import failed: ' + e.message });
+  }
+});
+
+// ─── Tag Management ───
+app.put('/api/tags/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const { name, color } = req.body;
+  const tag = db.prepare('SELECT * FROM tags WHERE id=?').get(id);
+  if (!tag) return res.status(404).json({ error: 'Tag not found' });
+  if (name !== undefined) {
+    const clean = String(name).trim().toLowerCase().replace(/[^a-z0-9\-_ ]/g, '');
+    if (!clean) return res.status(400).json({ error: 'Name required' });
+    const dup = db.prepare('SELECT * FROM tags WHERE name=? AND id!=?').get(clean, id);
+    if (dup) return res.status(409).json({ error: 'Tag name already exists' });
+    db.prepare('UPDATE tags SET name=? WHERE id=?').run(clean, id);
+  }
+  if (color !== undefined) {
+    db.prepare('UPDATE tags SET color=? WHERE id=?').run(color, id);
+  }
+  res.json(db.prepare('SELECT * FROM tags WHERE id=?').get(id));
+});
+
+app.get('/api/tags/stats', (req, res) => {
+  const tags = db.prepare(`
+    SELECT t.*, COUNT(tt.task_id) as usage_count
+    FROM tags t LEFT JOIN task_tags tt ON t.id=tt.tag_id
+    GROUP BY t.id ORDER BY t.name
+  `).all();
+  res.json(tags);
+});
+
+// ─── Focus Session History ───
+app.get('/api/focus/history', (req, res) => {
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+  const offset = (page - 1) * limit;
+  const total = db.prepare('SELECT COUNT(*) as c FROM focus_sessions').get().c;
+  const items = db.prepare(`
+    SELECT f.*, t.title as task_title, g.title as goal_title, a.name as area_name
+    FROM focus_sessions f
+    JOIN tasks t ON f.task_id=t.id
+    JOIN goals g ON t.goal_id=g.id
+    JOIN life_areas a ON g.area_id=a.id
+    ORDER BY f.started_at DESC LIMIT ? OFFSET ?
+  `).all(limit, offset);
+  // Also return daily totals for the last 14 days
+  const daily = db.prepare(`
+    SELECT date(started_at) as day, SUM(duration_sec) as total_sec, COUNT(*) as sessions
+    FROM focus_sessions
+    WHERE started_at >= date('now', '-14 days')
+    GROUP BY date(started_at) ORDER BY day
+  `).all();
+  res.json({ total, page, pages: Math.ceil(total / limit), items, daily });
+});
+
 // SPA fallback
 app.get('/{*splat}', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
