@@ -101,6 +101,41 @@ db.exec(`CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 )`);
 
+// ─── Saved Filters table ───
+db.exec(`CREATE TABLE IF NOT EXISTS saved_filters (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  icon TEXT DEFAULT '🔍',
+  color TEXT DEFAULT '#2563EB',
+  filters TEXT NOT NULL DEFAULT '{}',
+  position INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
+
+// ─── Due time column (nullable HH:MM) ───
+try { db.exec('ALTER TABLE tasks ADD COLUMN due_time TEXT DEFAULT NULL'); } catch(e) { /* already exists */ }
+
+// ─── Habits tables ───
+db.exec(`CREATE TABLE IF NOT EXISTS habits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  icon TEXT DEFAULT '✅',
+  color TEXT DEFAULT '#22C55E',
+  frequency TEXT DEFAULT 'daily',
+  target INTEGER DEFAULT 1,
+  position INTEGER DEFAULT 0,
+  archived INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
+db.exec(`CREATE TABLE IF NOT EXISTS habit_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  habit_id INTEGER NOT NULL,
+  date TEXT NOT NULL,
+  count INTEGER DEFAULT 1,
+  UNIQUE(habit_id, date),
+  FOREIGN KEY (habit_id) REFERENCES habits(id) ON DELETE CASCADE
+)`);
+
 // Seed
 const cnt = db.prepare('SELECT COUNT(*) as c FROM life_areas').get();
 if (cnt.c === 0) {
@@ -384,11 +419,11 @@ app.get('/api/tasks/calendar', (req, res) => {
 app.post('/api/goals/:goalId/tasks', (req, res) => {
   const goalId = Number(req.params.goalId);
   if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'Invalid ID' });
-  const { title, note, priority, due_date, recurring, assigned_to, my_day, tagIds } = req.body;
+  const { title, note, priority, due_date, due_time, recurring, assigned_to, my_day, tagIds } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
   const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM tasks WHERE goal_id=?').get(goalId);
-  const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,recurring,assigned_to,my_day,position) VALUES (?,?,?,?,?,?,?,?,?)').run(
-    goalId,title.trim(),note||'',priority||0,due_date||null,recurring||null,assigned_to||'',my_day?1:0,mp.p
+  const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position) VALUES (?,?,?,?,?,?,?,?,?,?)').run(
+    goalId,title.trim(),note||'',priority||0,due_date||null,due_time||null,recurring||null,assigned_to||'',my_day?1:0,mp.p
   );
   const taskId = r.lastInsertRowid;
   if (Array.isArray(tagIds)) {
@@ -487,13 +522,14 @@ app.put('/api/tasks/:id', (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const ex = db.prepare('SELECT * FROM tasks WHERE id=?').get(id);
   if (!ex) return res.status(404).json({ error: 'Not found' });
-  const { title, note, status, priority, due_date, recurring, assigned_to, my_day, position, goal_id } = req.body;
+  const { title, note, status, priority, due_date, due_time, recurring, assigned_to, my_day, position, goal_id } = req.body;
   const completedAt = status==='done' && ex.status!=='done' ? new Date().toISOString() : (status && status!=='done' ? null : ex.completed_at);
   db.prepare(`UPDATE tasks SET title=COALESCE(?,title),note=COALESCE(?,note),status=COALESCE(?,status),
-    priority=COALESCE(?,priority),due_date=?,recurring=?,assigned_to=COALESCE(?,assigned_to),
+    priority=COALESCE(?,priority),due_date=?,due_time=?,recurring=?,assigned_to=COALESCE(?,assigned_to),
     my_day=COALESCE(?,my_day),position=COALESCE(?,position),goal_id=COALESCE(?,goal_id),completed_at=? WHERE id=?`).run(
     title||null, note!==undefined?note:null, status||null, priority!==undefined?priority:null,
-    due_date!==undefined?due_date:ex.due_date, recurring!==undefined?recurring:ex.recurring,
+    due_date!==undefined?due_date:ex.due_date, due_time!==undefined?due_time:ex.due_time,
+    recurring!==undefined?recurring:ex.recurring,
     assigned_to!==undefined?assigned_to:null, my_day!==undefined?(my_day?1:0):null,
     position!==undefined?position:null, goal_id||null, completedAt, id
   );
@@ -501,8 +537,8 @@ app.put('/api/tasks/:id', (req, res) => {
   if (status === 'done' && ex.status !== 'done' && ex.recurring) {
     const nd = nextDueDate(ex.due_date, ex.recurring);
     const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM tasks WHERE goal_id=?').get(ex.goal_id);
-    const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,recurring,assigned_to,my_day,position) VALUES (?,?,?,?,?,?,?,?,?)').run(
-      ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.recurring, ex.assigned_to, 0, mp.p
+    const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position) VALUES (?,?,?,?,?,?,?,?,?,?)').run(
+      ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.due_time, ex.recurring, ex.assigned_to, 0, mp.p
     );
     // Copy tags to new task
     const oldTags = db.prepare('SELECT tag_id FROM task_tags WHERE task_id=?').all(id);
@@ -979,6 +1015,148 @@ app.put('/api/settings', (req, res) => {
 app.post('/api/settings/reset', (req, res) => {
   db.prepare('DELETE FROM settings').run();
   res.json(SETTINGS_DEFAULTS);
+});
+
+// ─── Saved Filters CRUD ───
+app.get('/api/filters', (req, res) => {
+  res.json(db.prepare('SELECT * FROM saved_filters ORDER BY position').all());
+});
+app.post('/api/filters', (req, res) => {
+  const { name, icon, color, filters } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  if (!filters || typeof filters !== 'object') return res.status(400).json({ error: 'Filters object required' });
+  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM saved_filters').get();
+  const r = db.prepare('INSERT INTO saved_filters (name,icon,color,filters,position) VALUES (?,?,?,?,?)').run(
+    name.trim(), icon || '🔍', color || '#2563EB', JSON.stringify(filters), mp.p
+  );
+  res.status(201).json(db.prepare('SELECT * FROM saved_filters WHERE id=?').get(r.lastInsertRowid));
+});
+app.put('/api/filters/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM saved_filters WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Not found' });
+  const { name, icon, color, filters } = req.body;
+  db.prepare('UPDATE saved_filters SET name=COALESCE(?,name),icon=COALESCE(?,icon),color=COALESCE(?,color),filters=COALESCE(?,filters) WHERE id=?').run(
+    name||null, icon||null, color||null, filters ? JSON.stringify(filters) : null, id
+  );
+  res.json(db.prepare('SELECT * FROM saved_filters WHERE id=?').get(id));
+});
+app.delete('/api/filters/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  db.prepare('DELETE FROM saved_filters WHERE id=?').run(id);
+  res.json({ ok: true });
+});
+// Execute a saved filter (or ad-hoc filter params)
+app.get('/api/filters/execute', (req, res) => {
+  let whereParts = [], params = [];
+  if (req.query.area_id) { whereParts.push('a.id=?'); params.push(Number(req.query.area_id)); }
+  if (req.query.goal_id) { whereParts.push('g.id=?'); params.push(Number(req.query.goal_id)); }
+  if (req.query.priority) { whereParts.push('t.priority=?'); params.push(Number(req.query.priority)); }
+  if (req.query.status) { whereParts.push('t.status=?'); params.push(req.query.status); }
+  if (req.query.tag_id) { whereParts.push('EXISTS (SELECT 1 FROM task_tags tt WHERE tt.task_id=t.id AND tt.tag_id=?)'); params.push(Number(req.query.tag_id)); }
+  if (req.query.due) {
+    const due = req.query.due;
+    if (due === 'today') { whereParts.push("t.due_date=date('now')"); }
+    else if (due === 'week') { whereParts.push("t.due_date BETWEEN date('now') AND date('now','+7 days')"); }
+    else if (due === 'overdue') { whereParts.push("t.due_date < date('now') AND t.status!='done'"); }
+    else if (due === 'none') { whereParts.push('t.due_date IS NULL'); }
+  }
+  if (req.query.my_day) { whereParts.push('t.my_day=1'); }
+  if (req.query.has_time) { whereParts.push('t.due_time IS NOT NULL'); }
+  const where = whereParts.length ? 'WHERE ' + whereParts.join(' AND ') : '';
+  res.json(enrichTasks(db.prepare(`
+    SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    ${where}
+    ORDER BY CASE t.status WHEN 'doing' THEN 0 WHEN 'todo' THEN 1 WHEN 'done' THEN 2 END, t.priority DESC, t.due_date
+    LIMIT 200
+  `).all(...params)));
+});
+
+// ─── Habits API ───
+app.get('/api/habits', (req, res) => {
+  const habits = db.prepare('SELECT * FROM habits WHERE archived=0 ORDER BY position').all();
+  // Attach today's log and streak info
+  const today = new Date().toISOString().slice(0, 10);
+  habits.forEach(h => {
+    h.todayCount = db.prepare('SELECT COALESCE(count,0) as c FROM habit_logs WHERE habit_id=? AND date=?').get(h.id, today)?.c || 0;
+    h.completed = h.todayCount >= h.target;
+    // Calculate streak
+    let streak = 0;
+    const d = new Date();
+    // Check today first
+    const todayLog = db.prepare('SELECT count FROM habit_logs WHERE habit_id=? AND date=?').get(h.id, today);
+    if (!todayLog || todayLog.count < h.target) d.setDate(d.getDate() - 1); // start from yesterday if today not done
+    else { streak = 1; d.setDate(d.getDate() - 1); }
+    while (true) {
+      const ds = d.toISOString().slice(0, 10);
+      const log = db.prepare('SELECT count FROM habit_logs WHERE habit_id=? AND date=?').get(h.id, ds);
+      if (log && log.count >= h.target) { streak++; d.setDate(d.getDate() - 1); }
+      else break;
+    }
+    h.streak = streak;
+  });
+  res.json(habits);
+});
+app.post('/api/habits', (req, res) => {
+  const { name, icon, color, frequency, target } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM habits').get();
+  const r = db.prepare('INSERT INTO habits (name,icon,color,frequency,target,position) VALUES (?,?,?,?,?,?)').run(
+    name.trim(), icon || '✅', color || '#22C55E', frequency || 'daily', target || 1, mp.p
+  );
+  res.status(201).json(db.prepare('SELECT * FROM habits WHERE id=?').get(r.lastInsertRowid));
+});
+app.put('/api/habits/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const { name, icon, color, frequency, target, archived } = req.body;
+  db.prepare('UPDATE habits SET name=COALESCE(?,name),icon=COALESCE(?,icon),color=COALESCE(?,color),frequency=COALESCE(?,frequency),target=COALESCE(?,target),archived=COALESCE(?,archived) WHERE id=?').run(
+    name||null, icon||null, color||null, frequency||null, target!==undefined?target:null, archived!==undefined?archived:null, id
+  );
+  res.json(db.prepare('SELECT * FROM habits WHERE id=?').get(id));
+});
+app.delete('/api/habits/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  db.prepare('DELETE FROM habits WHERE id=?').run(id);
+  res.json({ ok: true });
+});
+// Log a habit completion for a date
+app.post('/api/habits/:id/log', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const date = req.body.date || new Date().toISOString().slice(0, 10);
+  const existing = db.prepare('SELECT * FROM habit_logs WHERE habit_id=? AND date=?').get(id, date);
+  if (existing) {
+    db.prepare('UPDATE habit_logs SET count=count+1 WHERE habit_id=? AND date=?').run(id, date);
+  } else {
+    db.prepare('INSERT INTO habit_logs (habit_id,date,count) VALUES (?,?,1)').run(id, date);
+  }
+  const log = db.prepare('SELECT * FROM habit_logs WHERE habit_id=? AND date=?').get(id, date);
+  res.json(log);
+});
+// Undo a habit log
+app.delete('/api/habits/:id/log', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const date = (req.body && req.body.date) || new Date().toISOString().slice(0, 10);
+  const existing = db.prepare('SELECT * FROM habit_logs WHERE habit_id=? AND date=?').get(id, date);
+  if (existing && existing.count > 1) {
+    db.prepare('UPDATE habit_logs SET count=count-1 WHERE habit_id=? AND date=?').run(id, date);
+  } else {
+    db.prepare('DELETE FROM habit_logs WHERE habit_id=? AND date=?').run(id, date);
+  }
+  res.json({ ok: true });
+});
+// Habit heatmap (last 90 days)
+app.get('/api/habits/:id/heatmap', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const logs = db.prepare("SELECT date, count FROM habit_logs WHERE habit_id=? AND date >= date('now','-90 days') ORDER BY date").all(id);
+  res.json(logs);
 });
 
 // SPA fallback

@@ -339,6 +339,37 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .dr-footer .btn-skip{font-size:12px;color:var(--txd);background:none;border:none;cursor:pointer;font-family:inherit}
 .dr-footer .btn-next{font-size:12px;padding:8px 20px}
 
+/* Habits */
+.habit-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.habit-card{background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--r);padding:16px;cursor:pointer;transition:border-color .15s}
+.habit-card:hover{border-color:var(--brand)}
+.habit-card .hc-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.habit-card .hc-icon{font-size:24px}
+.habit-card .hc-name{font-weight:600;font-size:13px;flex:1}
+.habit-card .hc-streak{font-size:10px;color:var(--txd);background:var(--bg-s);padding:2px 8px;border-radius:10px}
+.habit-card .hc-streak.active{color:var(--warn);background:rgba(245,158,11,.12)}
+.habit-bar{height:6px;border-radius:3px;background:var(--bg-s);overflow:hidden;margin-bottom:10px}
+.habit-bar .fill{height:100%;border-radius:3px;transition:width .3s}
+.habit-check{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;border:2px solid var(--brd);transition:all .2s;margin:0 auto}
+.habit-check.done{border-color:var(--ok);background:var(--ok);color:#fff}
+.habit-check:hover{transform:scale(1.1)}
+.habit-week{display:flex;gap:4px;justify-content:center;margin-top:8px}
+.habit-week .hw-day{width:10px;height:10px;border-radius:2px;background:var(--bg-s)}
+.habit-week .hw-day.done{background:var(--ok)}
+.habit-week .hw-day.today{box-shadow:0 0 0 1px var(--brand)}
+
+/* Saved filters sidebar */
+.sf-item{display:flex;align-items:center;gap:8px;padding:6px 16px;cursor:pointer;font-size:12px;color:var(--txp);border-radius:var(--rs);margin:0 8px}
+.sf-item:hover,.sf-item.active{background:var(--bg-h)}
+.sf-item .sf-icon{font-size:14px}
+.sf-item .sf-del{margin-left:auto;opacity:0;font-size:12px;color:var(--txd);cursor:pointer}
+.sf-item:hover .sf-del{opacity:1}
+/* Filter builder */
+.fb-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.fb-row label{font-size:11px;font-weight:600;color:var(--txd);min-width:60px}
+.fb-row select,.fb-row input{font-size:12px;padding:6px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-family:inherit}
+.fb-save-row{display:flex;gap:8px;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--brd)}
+
 /* Dashboard */
 .ds-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:22px}
 .ds-card{background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--r);padding:16px;text-align:center}
@@ -591,9 +622,11 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <div class="ni" data-view="logbook"><span class="material-icons-round">history</span>Activity Log</div>
     <div class="ni" data-view="tags"><span class="material-icons-round">label</span>Tag Manager</div>
     <div class="ni" data-view="templates"><span class="material-icons-round">content_copy</span>Templates</div>
+    <div class="ni" data-view="habits"><span class="material-icons-round">repeat</span>Habits</div>
     <div class="ni" data-view="focushistory"><span class="material-icons-round">timer</span>Focus History</div>
     <div class="ni" data-view="settings"><span class="material-icons-round">settings</span>Settings</div>
   </div>
+  <div class="ns" id="sf-section" style="display:none"><div class="ns-label">Saved Filters</div><div id="sf-list"></div></div>
   <div style="padding:8px 12px"><button class="ab" id="dr-btn" style="width:100%;background:var(--brand);color:#fff;border-color:var(--brand)"><span class="material-icons-round">self_improvement</span>Daily Review</button></div>
   <div class="ns"><div class="ns-label">Life Areas</div></div>
   <div class="al" id="area-list"></div>
@@ -864,6 +897,33 @@ async function saveSetting(key,value){
   try{await api.put('/api/settings',{[key]:String(value)})}catch(e){console.error('Failed to save setting:',e)}
 }
 
+// ─── SAVED FILTERS + HABITS STATE ───
+let savedFilters=[],activeFilterId=null,activeFilterName='';
+let activeFilterParams={};
+async function loadSavedFilters(){
+  try{
+    savedFilters=await api.get('/api/filters');
+    const sec=$('sf-section');
+    if(savedFilters.length){sec.style.display='';renderSFList()}else{sec.style.display='none'}
+  }catch(e){}
+}
+function renderSFList(){
+  const list=$('sf-list');
+  list.innerHTML=savedFilters.map(f=>`<div class="sf-item ${activeFilterId===f.id?'active':''}" data-fid="${f.id}"><span class="sf-icon">${esc(f.icon)}</span><span>${esc(f.name)}</span><span class="material-icons-round sf-del" data-fid="${f.id}" title="Delete">close</span></div>`).join('');
+  list.querySelectorAll('.sf-item').forEach(el=>el.addEventListener('click',e=>{
+    if(e.target.closest('.sf-del')){
+      const fid=Number(e.target.dataset.fid);
+      if(confirm('Delete this saved filter?')){api.del('/api/filters/'+fid).then(()=>loadSavedFilters())}
+      return;
+    }
+    const f=savedFilters.find(x=>x.id===Number(el.dataset.fid));if(!f)return;
+    activeFilterId=f.id;activeFilterName=f.name;activeFilterParams=JSON.parse(f.filters);
+    currentView='filter';
+    document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));
+    el.classList.add('active');closeMobileSb();render();
+  }));
+}
+
 // Sidebar nav
 document.querySelectorAll('.ni').forEach(el=>el.addEventListener('click',()=>{
   currentView=el.dataset.view;activeAreaId=null;activeGoalId=null;
@@ -927,6 +987,8 @@ async function render(){
   else if(currentView==='focushistory')await renderFocusHistory();
   else if(currentView==='templates')await renderTemplates();
   else if(currentView==='settings')await renderSettings();
+  else if(currentView==='habits')await renderHabits();
+  else if(currentView==='filter')await renderSavedFilter();
   else if(currentView==='area')await renderArea();
   else if(currentView==='goal')await renderGoal();
   updateBC();
@@ -947,6 +1009,8 @@ function updateBC(){
   else if(currentView==='focushistory'){pt.textContent='Focus History';bc.innerHTML=''}
   else if(currentView==='templates'){pt.textContent='Templates';bc.innerHTML=''}
   else if(currentView==='settings'){pt.textContent='Settings';bc.innerHTML=''}
+  else if(currentView==='habits'){pt.textContent='Habits';bc.innerHTML=''}
+  else if(currentView==='filter'){pt.textContent=activeFilterName||'Saved Filter';bc.innerHTML=''}
   else if(currentView==='area'){
     const a=areas.find(x=>x.id===activeAreaId);
     pt.textContent=a?`${a.icon} ${a.name}`:'';
@@ -1170,7 +1234,7 @@ function tcHtml(t,ctx){
   const cls=['tc'];if(t.status==='done')cls.push('done');
   if(t.priority===3)cls.push('p3');else if(t.priority===2)cls.push('p2');else if(t.priority===1)cls.push('p1');
   let meta='';
-  if(t.due_date){const o=isOD(t.due_date)&&t.status!=='done';meta+=`<span class="${o?'od':''}"><span class="material-icons-round">event</span>${fmtDue(t.due_date)}</span>`}
+  if(t.due_date){const o=isOD(t.due_date)&&t.status!=='done';const tm=t.due_time?(' '+new Date('2000-01-01T'+t.due_time).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})):'';meta+=`<span class="${o?'od':''}"><span class="material-icons-round">event</span>${fmtDue(t.due_date)}${tm}</span>`}
   if(t.priority>0)meta+=`<span style="color:${PC[t.priority]}">${PL[t.priority]}</span>`;
   if(t.assigned_to)meta+=`<span>👤 ${esc(t.assigned_to)}</span>`;
   if(t.recurring)meta+=`<span>🔁 ${esc(t.recurring)}</span>`;
@@ -1517,7 +1581,7 @@ function renderDPBody(){
   let h=`<label>Title</label><input type="text" id="dp-ttl" value="${escA(t.title)}">
     <label>Notes</label><textarea id="dp-note">${esc(t.note||'')}</textarea>
     <div id="dp-note-preview" class="md-note" style="display:none;padding:8px 10px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin:-6px 0 10px;max-height:200px;overflow-y:auto"></div>
-    <div class="dp-row"><div><label>Due Date</label><input type="date" id="dp-due" value="${t.due_date||''}"></div>
+    <div class="dp-row"><div><label>Due Date</label><div style="display:flex;gap:6px"><input type="date" id="dp-due" value="${t.due_date||''}" style="flex:1"><input type="time" id="dp-time" value="${t.due_time||''}" style="width:100px"></div></div>
     <div><label>Priority</label><select id="dp-pri"><option value="0" ${t.priority===0?'selected':''}>None</option><option value="1" ${t.priority===1?'selected':''}>Normal</option><option value="2" ${t.priority===2?'selected':''}>High</option><option value="3" ${t.priority===3?'selected':''}>Critical</option></select></div></div>
     <div class="dp-row"><div><label>Assigned To</label><input type="text" id="dp-asg" value="${escA(t.assigned_to||'')}"></div>
     <div><label>Recurring</label><select id="dp-rec"><option value="">None</option><option value="daily" ${t.recurring==='daily'?'selected':''}>Daily</option><option value="weekdays" ${t.recurring==='weekdays'?'selected':''}>Weekdays</option><option value="weekly" ${t.recurring==='weekly'?'selected':''}>Weekly</option><option value="every-2-weeks" ${t.recurring==='every-2-weeks'?'selected':''}>Every 2 Weeks</option><option value="monthly" ${t.recurring==='monthly'?'selected':''}>Monthly</option><option value="yearly" ${t.recurring==='yearly'?'selected':''}>Yearly</option><option value="custom" ${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)?'selected':''}>Custom…</option></select><div id="dp-rec-custom" style="display:${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)&&t.recurring!=='every-2-weeks'?'flex':'none'};gap:6px;margin-top:4px;align-items:center"><span style="font-size:11px">Every</span><input type="number" id="dp-rec-n" min="1" max="365" style="width:60px" value="${(t.recurring?.match(/^every-(\d+)/)||[])[1]||'3'}"><select id="dp-rec-unit" style="width:80px"><option value="days" ${t.recurring?.endsWith('-days')?'selected':''}>Days</option><option value="weeks" ${t.recurring?.endsWith('-weeks')?'selected':''}>Weeks</option></select></div><div id="dp-rec-preview" style="display:${t.recurring?'block':'none'};margin-top:6px;padding:6px 8px;background:var(--bg-c);border-radius:4px;font-size:10px;color:var(--tx2)"><span class="material-icons-round" style="font-size:12px;vertical-align:middle">repeat</span> <span id="dp-rec-txt">${esc(t.recurring||'')} </span></div></div></div>
@@ -1661,6 +1725,7 @@ $('dp-save').addEventListener('click',async()=>{
   if(rec==='custom'){const n=parseInt($('dp-rec-n').value)||3;const u=$('dp-rec-unit').value;rec='every-'+n+'-'+u}
   await api.put('/api/tasks/'+dpTask.id,{
     title:$('dp-ttl').value, note:$('dp-note').value, due_date:$('dp-due').value||null,
+    due_time:$('dp-time').value||null,
     priority:Number($('dp-pri').value), assigned_to:$('dp-asg').value,
     recurring:rec, my_day:$('dp-md').checked
   });
@@ -1741,7 +1806,7 @@ $('sb-ov').addEventListener('click', () => { $('sb').classList.remove('open'); $
 function closeMobileSb() { $('sb').classList.remove('open'); $('sb-ov').classList.remove('open'); }
 
 // Boot
-Promise.all([loadSettings(),loadAreas(),loadTags()]).then(()=>{
+Promise.all([loadSettings(),loadAreas(),loadTags(),loadSavedFilters()]).then(()=>{
   // Apply settings on load
   if(appSettings.theme){
     document.documentElement.setAttribute('data-theme',appSettings.theme);
@@ -2617,6 +2682,177 @@ function showSavedIndicator(el){
 function applySettingsToTimer(){
   const fd=Number(appSettings.focusDuration)||25,sb=Number(appSettings.shortBreak)||5,lb=Number(appSettings.longBreak)||15;
   FT_MODES.focus.dur=fd*60;FT_MODES.short.dur=sb*60;FT_MODES.long.dur=lb*60;
+}
+
+// ─── HABITS VIEW ───
+async function renderHabits(){
+  const mc=$('mc');
+  let habits=[];
+  try{habits=await api.get('/api/habits')}catch(e){}
+  let h=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><h2 style="margin:0">Habits</h2><button class="btn-s" id="hab-add-btn">+ New Habit</button></div>`;
+  // Add form (hidden initially)
+  h+=`<div id="hab-form" style="display:none;padding:12px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin-bottom:16px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+      <div><label style="font-size:11px">Icon</label><input type="text" id="hab-icon" value="💪" style="width:50px"></div>
+      <div style="flex:1"><label style="font-size:11px">Name</label><input type="text" id="hab-name" placeholder="e.g. Exercise"></div>
+      <div><label style="font-size:11px">Target/day</label><input type="number" id="hab-target" value="1" min="1" max="99" style="width:60px"></div>
+      <div><label style="font-size:11px">Frequency</label><select id="hab-freq"><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
+      <div><label style="font-size:11px">Color</label><input type="color" id="hab-color" value="#6C63FF" style="width:40px;height:32px;padding:0;border:none"></div>
+      <button class="btn-s" id="hab-save">Save</button>
+      <button class="btn-c" id="hab-cancel">Cancel</button>
+    </div>
+  </div>`;
+  if(!habits.length){
+    h+=`<div style="text-align:center;padding:40px;color:var(--txd)"><span class="material-icons-round" style="font-size:48px;opacity:.3">repeat</span><p>No habits yet. Create your first habit to start tracking!</p></div>`;
+  }else{
+    h+=`<div class="habit-grid">`;
+    for(const hab of habits){
+      const pct=hab.target>0?Math.min(100,Math.round((hab.todayCount||0)/hab.target*100)):0;
+      h+=`<div class="habit-card" data-hid="${hab.id}">
+        <div class="hc-head"><span style="font-size:24px">${esc(hab.icon||'⭐')}</span><span style="flex:1;font-weight:600">${esc(hab.name)}</span>
+          <span class="hc-streak" style="background:${escA(hab.color||'#6C63FF')}20;color:${escA(hab.color||'#6C63FF')}">${hab.streak||0}🔥</span></div>
+        <div style="display:flex;align-items:center;gap:10px;margin:8px 0">
+          <div class="habit-bar" style="flex:1"><div class="habit-bar-fill" style="width:${pct}%;background:${escA(hab.color||'#6C63FF')}"></div></div>
+          <span style="font-size:11px;color:var(--txd)">${hab.todayCount||0}/${hab.target}</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div class="habit-week" id="hw-${hab.id}"></div>
+          <button class="habit-check ${hab.completed?'done':''}" data-hid="${hab.id}" style="--hc:${escA(hab.color||'#6C63FF')}"><span class="material-icons-round">check</span></button>
+        </div>
+        <div style="display:flex;gap:4px;margin-top:6px"><button class="btn-c" style="font-size:10px;padding:2px 8px" data-edit="${hab.id}">Edit</button><button class="btn-c" style="font-size:10px;padding:2px 8px;color:var(--dn)" data-del="${hab.id}">Delete</button></div>
+      </div>`;
+    }
+    h+=`</div>`;
+  }
+  mc.innerHTML=h;
+  // Load heatmaps for each habit (last 7 days)
+  for(const hab of habits){
+    try{
+      const hm=await api.get('/api/habits/'+hab.id+'/heatmap');
+      const el=document.getElementById('hw-'+hab.id);if(!el)continue;
+      const today=new Date();
+      let dots='';
+      for(let i=6;i>=0;i--){
+        const d=new Date(today);d.setDate(d.getDate()-i);
+        const ds=d.toISOString().slice(0,10);
+        const entry=hm.find(x=>x.date===ds);
+        const count=entry?entry.count:0;
+        const dayLbl=['S','M','T','W','T','F','S'][d.getDay()];
+        dots+=`<div class="hw-day${count>0?' filled':''}" title="${ds}: ${count}" style="${count>0?'background:'+escA(hab.color||'#6C63FF'):''}">${dayLbl}</div>`;
+      }
+      el.innerHTML=dots;
+    }catch(e){}
+  }
+  // Event handlers
+  document.getElementById('hab-add-btn')?.addEventListener('click',()=>{$('hab-form').style.display='block'});
+  document.getElementById('hab-cancel')?.addEventListener('click',()=>{$('hab-form').style.display='none'});
+  document.getElementById('hab-save')?.addEventListener('click',async()=>{
+    const name=$('hab-name').value.trim();if(!name)return;
+    await api.post('/api/habits',{name,icon:$('hab-icon').value,color:$('hab-color').value,target:Number($('hab-target').value)||1,frequency:$('hab-freq').value});
+    showToast('Habit created!');renderHabits();
+  });
+  // Check buttons (log/unlog)
+  mc.querySelectorAll('.habit-check').forEach(btn=>btn.addEventListener('click',async()=>{
+    const hid=Number(btn.dataset.hid);
+    if(btn.classList.contains('done')){await api.del('/api/habits/'+hid+'/log')}
+    else{await api.post('/api/habits/'+hid+'/log',{})}
+    renderHabits();
+  }));
+  // Delete
+  mc.querySelectorAll('[data-del]').forEach(btn=>btn.addEventListener('click',async()=>{
+    if(!confirm('Delete this habit?'))return;
+    await api.del('/api/habits/'+Number(btn.dataset.del));showToast('Habit deleted');renderHabits();
+  }));
+  // Edit (inline toggle - reuse form)
+  mc.querySelectorAll('[data-edit]').forEach(btn=>btn.addEventListener('click',async()=>{
+    const hab=habits.find(x=>x.id===Number(btn.dataset.edit));if(!hab)return;
+    $('hab-form').style.display='block';
+    $('hab-name').value=hab.name;$('hab-icon').value=hab.icon||'⭐';
+    $('hab-color').value=hab.color||'#6C63FF';$('hab-target').value=hab.target||1;
+    $('hab-freq').value=hab.frequency||'daily';
+    // Replace save handler for edit
+    const saveBtn=$('hab-save');const newBtn=saveBtn.cloneNode(true);saveBtn.parentNode.replaceChild(newBtn,saveBtn);
+    newBtn.textContent='Update';
+    newBtn.addEventListener('click',async()=>{
+      await api.put('/api/habits/'+hab.id,{name:$('hab-name').value.trim(),icon:$('hab-icon').value,color:$('hab-color').value,target:Number($('hab-target').value)||1,frequency:$('hab-freq').value});
+      showToast('Habit updated');renderHabits();
+    });
+  }));
+}
+
+// ─── SAVED FILTER VIEW ───
+async function renderSavedFilter(){
+  const mc=$('mc');
+  const params=activeFilterParams||{};
+  let h=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><h2 style="margin:0">${esc(activeFilterName||'Filter')}</h2><button class="btn-c" id="fb-edit-btn">Edit Filter</button></div>`;
+  // Filter builder (hidden by default if activeFilterId is set)
+  h+=`<div id="fb-builder" style="display:${activeFilterId?'none':'block'};padding:12px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin-bottom:16px">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:end">
+      <div class="fb-row"><label style="font-size:11px">Area</label><select id="fb-area"><option value="">Any</option>${areas.map(a=>`<option value="${a.id}" ${params.area_id==a.id?'selected':''}>${esc(a.icon)} ${esc(a.name)}</option>`).join('')}</select></div>
+      <div class="fb-row"><label style="font-size:11px">Priority</label><select id="fb-pri"><option value="">Any</option><option value="1" ${params.priority=='1'?'selected':''}>Normal</option><option value="2" ${params.priority=='2'?'selected':''}>High</option><option value="3" ${params.priority=='3'?'selected':''}>Critical</option></select></div>
+      <div class="fb-row"><label style="font-size:11px">Status</label><select id="fb-status"><option value="">Any</option><option value="todo" ${params.status==='todo'?'selected':''}>To Do</option><option value="in-progress" ${params.status==='in-progress'?'selected':''}>In Progress</option><option value="done" ${params.status==='done'?'selected':''}>Done</option></select></div>
+      <div class="fb-row"><label style="font-size:11px">Due</label><select id="fb-due"><option value="">Any</option><option value="today" ${params.due==='today'?'selected':''}>Today</option><option value="week" ${params.due==='week'?'selected':''}>This Week</option><option value="overdue" ${params.due==='overdue'?'selected':''}>Overdue</option><option value="none" ${params.due==='none'?'selected':''}>No Date</option></select></div>
+      <div class="fb-row"><label style="font-size:11px">Tag</label><select id="fb-tag"><option value="">Any</option>${allTags.map(t=>`<option value="${t.id}" ${params.tag_id==t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div>
+      <div class="fb-row"><label style="font-size:11px;display:flex;align-items:center;gap:4px"><input type="checkbox" id="fb-myday" ${params.my_day?'checked':''} style="width:auto;margin:0">My Day only</label></div>
+    </div>
+    <div class="fb-save-row" style="margin-top:10px;display:flex;gap:8px;align-items:center">
+      <button class="btn-s" id="fb-apply">Apply</button>
+      <input type="text" id="fb-name" placeholder="Filter name..." value="${escA(activeFilterName||'')}" style="flex:1;max-width:200px">
+      <input type="text" id="fb-icon" value="${escA(params._icon||'🔍')}" style="width:40px;text-align:center">
+      <button class="btn-c" id="fb-saveas">${activeFilterId?'Update':'Save'}</button>
+    </div>
+  </div>`;
+  h+=`<div id="fb-results"><div style="text-align:center;padding:20px;color:var(--txd)">Loading...</div></div>`;
+  mc.innerHTML=h;
+  // Execute filter
+  async function execFilter(){
+    const p={};
+    const area=$('fb-area').value;if(area)p.area_id=area;
+    const pri=$('fb-pri').value;if(pri)p.priority=pri;
+    const st=$('fb-status').value;if(st)p.status=st;
+    const due=$('fb-due').value;if(due)p.due=due;
+    const tag=$('fb-tag').value;if(tag)p.tag_id=tag;
+    if($('fb-myday').checked)p.my_day='1';
+    const qs=new URLSearchParams(p).toString();
+    try{
+      const tasks=await api.get('/api/filters/execute'+(qs?'?'+qs:''));
+      if(!tasks.length){$('fb-results').innerHTML='<div style="text-align:center;padding:20px;color:var(--txd)">No tasks match this filter</div>';return}
+      $('fb-results').innerHTML=`<div style="margin-bottom:8px;font-size:12px;color:var(--txd)">${tasks.length} task${tasks.length!==1?'s':''}</div>`+tasks.map(t=>tcHtml(t,true)).join('');
+      wireTC($('fb-results'));
+    }catch(e){$('fb-results').innerHTML='<div style="color:var(--dn)">Error loading results</div>'}
+  }
+  await execFilter();
+  // Event handlers
+  $('fb-apply').addEventListener('click',async()=>{
+    activeFilterParams=gatherFilterParams();await execFilter();
+  });
+  $('fb-edit-btn').addEventListener('click',()=>{
+    const fb=$('fb-builder');fb.style.display=fb.style.display==='none'?'block':'none';
+  });
+  $('fb-saveas').addEventListener('click',async()=>{
+    const name=$('fb-name').value.trim()||'Untitled Filter';
+    const icon=$('fb-icon').value||'🔍';
+    const filters=gatherFilterParams();
+    if(activeFilterId){
+      await api.put('/api/filters/'+activeFilterId,{name,icon,filters});
+      activeFilterName=name;
+    }else{
+      const f=await api.post('/api/filters',{name,icon,filters});
+      activeFilterId=f.id;activeFilterName=name;
+    }
+    await loadSavedFilters();showToast('Filter saved!');render();
+  });
+  function gatherFilterParams(){
+    const p={};
+    const area=$('fb-area').value;if(area)p.area_id=area;
+    const pri=$('fb-pri').value;if(pri)p.priority=pri;
+    const st=$('fb-status').value;if(st)p.status=st;
+    const due=$('fb-due').value;if(due)p.due=due;
+    const tag=$('fb-tag').value;if(tag)p.tag_id=tag;
+    if($('fb-myday').checked)p.my_day='1';
+    p._icon=$('fb-icon').value||'🔍';
+    return p;
+  }
 }
 
 // ─── DAILY REVIEW ───

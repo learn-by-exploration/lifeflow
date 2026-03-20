@@ -28,6 +28,9 @@ function cleanDb() {
   db.exec('DELETE FROM tags');
   db.exec('DELETE FROM task_templates');
   db.exec('DELETE FROM settings');
+  db.exec('DELETE FROM habit_logs');
+  db.exec('DELETE FROM habits');
+  db.exec('DELETE FROM saved_filters');
 }
 
 function teardown() {
