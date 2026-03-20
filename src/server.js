@@ -425,6 +425,38 @@ app.get('/api/stats', (req, res) => {
   res.json({ total, done, overdue, dueToday, thisWeek, byArea, byPriority, recentDone });
 });
 
+// ─── Focus Session Tracking ───
+db.exec(`CREATE TABLE IF NOT EXISTS focus_sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL,
+  started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  duration_sec INTEGER DEFAULT 0,
+  type TEXT DEFAULT 'pomodoro',
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+)`);
+
+app.post('/api/focus', (req, res) => {
+  const { task_id, duration_sec, type } = req.body;
+  if (!task_id || !Number.isInteger(Number(task_id))) return res.status(400).json({ error: 'task_id required' });
+  const r = db.prepare('INSERT INTO focus_sessions (task_id, duration_sec, type) VALUES (?,?,?)').run(
+    Number(task_id), duration_sec || 0, type || 'pomodoro'
+  );
+  res.status(201).json(db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(r.lastInsertRowid));
+});
+
+app.get('/api/focus/stats', (req, res) => {
+  const today = db.prepare("SELECT COALESCE(SUM(duration_sec),0) as total FROM focus_sessions WHERE date(started_at)=date('now')").get().total;
+  const week = db.prepare("SELECT COALESCE(SUM(duration_sec),0) as total FROM focus_sessions WHERE started_at>=date('now','-7 days')").get().total;
+  const sessions = db.prepare("SELECT COALESCE(COUNT(*),0) as c FROM focus_sessions WHERE date(started_at)=date('now')").get().c;
+  const byTask = db.prepare(`
+    SELECT t.title, SUM(f.duration_sec) as total_sec, COUNT(f.id) as sessions
+    FROM focus_sessions f JOIN tasks t ON f.task_id=t.id
+    WHERE f.started_at>=date('now','-7 days')
+    GROUP BY f.task_id ORDER BY total_sec DESC LIMIT 10
+  `).all();
+  res.json({ today, week, sessions, byTask });
+});
+
 // ─── NLP Quick Capture Parser ───
 app.post('/api/tasks/parse', (req, res) => {
   const { text } = req.body;
@@ -467,6 +499,54 @@ app.get('/api/goals', (req, res) => {
     WHERE g.status='active'
     ORDER BY a.position, g.position
   `).all());
+});
+
+// ─── Activity Log ───
+app.get('/api/activity', (req, res) => {
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+  const offset = (page - 1) * limit;
+  const total = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='done' AND completed_at IS NOT NULL").get().c;
+  const items = db.prepare(`
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.status='done' AND t.completed_at IS NOT NULL
+    ORDER BY t.completed_at DESC LIMIT ? OFFSET ?
+  `).all(limit, offset);
+  res.json({ total, page, pages: Math.ceil(total / limit), items: enrichTasks(items) });
+});
+
+// ─── Auto Backup ───
+const backupDir = path.join(dbDir, 'backups');
+if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+
+function runBackup() {
+  const areas = db.prepare('SELECT * FROM life_areas ORDER BY position').all();
+  const goals = db.prepare('SELECT * FROM goals ORDER BY area_id, position').all();
+  const tasks = enrichTasks(db.prepare('SELECT * FROM tasks ORDER BY goal_id, position').all());
+  const tags = db.prepare('SELECT * FROM tags ORDER BY name').all();
+  const data = JSON.stringify({ backupDate: new Date().toISOString(), areas, goals, tasks, tags });
+  const fname = `lifeflow-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  fs.writeFileSync(path.join(backupDir, fname), data);
+  // Rotate: keep last 7
+  const files = fs.readdirSync(backupDir).filter(f => f.startsWith('lifeflow-backup-')).sort();
+  while (files.length > 7) { fs.unlinkSync(path.join(backupDir, files.shift())); }
+  return fname;
+}
+
+// Backup on startup
+try { runBackup(); } catch(e) { console.error('Backup failed:', e.message); }
+// Backup every 24h
+setInterval(() => { try { runBackup(); } catch(e) { console.error('Backup failed:', e.message); } }, 24 * 60 * 60 * 1000);
+
+app.post('/api/backup', (req, res) => {
+  const fname = runBackup();
+  res.json({ ok: true, file: fname });
+});
+
+app.get('/api/backups', (req, res) => {
+  const files = fs.readdirSync(backupDir).filter(f => f.startsWith('lifeflow-backup-')).sort().reverse();
+  res.json(files.map(f => ({ name: f, size: fs.statSync(path.join(backupDir, f)).size, date: f.replace('lifeflow-backup-', '').replace('.json', '') })));
 });
 
 // ─── Export ───

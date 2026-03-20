@@ -288,6 +288,54 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 
 ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(128,128,128,.25);border-radius:3px}
 [data-theme="light"] ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
+
+/* Focus Timer Overlay */
+.ft-ov{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:300;display:none;align-items:center;justify-content:center;flex-direction:column}
+.ft-ov.active{display:flex}
+.ft-box{text-align:center;color:#fff}
+.ft-task{font-size:14px;color:var(--tx2);margin-bottom:8px;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ft-time{font-size:96px;font-weight:200;font-variant-numeric:tabular-nums;letter-spacing:-2px;margin-bottom:16px}
+.ft-label{font-size:12px;color:var(--txd);margin-bottom:24px;text-transform:uppercase;letter-spacing:2px}
+.ft-btns{display:flex;gap:12px;justify-content:center}
+.ft-btn{padding:12px 28px;border-radius:var(--r);border:1px solid rgba(255,255,255,.15);background:transparent;color:#fff;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s}
+.ft-btn:hover{background:rgba(255,255,255,.1)}
+.ft-btn.primary{background:var(--brand);border-color:var(--brand)}
+.ft-btn.primary:hover{background:var(--brand-h)}
+.ft-btn.danger{border-color:var(--err);color:var(--err)}
+.ft-btn.danger:hover{background:rgba(239,68,68,.15)}
+.ft-ring{width:220px;height:220px;margin:0 auto 20px;position:relative}
+.ft-ring svg{transform:rotate(-90deg)}
+.ft-ring .ft-time-inner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;font-weight:300;font-variant-numeric:tabular-nums}
+
+/* Activity Log */
+.al-day{margin-bottom:18px}
+.al-dh{font-size:12px;font-weight:600;color:var(--txd);margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.al-dh .al-c{font-size:10px;background:rgba(255,255,255,.06);padding:1px 7px;border-radius:8px}
+.al-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--rs);font-size:13px;transition:background .12s;cursor:pointer}
+.al-item:hover{background:var(--bg-h)}
+.al-item .al-t{flex:1;font-weight:500}
+.al-item .al-meta{font-size:10px;color:var(--txd)}
+.al-item .al-time{font-size:10px;color:var(--txd);white-space:nowrap}
+
+/* Dashboard clickable cards */
+.ds-card.clickable{cursor:pointer;transition:all .15s}
+.ds-card.clickable:hover{background:var(--bg-h);border-color:var(--brand);transform:translateY(-2px)}
+.ds-area{cursor:pointer;transition:all .12s}
+.ds-area:hover{background:var(--bg-h);border-color:var(--brand)}
+
+/* Markdown in notes */
+.md-note{font-size:12px;line-height:1.6;color:var(--tx2)}
+.md-note strong{font-weight:600;color:var(--tx)}
+.md-note em{font-style:italic}
+.md-note code{font-family:monospace;background:var(--bg-c);padding:1px 4px;border-radius:3px;font-size:11px}
+.md-note pre{background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);padding:8px 10px;margin:6px 0;overflow-x:auto}
+.md-note pre code{background:none;padding:0}
+.md-note a{color:var(--brand);text-decoration:underline}
+.md-note ul,.md-note ol{margin:4px 0 4px 18px}
+.md-note li{margin:2px 0}
+.md-note blockquote{border-left:3px solid var(--brd);padding-left:10px;margin:6px 0;color:var(--txd);font-style:italic}
+.md-note h1,.md-note h2,.md-note h3{font-weight:600;color:var(--tx);margin:8px 0 4px}
+.md-note h1{font-size:16px}.md-note h2{font-size:14px}.md-note h3{font-size:13px}
 </style>
 </head>
 <body>
@@ -305,6 +353,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <div class="ni" data-view="calendar"><span class="material-icons-round">calendar_month</span>Calendar</div>
     <div class="ni" data-view="overdue"><span class="material-icons-round">warning</span>Overdue<span class="badge" id="overdue-badge">0</span></div>
     <div class="ni" data-view="dashboard"><span class="material-icons-round">dashboard</span>Dashboard</div>
+    <div class="ni" data-view="logbook"><span class="material-icons-round">history</span>Activity Log</div>
   </div>
   <div class="ns"><div class="ns-label">Life Areas</div></div>
   <div class="al" id="area-list"></div>
@@ -389,8 +438,29 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <div class="kb-row"><span>Board</span><span class="kb-key">3</span></div>
     <div class="kb-row"><span>Calendar</span><span class="kb-key">4</span></div>
     <div class="kb-row"><span>Dashboard</span><span class="kb-key">5</span></div>
+    <div class="kb-row"><span>Activity Log</span><span class="kb-key">6</span></div>
     <div class="kb-row"><span>Close panel / overlay</span><span class="kb-key">Esc</span></div>
     <div class="kb-row"><span>Show this help</span><span class="kb-key">?</span></div>
+  </div>
+</div>
+
+<!-- Focus Timer overlay -->
+<div class="ft-ov" id="ft-ov">
+  <div class="ft-box">
+    <div class="ft-task" id="ft-task"></div>
+    <div class="ft-ring">
+      <svg width="220" height="220" viewBox="0 0 220 220">
+        <circle cx="110" cy="110" r="100" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="6"/>
+        <circle id="ft-arc" cx="110" cy="110" r="100" fill="none" stroke="var(--brand)" stroke-width="6" stroke-linecap="round" stroke-dasharray="628.32" stroke-dashoffset="0"/>
+      </svg>
+      <div class="ft-time-inner" id="ft-display">25:00</div>
+    </div>
+    <div class="ft-label" id="ft-label">Focus Time</div>
+    <div class="ft-btns">
+      <button class="ft-btn" id="ft-mode">Short Break</button>
+      <button class="ft-btn primary" id="ft-toggle">Start</button>
+      <button class="ft-btn danger" id="ft-stop">End Session</button>
+    </div>
   </div>
 </div>
 
@@ -411,7 +481,7 @@ const api={
 };
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function escA(s){return String(s).replace(/[&"'<>]/g,m=>({'&':'&amp;','"':'&quot;',"'":'&#39;','<':'&lt;','>':'&gt;'})[m])}
-function fmtDue(d){if(!d)return'';const dt=new Date(d+'T00:00:00'),td=new Date();td.setHours(0,0,0,0);const df=Math.round((dt-td)/864e5);if(df===0)return'Today';if(df===1)return'Tomorrow';if(df===-1)return'Yesterday';return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+function fmtDue(d){if(!d)return'';const dt=new Date(d+'T00:00:00'),td=new Date();td.setHours(0,0,0,0);const df=Math.round((dt-td)/864e5);if(df===0)return'Today';if(df===1)return'Tomorrow';if(df===-1)return'Yesterday';if(df===-2)return'2 days ago';if(df>1&&df<=6)return'in '+df+' days';if(df<-1&&df>=-7)return Math.abs(df)+'d overdue';if(df===7)return'Next week';const wd=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];if(df>1&&df<=13)return'Next '+wd[dt.getDay()];return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})}
 function isOD(d){return d&&new Date(d+'T00:00:00')<new Date(new Date().toDateString())}
 const PL=['','Normal','High','Critical'],PC=['','var(--brand)','var(--warn)','var(--err)'];
 
@@ -472,6 +542,7 @@ async function render(){
   else if(currentView==='calendar')await renderCal();
   else if(currentView==='overdue')await renderOverdue();
   else if(currentView==='dashboard')await renderDashboard();
+  else if(currentView==='logbook')await renderLogbook();
   else if(currentView==='area')await renderArea();
   else if(currentView==='goal')await renderGoal();
   updateBC();
@@ -484,6 +555,7 @@ function updateBC(){
   else if(currentView==='board'){pt.textContent='Board';bc.innerHTML=''}
   else if(currentView==='calendar'){pt.textContent='Calendar';bc.innerHTML=''}
   else if(currentView==='overdue'){pt.textContent='Overdue';bc.innerHTML=''}
+  else if(currentView==='logbook'){pt.textContent='Activity Log';bc.innerHTML=''}
   else if(currentView==='dashboard'){pt.textContent='Dashboard';bc.innerHTML=''}
   else if(currentView==='area'){
     const a=areas.find(x=>x.id===activeAreaId);
@@ -653,12 +725,14 @@ async function renderCal(){
   const cur=new Date(sd);while(cur<=ed){
     const ds=cur.toISOString().slice(0,10);const dt=bd[ds]||[];
     h+=`<div class="cc ${ds===ts?'today':''} ${cur.getMonth()!==calM?'om':''}"><div class="cd">${cur.getDate()}</div>`;
-    dt.slice(0,3).forEach(t=>h+=`<span class="ctd" style="background:${escA(t.goal_color||'var(--brand)')}">${esc(t.title.substring(0,18))}</span>`);
+    dt.slice(0,3).forEach(t=>h+=`<span class="ctd" data-id="${t.id}" style="background:${escA(t.goal_color||'var(--brand)')}">${esc(t.title.substring(0,18))}</span>`);
     if(dt.length>3)h+=`<span style="font-size:9px;color:var(--txd)">+${dt.length-3}</span>`;
     h+=`</div>`;cur.setDate(cur.getDate()+1);}
   h+=`</div>`;c.innerHTML=h;
   $('cp').addEventListener('click',()=>{calM--;if(calM<0){calM=11;calY--}renderCal()});
   $('cn').addEventListener('click',()=>{calM++;if(calM>11){calM=0;calY++}renderCal()});
+  // Clickable calendar events
+  c.querySelectorAll('.ctd[data-id]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();openDP(Number(el.dataset.id))}));
 }
 
 // ─── Task card HTML ───
@@ -688,7 +762,7 @@ function tcHtml(t,ctx){
   return`<div class="${cls.join(' ')}" data-id="${t.id}" draggable="true">
     <div class="tk" data-id="${t.id}"><span class="material-icons-round">check</span></div>
     <div class="tb2"><div class="tt">${esc(t.title)}</div>${meta?`<div class="tm">${meta}</div>`:''}${stBar}${stList}</div>
-    <div class="ta"><button class="material-icons-round et" data-id="${t.id}">edit</button><button class="material-icons-round dt" data-id="${t.id}">delete_outline</button></div>
+    <div class="ta"><button class="material-icons-round ft-start" data-id="${t.id}" title="Focus timer">timer</button><button class="material-icons-round et" data-id="${t.id}">edit</button><button class="material-icons-round dt" data-id="${t.id}">delete_outline</button></div>
   </div>`;
 }
 
@@ -741,6 +815,8 @@ function attachTE(){
   document.querySelectorAll('.tc').forEach(card=>card.addEventListener('click',e=>{
     if(e.target.closest('.tk,.ta,.tc-subs,.tc-expand'))return;openDP(Number(card.dataset.id));
   }));
+  // Focus timer buttons
+  document.querySelectorAll('.ft-start').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();startFocusTimer(Number(b.dataset.id))}));
 }
 function attachBD(){
   document.querySelectorAll('.tc').forEach(card=>{
@@ -771,6 +847,7 @@ function renderDPBody(){
   const t=dpTask;
   let h=`<label>Title</label><input type="text" id="dp-ttl" value="${escA(t.title)}">
     <label>Notes</label><textarea id="dp-note">${esc(t.note||'')}</textarea>
+    <div id="dp-note-preview" class="md-note" style="display:none;padding:8px 10px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin:-6px 0 10px;max-height:200px;overflow-y:auto"></div>
     <div class="dp-row"><div><label>Due Date</label><input type="date" id="dp-due" value="${t.due_date||''}"></div>
     <div><label>Priority</label><select id="dp-pri"><option value="0" ${t.priority===0?'selected':''}>None</option><option value="1" ${t.priority===1?'selected':''}>Normal</option><option value="2" ${t.priority===2?'selected':''}>High</option><option value="3" ${t.priority===3?'selected':''}>Critical</option></select></div></div>
     <div class="dp-row"><div><label>Assigned To</label><input type="text" id="dp-asg" value="${escA(t.assigned_to||'')}"></div>
@@ -783,6 +860,11 @@ function renderDPBody(){
   renderSubtasks();
   $('st-add').addEventListener('click',addSubtask);
   $('st-input').addEventListener('keydown',e=>{if(e.key==='Enter')addSubtask()});
+  // Markdown preview toggle
+  const noteEl=$('dp-note'),prevEl=$('dp-note-preview');
+  function updateNotePrev(){const v=noteEl.value.trim();if(v){prevEl.innerHTML=renderMd(v);prevEl.style.display='block'}else{prevEl.style.display='none'}}
+  noteEl.addEventListener('blur',updateNotePrev);
+  if(t.note)updateNotePrev();
 }
 function renderTagInput(){
   const wrap=$('tgi');
@@ -1049,10 +1131,10 @@ async function renderDashboard(){
   const c=$('ct');
   const pct=s.total?Math.round(s.done/s.total*100):0;
   let h=`<div class="ds-grid">
-    <div class="ds-card"><div class="ds-num">${s.total}</div><div class="ds-label">Total Tasks</div></div>
-    <div class="ds-card"><div class="ds-num" style="color:var(--ok)">${s.done}</div><div class="ds-label">Completed</div></div>
-    <div class="ds-card"><div class="ds-num" style="color:var(--err)">${s.overdue}</div><div class="ds-label">Overdue</div></div>
-    <div class="ds-card"><div class="ds-num" style="color:var(--warn)">${s.dueToday}</div><div class="ds-label">Due Today</div></div>
+    <div class="ds-card clickable" data-go="all"><div class="ds-num">${s.total}</div><div class="ds-label">Total Tasks</div></div>
+    <div class="ds-card clickable" data-go="logbook"><div class="ds-num" style="color:var(--ok)">${s.done}</div><div class="ds-label">Completed</div></div>
+    <div class="ds-card clickable" data-go="overdue"><div class="ds-num" style="color:var(--err)">${s.overdue}</div><div class="ds-label">Overdue</div></div>
+    <div class="ds-card clickable" data-go="myday"><div class="ds-num" style="color:var(--warn)">${s.dueToday}</div><div class="ds-label">Due Today</div></div>
     <div class="ds-card"><div class="ds-num" style="color:var(--brand)">${s.thisWeek}</div><div class="ds-label">Done This Week</div></div>
     <div class="ds-card"><div class="ds-num">${pct}%</div><div class="ds-label">Completion Rate</div></div>
   </div>`;
@@ -1087,8 +1169,142 @@ async function renderDashboard(){
     });
   }
   c.innerHTML=h;
+  // Dashboard drill-down
+  c.querySelectorAll('.ds-card.clickable').forEach(card=>card.addEventListener('click',()=>{go(card.dataset.go)}));
+  c.querySelectorAll('.ds-area').forEach(el=>{el.addEventListener('click',()=>{
+    const a=areas.find(x=>x.name===el.querySelector('.ds-aname')?.textContent);
+    if(a){activeAreaId=a.id;activeGoalId=null;currentView='area';document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));render()}
+  })});
 }
 function timeAgo(iso){const d=new Date(iso),n=Date.now(),s=Math.floor((n-d)/1e3);if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago'}
+
+// ─── ACTIVITY LOG / LOGBOOK ───
+async function renderLogbook(){
+  const c=$('ct');
+  const r=await api.get('/api/activity?limit=100');
+  if(!r.items||!r.items.length){c.innerHTML=emptyS('history','No completed tasks yet','Complete a task and it will appear here');return}
+  // Group by day
+  const groups={};
+  r.items.forEach(t=>{
+    const day=t.completed_at?t.completed_at.slice(0,10):'unknown';
+    if(!groups[day])groups[day]=[];groups[day].push(t);
+  });
+  let h=`<div style="font-size:13px;color:var(--tx2);margin-bottom:16px">${r.total} task${r.total!==1?'s':''} completed</div>`;
+  Object.entries(groups).forEach(([day,items])=>{
+    const d=new Date(day+'T00:00:00');
+    const label=fmtDue(day)||d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+    h+=`<div class="al-day"><div class="al-dh">${label}<span class="al-c">${items.length}</span></div>`;
+    items.forEach(t=>{
+      const time=t.completed_at?new Date(t.completed_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'';
+      h+=`<div class="al-item" data-id="${t.id}">
+        <span class="material-icons-round" style="font-size:18px;color:var(--ok)">check_circle</span>
+        <span class="al-t">${esc(t.title)}</span>
+        <span class="al-meta">${esc(t.area_icon||'')} ${esc(t.area_name||'')} › ${esc(t.goal_title||'')}</span>
+        <span class="al-time">${time}</span>
+      </div>`;
+    });
+    h+=`</div>`;
+  });
+  c.innerHTML=h;
+  c.querySelectorAll('.al-item').forEach(el=>el.addEventListener('click',()=>openDP(Number(el.dataset.id))));
+}
+
+// ─── FOCUS TIMER / POMODORO ───
+let ftTask=null,ftInterval=null,ftRemaining=25*60,ftTotal=25*60,ftRunning=false,ftMode='focus',ftElapsed=0;
+const FT_MODES={focus:{label:'Focus Time',dur:25*60},short:{label:'Short Break',dur:5*60},long:{label:'Long Break',dur:15*60}};
+
+function startFocusTimer(taskId){
+  let tk=tasks.find(t=>t.id===taskId);
+  if(!tk){api.get('/api/tasks/'+taskId).then(t=>{ftTask=t;showFocusUI()}).catch(()=>{});return}
+  ftTask=tk;showFocusUI();
+}
+function showFocusUI(){
+  if(!ftTask)return;
+  ftMode='focus';ftTotal=FT_MODES.focus.dur;ftRemaining=ftTotal;ftRunning=false;ftElapsed=0;
+  $('ft-task').textContent=ftTask.title;
+  $('ft-label').textContent=FT_MODES.focus.label;
+  $('ft-toggle').textContent='Start';
+  $('ft-mode').textContent='Short Break';
+  updateFTDisplay();
+  $('ft-ov').classList.add('active');
+}
+function updateFTDisplay(){
+  const m=Math.floor(ftRemaining/60),s=ftRemaining%60;
+  $('ft-display').textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  const pct=ftTotal>0?(ftTotal-ftRemaining)/ftTotal:0;
+  $('ft-arc').setAttribute('stroke-dashoffset',String(628.32*(1-pct)));
+  $('ft-arc').setAttribute('stroke',ftMode==='focus'?'var(--brand)':'var(--ok)');
+}
+$('ft-toggle').addEventListener('click',()=>{
+  if(ftRunning){
+    clearInterval(ftInterval);ftRunning=false;$('ft-toggle').textContent='Resume';
+  } else {
+    ftRunning=true;$('ft-toggle').textContent='Pause';
+    ftInterval=setInterval(()=>{
+      ftRemaining--;ftElapsed++;
+      if(ftRemaining<=0){
+        clearInterval(ftInterval);ftRunning=false;
+        if(ftMode==='focus'&&ftTask){
+          api.post('/api/focus',{task_id:ftTask.id,duration_sec:ftElapsed,type:'pomodoro'});
+          showToast('Focus session complete! '+Math.floor(ftElapsed/60)+'m logged');
+          ftElapsed=0;
+          // Auto switch to break
+          ftMode='short';ftTotal=FT_MODES.short.dur;ftRemaining=ftTotal;
+          $('ft-label').textContent=FT_MODES.short.label;
+          $('ft-toggle').textContent='Start Break';
+          $('ft-mode').textContent='Focus (25m)';
+        } else {
+          ftMode='focus';ftTotal=FT_MODES.focus.dur;ftRemaining=ftTotal;
+          $('ft-label').textContent=FT_MODES.focus.label;
+          $('ft-toggle').textContent='Start';
+          $('ft-mode').textContent='Short Break';
+          showToast('Break over! Ready to focus?');
+        }
+      }
+      updateFTDisplay();
+    },1000);
+  }
+});
+$('ft-mode').addEventListener('click',()=>{
+  clearInterval(ftInterval);ftRunning=false;
+  if(ftMode==='focus'){
+    ftMode='short';ftTotal=FT_MODES.short.dur;$('ft-mode').textContent='Long Break';
+  } else if(ftMode==='short'){
+    ftMode='long';ftTotal=FT_MODES.long.dur;$('ft-mode').textContent='Focus (25m)';
+  } else {
+    ftMode='focus';ftTotal=FT_MODES.focus.dur;$('ft-mode').textContent='Short Break';
+  }
+  ftRemaining=ftTotal;$('ft-label').textContent=FT_MODES[ftMode].label;$('ft-toggle').textContent='Start';
+  updateFTDisplay();
+});
+$('ft-stop').addEventListener('click',()=>{
+  clearInterval(ftInterval);
+  if(ftMode==='focus'&&ftElapsed>30&&ftTask){
+    api.post('/api/focus',{task_id:ftTask.id,duration_sec:ftElapsed,type:'pomodoro'});
+    showToast(Math.floor(ftElapsed/60)+'m focus session saved');
+  }
+  ftRunning=false;ftElapsed=0;ftTask=null;
+  $('ft-ov').classList.remove('active');
+});
+
+// ─── MARKDOWN NOTE RENDERER ───
+function renderMd(text){
+  if(!text)return'';
+  let h=esc(text);
+  h=h.replace(/```([\s\S]*?)```/g,(m,c)=>'<pre><code>'+c.trim()+'</code></pre>');
+  h=h.replace(/`([^`]+)`/g,'<code>$1</code>');
+  h=h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+  h=h.replace(/\*(.+?)\*/g,'<em>$1</em>');
+  h=h.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  h=h.replace(/^### (.+)$/gm,'<h3>$1</h3>');
+  h=h.replace(/^## (.+)$/gm,'<h2>$1</h2>');
+  h=h.replace(/^# (.+)$/gm,'<h1>$1</h1>');
+  h=h.replace(/^&gt; (.+)$/gm,'<blockquote>$1</blockquote>');
+  h=h.replace(/^- (.+)$/gm,'<li>$1</li>');
+  h=h.replace(/(<li>[\s\S]*?<\/li>)/g,m=>'<ul>'+m+'</ul>');
+  h=h.replace(/\n/g,'<br>');
+  return h;
+}
 
 // ─── EXPORT ───
 $('export-btn').addEventListener('click',async()=>{
@@ -1106,6 +1322,7 @@ document.addEventListener('keydown',e=>{
   if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||ce)return;
   if(e.key==='k'&&(e.ctrlKey||e.metaKey)){e.preventDefault();openSearch();return}
   if(e.key==='Escape'){
+    if($('ft-ov').classList.contains('active')){$('ft-stop').click();return}
     if($('sr-ov').classList.contains('active')){closeSearch();return}
     if($('qc-ov').classList.contains('active')){closeQC();return}
     if($('kb-ov').classList.contains('active')){$('kb-ov').classList.remove('active');return}
@@ -1121,6 +1338,8 @@ document.addEventListener('keydown',e=>{
   if(e.key==='3'){go('board');return}
   if(e.key==='4'){go('calendar');return}
   if(e.key==='5'){go('dashboard');return}
+  if(e.key==='6'){go('logbook');return}
+  if(e.key==='f'||e.key==='F'){/* focus needs a task selected */return}
 });
 // Also handle Ctrl+K when in inputs
 document.addEventListener('keydown',e=>{if(e.key==='k'&&(e.ctrlKey||e.metaKey)){e.preventDefault();openSearch()}});
