@@ -160,6 +160,42 @@ db.exec(`CREATE TABLE IF NOT EXISTS goal_milestones (
   FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
 )`);
 
+// ─── Inbox table ───
+db.exec(`CREATE TABLE IF NOT EXISTS inbox (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  note TEXT DEFAULT '',
+  priority INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
+
+// ─── Time tracking columns on tasks ───
+try { db.exec('ALTER TABLE tasks ADD COLUMN estimated_minutes INTEGER DEFAULT NULL'); } catch(e) {}
+try { db.exec('ALTER TABLE tasks ADD COLUMN actual_minutes INTEGER DEFAULT 0'); } catch(e) {}
+
+// ─── Project Notes table ───
+db.exec(`CREATE TABLE IF NOT EXISTS notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  goal_id INTEGER,
+  title TEXT NOT NULL,
+  content TEXT DEFAULT '',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
+)`);
+
+// ─── Weekly Reviews table ───
+db.exec(`CREATE TABLE IF NOT EXISTS weekly_reviews (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  week_start TEXT NOT NULL,
+  tasks_completed INTEGER DEFAULT 0,
+  tasks_created INTEGER DEFAULT 0,
+  top_accomplishments TEXT DEFAULT '[]',
+  reflection TEXT DEFAULT '',
+  next_week_priorities TEXT DEFAULT '[]',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
+
 // Seed
 const cnt = db.prepare('SELECT COUNT(*) as c FROM life_areas').get();
 if (cnt.c === 0) {
@@ -443,11 +479,11 @@ app.get('/api/tasks/calendar', (req, res) => {
 app.post('/api/goals/:goalId/tasks', (req, res) => {
   const goalId = Number(req.params.goalId);
   if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'Invalid ID' });
-  const { title, note, priority, due_date, due_time, recurring, assigned_to, my_day, tagIds, time_block_start, time_block_end } = req.body;
+  const { title, note, priority, due_date, due_time, recurring, assigned_to, my_day, tagIds, time_block_start, time_block_end, estimated_minutes } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
   const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM tasks WHERE goal_id=?').get(goalId);
-  const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,time_block_start,time_block_end) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run(
-    goalId,title.trim(),note||'',priority||0,due_date||null,due_time||null,recurring||null,assigned_to||'',my_day?1:0,mp.p,time_block_start||null,time_block_end||null
+  const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,time_block_start,time_block_end,estimated_minutes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
+    goalId,title.trim(),note||'',priority||0,due_date||null,due_time||null,recurring||null,assigned_to||'',my_day?1:0,mp.p,time_block_start||null,time_block_end||null,estimated_minutes||null
   );
   const taskId = r.lastInsertRowid;
   if (Array.isArray(tagIds)) {
@@ -546,18 +582,19 @@ app.put('/api/tasks/:id', (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const ex = db.prepare('SELECT * FROM tasks WHERE id=?').get(id);
   if (!ex) return res.status(404).json({ error: 'Not found' });
-  const { title, note, status, priority, due_date, due_time, recurring, assigned_to, my_day, position, goal_id, time_block_start, time_block_end } = req.body;
+  const { title, note, status, priority, due_date, due_time, recurring, assigned_to, my_day, position, goal_id, time_block_start, time_block_end, estimated_minutes, actual_minutes } = req.body;
   const completedAt = status==='done' && ex.status!=='done' ? new Date().toISOString() : (status && status!=='done' ? null : ex.completed_at);
   db.prepare(`UPDATE tasks SET title=COALESCE(?,title),note=COALESCE(?,note),status=COALESCE(?,status),
     priority=COALESCE(?,priority),due_date=?,due_time=?,recurring=?,assigned_to=COALESCE(?,assigned_to),
     my_day=COALESCE(?,my_day),position=COALESCE(?,position),goal_id=COALESCE(?,goal_id),completed_at=?,
-    time_block_start=?,time_block_end=? WHERE id=?`).run(
+    time_block_start=?,time_block_end=?,estimated_minutes=?,actual_minutes=? WHERE id=?`).run(
     title||null, note!==undefined?note:null, status||null, priority!==undefined?priority:null,
     due_date!==undefined?due_date:ex.due_date, due_time!==undefined?due_time:ex.due_time,
     recurring!==undefined?recurring:ex.recurring,
     assigned_to!==undefined?assigned_to:null, my_day!==undefined?(my_day?1:0):null,
     position!==undefined?position:null, goal_id||null, completedAt,
-    time_block_start!==undefined?time_block_start:ex.time_block_start, time_block_end!==undefined?time_block_end:ex.time_block_end, id
+    time_block_start!==undefined?time_block_start:ex.time_block_start, time_block_end!==undefined?time_block_end:ex.time_block_end,
+    estimated_minutes!==undefined?estimated_minutes:ex.estimated_minutes, actual_minutes!==undefined?actual_minutes:ex.actual_minutes, id
   );
   // Recurring: spawn next task when completed
   if (status === 'done' && ex.status !== 'done' && ex.recurring) {
@@ -1292,6 +1329,152 @@ app.get('/api/stats/trends', (req, res) => {
     weeks.push({ week_start: startStr, week_end: endStr, completed: row.count });
   }
   res.json(weeks);
+});
+
+// ─── INBOX API ───
+app.get('/api/inbox', (req, res) => {
+  res.json(db.prepare('SELECT * FROM inbox ORDER BY created_at DESC').all());
+});
+app.post('/api/inbox', (req, res) => {
+  const { title, note, priority } = req.body;
+  if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
+  const r = db.prepare('INSERT INTO inbox (title, note, priority) VALUES (?,?,?)').run(title.trim(), note || '', priority || 0);
+  res.status(201).json(db.prepare('SELECT * FROM inbox WHERE id=?').get(r.lastInsertRowid));
+});
+app.put('/api/inbox/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM inbox WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Not found' });
+  const { title, note, priority } = req.body;
+  db.prepare('UPDATE inbox SET title=COALESCE(?,title), note=COALESCE(?,note), priority=COALESCE(?,priority) WHERE id=?').run(
+    title || null, note !== undefined ? note : null, priority !== undefined ? priority : null, id
+  );
+  res.json(db.prepare('SELECT * FROM inbox WHERE id=?').get(id));
+});
+app.delete('/api/inbox/:id', (req, res) => {
+  const id = Number(req.params.id);
+  db.prepare('DELETE FROM inbox WHERE id=?').run(id);
+  res.json({ ok: true });
+});
+// Triage: move inbox item to a goal as a task
+app.post('/api/inbox/:id/triage', (req, res) => {
+  const id = Number(req.params.id);
+  const item = db.prepare('SELECT * FROM inbox WHERE id=?').get(id);
+  if (!item) return res.status(404).json({ error: 'Not found' });
+  const { goal_id, due_date, priority } = req.body;
+  if (!goal_id || !Number.isInteger(Number(goal_id))) return res.status(400).json({ error: 'goal_id required' });
+  const gid = Number(goal_id);
+  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM tasks WHERE goal_id=?').get(gid);
+  const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,position) VALUES (?,?,?,?,?,?)').run(
+    gid, item.title, item.note, priority !== undefined ? priority : item.priority, due_date || null, mp.p
+  );
+  db.prepare('DELETE FROM inbox WHERE id=?').run(id);
+  res.status(201).json(db.prepare('SELECT * FROM tasks WHERE id=?').get(r.lastInsertRowid));
+});
+
+// ─── TIME TRACKING API ───
+app.post('/api/tasks/:id/time', (req, res) => {
+  const id = Number(req.params.id);
+  const ex = db.prepare('SELECT * FROM tasks WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Not found' });
+  const { minutes } = req.body;
+  if (!minutes || minutes <= 0) return res.status(400).json({ error: 'minutes required (positive number)' });
+  const newActual = (ex.actual_minutes || 0) + minutes;
+  db.prepare('UPDATE tasks SET actual_minutes=? WHERE id=?').run(newActual, id);
+  res.json(db.prepare('SELECT * FROM tasks WHERE id=?').get(id));
+});
+
+// ─── NOTES API ───
+app.get('/api/notes', (req, res) => {
+  const { goal_id } = req.query;
+  if (goal_id) {
+    res.json(db.prepare('SELECT * FROM notes WHERE goal_id=? ORDER BY updated_at DESC').all(Number(goal_id)));
+  } else {
+    res.json(db.prepare('SELECT * FROM notes ORDER BY updated_at DESC').all());
+  }
+});
+app.get('/api/notes/:id', (req, res) => {
+  const n = db.prepare('SELECT * FROM notes WHERE id=?').get(Number(req.params.id));
+  if (!n) return res.status(404).json({ error: 'Not found' });
+  res.json(n);
+});
+app.post('/api/notes', (req, res) => {
+  const { title, content, goal_id } = req.body;
+  if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
+  const r = db.prepare('INSERT INTO notes (title, content, goal_id) VALUES (?,?,?)').run(title.trim(), content || '', goal_id || null);
+  res.status(201).json(db.prepare('SELECT * FROM notes WHERE id=?').get(r.lastInsertRowid));
+});
+app.put('/api/notes/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const ex = db.prepare('SELECT * FROM notes WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Not found' });
+  const { title, content, goal_id } = req.body;
+  db.prepare('UPDATE notes SET title=COALESCE(?,title), content=COALESCE(?,content), goal_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?').run(
+    title || null, content !== undefined ? content : null, goal_id !== undefined ? goal_id : ex.goal_id, id
+  );
+  res.json(db.prepare('SELECT * FROM notes WHERE id=?').get(id));
+});
+app.delete('/api/notes/:id', (req, res) => {
+  db.prepare('DELETE FROM notes WHERE id=?').run(Number(req.params.id));
+  res.json({ ok: true });
+});
+
+// ─── WEEKLY REVIEW API ───
+app.get('/api/reviews', (req, res) => {
+  res.json(db.prepare('SELECT * FROM weekly_reviews ORDER BY week_start DESC').all());
+});
+app.get('/api/reviews/current', (req, res) => {
+  // Get data for current week review
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
+  const weekStart = monday.toISOString().split('T')[0];
+  const weekEnd = new Date(monday);
+  weekEnd.setDate(monday.getDate() + 7);
+  const weekEndStr = weekEnd.toISOString().split('T')[0];
+
+  const completed = db.prepare(`SELECT t.*, g.title as goal_title FROM tasks t LEFT JOIN goals g ON t.goal_id=g.id 
+    WHERE t.status='done' AND t.completed_at >= ? AND t.completed_at < ? ORDER BY t.completed_at DESC`).all(weekStart, weekEndStr);
+  const created = db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE created_at >= ? AND created_at < ?`).get(weekStart, weekEndStr);
+  const overdue = db.prepare(`SELECT t.*, g.title as goal_title FROM tasks t LEFT JOIN goals g ON t.goal_id=g.id 
+    WHERE t.status!='done' AND t.due_date < ? ORDER BY t.due_date`).all(weekStart);
+  const streakRow = db.prepare(`SELECT COUNT(DISTINCT date(completed_at)) as days FROM tasks WHERE status='done' AND completed_at >= ? AND completed_at < ?`).get(weekStart, weekEndStr);
+  // Check for existing review
+  const existing = db.prepare('SELECT * FROM weekly_reviews WHERE week_start=?').get(weekStart);
+  res.json({
+    weekStart, weekEnd: weekEndStr,
+    completedTasks: completed,
+    tasksCompletedCount: completed.length,
+    tasksCreatedCount: created.count,
+    overdueTasks: overdue,
+    activeDays: streakRow.days,
+    existingReview: existing || null
+  });
+});
+app.post('/api/reviews', (req, res) => {
+  const { week_start, top_accomplishments, reflection, next_week_priorities } = req.body;
+  if (!week_start) return res.status(400).json({ error: 'week_start required' });
+  // Compute stats
+  const weekEnd = new Date(week_start);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+  const weekEndStr = weekEnd.toISOString().split('T')[0];
+  const completed = db.prepare(`SELECT COUNT(*) as c FROM tasks WHERE status='done' AND completed_at >= ? AND completed_at < ?`).get(week_start, weekEndStr);
+  const created = db.prepare(`SELECT COUNT(*) as c FROM tasks WHERE created_at >= ? AND created_at < ?`).get(week_start, weekEndStr);
+  // Upsert
+  const existing = db.prepare('SELECT id FROM weekly_reviews WHERE week_start=?').get(week_start);
+  if (existing) {
+    db.prepare('UPDATE weekly_reviews SET tasks_completed=?, tasks_created=?, top_accomplishments=?, reflection=?, next_week_priorities=? WHERE id=?').run(
+      completed.c, created.c, JSON.stringify(top_accomplishments || []), reflection || '', JSON.stringify(next_week_priorities || []), existing.id
+    );
+    res.json(db.prepare('SELECT * FROM weekly_reviews WHERE id=?').get(existing.id));
+  } else {
+    const r = db.prepare('INSERT INTO weekly_reviews (week_start, tasks_completed, tasks_created, top_accomplishments, reflection, next_week_priorities) VALUES (?,?,?,?,?,?)').run(
+      week_start, completed.c, created.c, JSON.stringify(top_accomplishments || []), reflection || '', JSON.stringify(next_week_priorities || [])
+    );
+    res.status(201).json(db.prepare('SELECT * FROM weekly_reviews WHERE id=?').get(r.lastInsertRowid));
+  }
 });
 
 // SPA fallback

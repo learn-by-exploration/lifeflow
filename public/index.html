@@ -119,6 +119,33 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .trend-fill{width:100%;border-radius:3px 3px 0 0;min-height:2px;transition:height .3s}
 .trend-label{font-size:8px;color:var(--txd)}
 .trend-val{font-size:9px;font-weight:600}
+/* Inbox */
+.inbox-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin-bottom:6px;cursor:pointer;transition:background .12s}
+.inbox-item:hover{background:var(--bg-h)}
+.inbox-title{flex:1;font-size:13px;font-weight:500}
+.inbox-meta{font-size:10px;color:var(--txd)}
+.inbox-actions{display:flex;gap:4px}
+.inbox-actions button{background:none;border:none;cursor:pointer;padding:2px;border-radius:4px;color:var(--tx2)}
+.inbox-actions button:hover{background:var(--bg-h);color:var(--brand)}
+.triage-modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:999}
+.triage-box{background:var(--bg);border-radius:var(--rl);padding:20px;width:360px;max-width:90vw;box-shadow:var(--shadow2)}
+.triage-box select,.triage-box input{width:100%;padding:8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);margin-bottom:10px;font-size:13px}
+/* Notes */
+.note-card{padding:12px 14px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin-bottom:8px;cursor:pointer;transition:background .12s}
+.note-card:hover{background:var(--bg-h)}
+.note-card h4{margin:0 0 4px;font-size:13px;font-weight:600}
+.note-card p{margin:0;font-size:11px;color:var(--txd);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note-editor{margin-top:12px}
+.note-editor textarea{width:100%;min-height:200px;padding:10px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-family:inherit;font-size:13px;resize:vertical}
+/* Weekly Review */
+.review-section{margin-bottom:20px}
+.review-section h3{font-size:14px;font-weight:600;margin:0 0 8px;display:flex;align-items:center;gap:6px}
+.review-stat{display:inline-flex;align-items:center;gap:4px;padding:6px 14px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);font-size:12px;font-weight:600}
+.review-list{list-style:none;padding:0;margin:0}
+.review-list li{padding:6px 0;font-size:12px;border-bottom:1px solid var(--brd);display:flex;gap:6px;align-items:center}
+.review-textarea{width:100%;min-height:80px;padding:8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-family:inherit;font-size:13px;resize:vertical}
+/* Time estimate */
+.time-est{display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--txd);padding:1px 5px;background:var(--bg-c);border-radius:10px}
 .al{flex:1;overflow-y:auto;padding:0 10px}
 .ai{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:var(--rs);cursor:pointer;font-size:13px;font-weight:500;color:var(--tx2);transition:all .12s;position:relative}
 .ai:hover{background:var(--bg-h);color:var(--tx)}
@@ -657,6 +684,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
   <div class="sb-brand"><div class="logo">L</div><h1>LifeFlow</h1></div>
   <div class="ns">
     <div class="ns-label">Core</div>
+    <div class="ni" data-view="inbox"><span class="material-icons-round">inbox</span>Inbox<span class="badge" id="inbox-badge">0</span></div>
     <div class="ni active" data-view="myday"><span class="material-icons-round">wb_sunny</span>My Day<span class="badge" id="myday-badge">0</span></div>
     <div class="ni" data-view="all"><span class="material-icons-round">list</span>All Tasks</div>
     <div class="ni" data-view="board"><span class="material-icons-round">view_kanban</span>Board</div>
@@ -670,6 +698,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <div class="ni" data-view="weekly"><span class="material-icons-round">view_week</span>Weekly Plan</div>
     <div class="ni" data-view="planner"><span class="material-icons-round">schedule</span>Day Planner</div>
     <div class="ni" data-view="matrix"><span class="material-icons-round">grid_view</span>Matrix</div>
+    <div class="ni" data-view="review"><span class="material-icons-round">rate_review</span>Weekly Review</div>
     </div>
   </div>
   <div class="ns sb-collapsible">
@@ -680,6 +709,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <div class="ni" data-view="templates"><span class="material-icons-round">content_copy</span>Templates</div>
     <div class="ni" data-view="habits"><span class="material-icons-round">repeat</span>Habits</div>
     <div class="ni" data-view="focushistory"><span class="material-icons-round">timer</span>Focus History</div>
+    <div class="ni" data-view="notes"><span class="material-icons-round">note</span>Notes</div>
     <div class="ni" data-view="settings"><span class="material-icons-round">settings</span>Settings</div>
     </div>
   </div>
@@ -1060,6 +1090,9 @@ async function render(){
   else if(currentView==='settings')await renderSettings();
   else if(currentView==='habits')await renderHabits();
   else if(currentView==='planner')await renderPlanner();
+  else if(currentView==='inbox')await renderInbox();
+  else if(currentView==='review')await renderWeeklyReview();
+  else if(currentView==='notes')await renderNotes();
   else if(currentView==='filter')await renderSavedFilter();
   else if(currentView==='area')await renderArea();
   else if(currentView==='goal')await renderGoal();
@@ -1083,6 +1116,9 @@ function updateBC(){
   else if(currentView==='planner'){pt.textContent='Day Planner';bc.innerHTML=''}
   else if(currentView==='settings'){pt.textContent='Settings';bc.innerHTML=''}
   else if(currentView==='habits'){pt.textContent='Habits';bc.innerHTML=''}
+  else if(currentView==='inbox'){pt.textContent='Inbox';bc.innerHTML=''}
+  else if(currentView==='review'){pt.textContent='Weekly Review';bc.innerHTML=''}
+  else if(currentView==='notes'){pt.textContent='Notes';bc.innerHTML=''}
   else if(currentView==='filter'){pt.textContent=activeFilterName||'Saved Filter';bc.innerHTML=''}
   else if(currentView==='area'){
     const a=areas.find(x=>x.id===activeAreaId);
@@ -1331,6 +1367,7 @@ function tcHtml(t,ctx){
   if(t.recurring)meta+=`<span>🔁 ${esc(t.recurring)}</span>`;
   if(t.blocked_by&&t.blocked_by.some(b=>b.status!=='done'))meta+=`<span class="blocked-indicator"><span class="material-icons-round" style="font-size:12px">lock</span>Blocked</span>`;
   if(t.my_day&&currentView!=='myday')meta+=`<span>☀️</span>`;
+  if(t.estimated_minutes)meta+=`<span class="time-est"><span class="material-icons-round" style="font-size:10px">schedule</span>${t.estimated_minutes}m${t.actual_minutes?` / ${t.actual_minutes}m`:''}</span>`;
   if(t.tags&&t.tags.length)t.tags.forEach(tg=>meta+=`<span class="tag" style="background:${escA(tg.color)}">${esc(tg.name)}</span>`);
   if(ctx){meta+=`<span class="tag" style="background:${escA(t.goal_color||'var(--brand)')}">${esc(t.goal_title||'')}</span>`;
     if(t.area_icon)meta+=`<span>${esc(t.area_icon)} ${esc(t.area_name||'')}</span>`}
@@ -1715,6 +1752,8 @@ function renderDPBody(){
     <div class="dp-row"><div><label>Assigned To</label><input type="text" id="dp-asg" value="${escA(t.assigned_to||'')}"></div>
     <div><label>Recurring</label><select id="dp-rec"><option value="">None</option><option value="daily" ${t.recurring==='daily'?'selected':''}>Daily</option><option value="weekdays" ${t.recurring==='weekdays'?'selected':''}>Weekdays</option><option value="weekly" ${t.recurring==='weekly'?'selected':''}>Weekly</option><option value="every-2-weeks" ${t.recurring==='every-2-weeks'?'selected':''}>Every 2 Weeks</option><option value="monthly" ${t.recurring==='monthly'?'selected':''}>Monthly</option><option value="yearly" ${t.recurring==='yearly'?'selected':''}>Yearly</option><option value="custom" ${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)?'selected':''}>Custom…</option></select><div id="dp-rec-custom" style="display:${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)&&t.recurring!=='every-2-weeks'?'flex':'none'};gap:6px;margin-top:4px;align-items:center"><span style="font-size:11px">Every</span><input type="number" id="dp-rec-n" min="1" max="365" style="width:60px" value="${(t.recurring?.match(/^every-(\d+)/)||[])[1]||'3'}"><select id="dp-rec-unit" style="width:80px"><option value="days" ${t.recurring?.endsWith('-days')?'selected':''}>Days</option><option value="weeks" ${t.recurring?.endsWith('-weeks')?'selected':''}>Weeks</option></select></div><div id="dp-rec-preview" style="display:${t.recurring?'block':'none'};margin-top:6px;padding:6px 8px;background:var(--bg-c);border-radius:4px;font-size:10px;color:var(--tx2)"><span class="material-icons-round" style="font-size:12px;vertical-align:middle">repeat</span> <span id="dp-rec-txt">${esc(t.recurring||'')} </span></div></div></div>
     <div><label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:10px"><input type="checkbox" id="dp-md" ${t.my_day?'checked':''} style="width:auto;margin:0">Add to My Day</label></div>
+    <div class="dp-row"><div><label>Estimated (min)</label><input type="number" id="dp-est" min="0" value="${t.estimated_minutes||''}" placeholder="e.g. 30"></div>
+    <div><label>Actual (min)</label><input type="number" id="dp-act" min="0" value="${t.actual_minutes||''}" placeholder="0"></div></div>
     <label>Tags</label><div class="tg-wrap" id="tg-wrap"><div class="tgi" id="tgi"></div></div>
     <label>Subtasks</label><div class="sta"><input type="text" id="st-input" placeholder="Add subtask..."><button id="st-add">Add</button></div><div class="stl" id="stl"></div>
     <label>Dependencies</label><div id="dp-deps"></div>
@@ -1881,7 +1920,8 @@ $('dp-save').addEventListener('click',async()=>{
     title:$('dp-ttl').value, note:$('dp-note').value, due_date:$('dp-due').value||null,
     due_time:$('dp-time').value||null,
     priority:Number($('dp-pri').value), assigned_to:$('dp-asg').value,
-    recurring:rec, my_day:$('dp-md').checked
+    recurring:rec, my_day:$('dp-md').checked,
+    estimated_minutes:Number($('dp-est').value)||null, actual_minutes:Number($('dp-act').value)||0
   });
   await api.put('/api/tasks/'+dpTask.id+'/tags',{tagIds:dpTags});
   $('dp').classList.remove('open');showToast('Task saved');await loadAreas();render();loadBellReminders
@@ -2274,6 +2314,10 @@ async function loadOverdueBadge(){
   const r=await api.get('/api/tasks/overdue');
   $('overdue-badge').textContent=r.length;
   $('overdue-badge').style.color=r.length?'var(--err)':'';
+  // Inbox badge
+  const inbox=await api.get('/api/inbox');
+  $('inbox-badge').textContent=inbox.length;
+  $('inbox-badge').style.color=inbox.length?'var(--brand)':'';
 }
 async function renderOverdue(){
   const t=await api.get('/api/tasks/overdue');
@@ -3232,6 +3276,184 @@ $('dr-next').addEventListener('click',async()=>{
 document.querySelectorAll('.dr-step').forEach(s=>s.addEventListener('click',()=>{
   const n=Number(s.dataset.step);if(n>=1&&n<=3){drStep=n;renderDR()}
 }));
+
+// ─── INBOX VIEW ───
+async function renderInbox(){
+  const items=await api.get('/api/inbox');
+  const c=$('ct');
+  if(!items.length){c.innerHTML=emptyS('inbox','Inbox is empty','Capture quick thoughts with the + button below');
+    c.innerHTML+=`<div style="text-align:center;margin-top:16px"><button class="ib-add-btn" style="padding:8px 20px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:13px"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">add</span>Quick Capture</button></div>`;
+    c.querySelector('.ib-add-btn').addEventListener('click',inboxQuickAdd);return}
+  let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span style="font-size:13px;color:var(--txd)">${items.length} item${items.length!==1?'s':''} to triage</span>
+    <button class="ib-add-btn" style="padding:4px 12px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:12px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:3px">add</span>Capture</button></div>`;
+  items.forEach(it=>{
+    h+=`<div class="inbox-item" data-id="${it.id}"><div style="flex:1">
+      <div class="inbox-title">${esc(it.title)}</div>
+      ${it.note?`<div class="inbox-meta">${esc(it.note)}</div>`:''}
+      <div class="inbox-meta">${timeAgo(it.created_at)}</div>
+    </div><div class="inbox-actions">
+      <button class="ib-triage material-icons-round" data-id="${it.id}" title="Triage to goal">move_to_inbox</button>
+      <button class="ib-del material-icons-round" data-id="${it.id}" title="Delete">delete</button>
+    </div></div>`;
+  });
+  c.innerHTML=h;
+  c.querySelector('.ib-add-btn').addEventListener('click',inboxQuickAdd);
+  c.querySelectorAll('.ib-del').forEach(b=>b.addEventListener('click',async e=>{
+    e.stopPropagation();await api.delete('/api/inbox/'+b.dataset.id);showToast('Deleted');renderInbox();loadOverdueBadge();
+  }));
+  c.querySelectorAll('.ib-triage').forEach(b=>b.addEventListener('click',async e=>{
+    e.stopPropagation();showTriageModal(Number(b.dataset.id));
+  }));
+}
+async function inboxQuickAdd(){
+  const title=prompt('Quick capture:');
+  if(!title||!title.trim())return;
+  await api.post('/api/inbox',{title:title.trim()});
+  showToast('Captured');renderInbox();loadOverdueBadge();
+}
+async function showTriageModal(inboxId){
+  const m=document.createElement('div');m.className='triage-modal';
+  let goalOpts='<option value="">Select a goal...</option>';
+  areas.forEach(a=>{
+    const goals=allGoals.filter(g=>g.area_id===a.id&&g.status==='active');
+    if(goals.length){goalOpts+=`<optgroup label="${esc(a.icon+' '+a.name)}">${goals.map(g=>`<option value="${g.id}">${esc(g.title)}</option>`).join('')}</optgroup>`}
+  });
+  m.innerHTML=`<div class="triage-box"><h3 style="margin:0 0 12px;font-size:14px">Triage to Goal</h3>
+    <select id="triage-goal">${goalOpts}</select>
+    <input type="date" id="triage-date" placeholder="Due date (optional)">
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button id="triage-cancel" style="padding:6px 14px;background:none;border:1px solid var(--brd);border-radius:var(--rs);cursor:pointer;color:var(--tx)">Cancel</button>
+      <button id="triage-ok" style="padding:6px 14px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer">Move</button>
+    </div></div>`;
+  document.body.appendChild(m);
+  m.querySelector('#triage-cancel').addEventListener('click',()=>m.remove());
+  m.addEventListener('click',e=>{if(e.target===m)m.remove()});
+  m.querySelector('#triage-ok').addEventListener('click',async()=>{
+    const gid=Number(m.querySelector('#triage-goal').value);
+    if(!gid){showToast('Select a goal');return}
+    const dd=m.querySelector('#triage-date').value||null;
+    await api.post('/api/inbox/'+inboxId+'/triage',{goal_id:gid,due_date:dd});
+    m.remove();showToast('Moved to goal');await loadAreas();renderInbox();loadOverdueBadge();
+  });
+}
+
+// ─── NOTES VIEW ───
+let activeNoteId=null;
+async function renderNotes(){
+  const c=$('ct');const notes=await api.get('/api/notes');
+  if(activeNoteId){
+    const note=notes.find(n=>n.id===activeNoteId);
+    if(note)return renderNoteEditor(note);
+    activeNoteId=null;
+  }
+  let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <span style="font-size:13px;color:var(--txd)">${notes.length} note${notes.length!==1?'s':''}</span>
+    <button id="new-note-btn" style="padding:4px 12px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:12px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:3px">add</span>New Note</button></div>`;
+  if(!notes.length){h+=emptyS('note','No notes yet','Create a note to capture ideas and reference material')}
+  notes.forEach(n=>{
+    const goalLabel=n.goal_id?allGoals.find(g=>g.id===n.goal_id)?.title||'':'';
+    h+=`<div class="note-card" data-id="${n.id}"><h4>${esc(n.title)}</h4>
+      <p>${esc(n.content.slice(0,120))}</p>
+      <div style="display:flex;justify-content:space-between;margin-top:6px"><span style="font-size:10px;color:var(--txd)">${timeAgo(n.updated_at)}</span>
+      ${goalLabel?`<span style="font-size:10px;color:var(--brand)">${esc(goalLabel)}</span>`:''}</div></div>`;
+  });
+  c.innerHTML=h;
+  c.querySelector('#new-note-btn')?.addEventListener('click',async()=>{
+    const r=await api.post('/api/notes',{title:'Untitled Note'});
+    activeNoteId=r.id;renderNotes();
+  });
+  c.querySelectorAll('.note-card').forEach(card=>card.addEventListener('click',()=>{
+    activeNoteId=Number(card.dataset.id);renderNotes();
+  }));
+}
+async function renderNoteEditor(note){
+  const c=$('ct');
+  let goalOpts='<option value="">No goal</option>';
+  areas.forEach(a=>{
+    const goals=allGoals.filter(g=>g.area_id===a.id);
+    if(goals.length){goalOpts+=`<optgroup label="${esc(a.icon+' '+a.name)}">${goals.map(g=>`<option value="${g.id}" ${g.id===note.goal_id?'selected':''}>${esc(g.title)}</option>`).join('')}</optgroup>`}
+  });
+  c.innerHTML=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+    <button id="note-back" class="material-icons-round" style="background:none;border:none;cursor:pointer;color:var(--tx2);font-size:18px">arrow_back</button>
+    <input id="note-title" value="${escA(note.title)}" style="flex:1;font-size:16px;font-weight:600;border:none;background:none;color:var(--tx);outline:none;padding:4px 0">
+    <select id="note-goal" style="padding:4px 8px;font-size:11px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx)">${goalOpts}</select>
+    <button id="note-del" class="material-icons-round" style="background:none;border:none;cursor:pointer;color:var(--err);font-size:18px">delete</button>
+  </div>
+  <div class="note-editor"><textarea id="note-content">${esc(note.content)}</textarea></div>`;
+  $('note-back').addEventListener('click',()=>{activeNoteId=null;renderNotes()});
+  $('note-del').addEventListener('click',async()=>{
+    if(!confirm('Delete this note?'))return;
+    await api.delete('/api/notes/'+note.id);activeNoteId=null;showToast('Deleted');renderNotes();
+  });
+  let saveTimer;
+  const autoSave=()=>{clearTimeout(saveTimer);saveTimer=setTimeout(async()=>{
+    await api.put('/api/notes/'+note.id,{
+      title:$('note-title').value.trim()||'Untitled',
+      content:$('note-content').value,
+      goal_id:Number($('note-goal').value)||null
+    });
+  },600)};
+  $('note-title').addEventListener('input',autoSave);
+  $('note-content').addEventListener('input',autoSave);
+  $('note-goal').addEventListener('change',autoSave);
+}
+
+// ─── WEEKLY REVIEW VIEW ───
+async function renderWeeklyReview(){
+  const c=$('ct');const data=await api.get('/api/reviews/current');
+  const existing=data.existingReview;
+  let h=`<div style="font-size:13px;color:var(--txd);margin-bottom:14px">Week of ${data.weekStart} &mdash; ${data.weekEnd}</div>`;
+  h+=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">
+    <div class="review-stat"><span class="material-icons-round" style="font-size:14px;color:var(--ok)">check_circle</span>${data.tasksCompletedCount} completed</div>
+    <div class="review-stat"><span class="material-icons-round" style="font-size:14px;color:var(--brand)">add_circle</span>${data.tasksCreatedCount} created</div>
+    <div class="review-stat"><span class="material-icons-round" style="font-size:14px;color:var(--warn)">event_available</span>${data.activeDays} active days</div>
+    <div class="review-stat"><span class="material-icons-round" style="font-size:14px;color:var(--err)">warning</span>${data.overdueTasks.length} overdue</div>
+  </div>`;
+  // Completed tasks
+  if(data.completedTasks.length){
+    h+=`<div class="review-section"><h3><span class="material-icons-round" style="font-size:16px;color:var(--ok)">task_alt</span>Completed This Week</h3><ul class="review-list">`;
+    data.completedTasks.slice(0,15).forEach(t=>{
+      h+=`<li><span class="material-icons-round" style="font-size:14px;color:var(--ok)">check</span><span style="flex:1">${esc(t.title)}</span><span style="font-size:10px;color:var(--txd)">${t.goal_title?esc(t.goal_title):''}</span></li>`;
+    });
+    h+=`</ul></div>`;
+  }
+  // Overdue
+  if(data.overdueTasks.length){
+    h+=`<div class="review-section"><h3><span class="material-icons-round" style="font-size:16px;color:var(--err)">schedule</span>Still Outstanding</h3><ul class="review-list">`;
+    data.overdueTasks.slice(0,10).forEach(t=>{
+      h+=`<li><span class="material-icons-round" style="font-size:14px;color:var(--err)">radio_button_unchecked</span><span style="flex:1">${esc(t.title)}</span><span style="font-size:10px;color:var(--txd)">${t.due_date}</span></li>`;
+    });
+    h+=`</ul></div>`;
+  }
+  // Reflection form
+  h+=`<div class="review-section"><h3><span class="material-icons-round" style="font-size:16px;color:var(--brand)">edit_note</span>Reflection</h3>
+    <label style="font-size:12px;color:var(--txd);display:block;margin-bottom:4px">Top accomplishments (one per line)</label>
+    <textarea class="review-textarea" id="rv-acc" rows="3">${existing?JSON.parse(existing.top_accomplishments||'[]').join('\n'):''}</textarea>
+    <label style="font-size:12px;color:var(--txd);display:block;margin:8px 0 4px">Reflection &amp; learnings</label>
+    <textarea class="review-textarea" id="rv-refl" rows="3">${existing?esc(existing.reflection||''):''}</textarea>
+    <label style="font-size:12px;color:var(--txd);display:block;margin:8px 0 4px">Next week priorities (one per line)</label>
+    <textarea class="review-textarea" id="rv-next" rows="3">${existing?JSON.parse(existing.next_week_priorities||'[]').join('\n'):''}</textarea>
+    <div style="margin-top:12px;text-align:right"><button id="rv-save" style="padding:8px 20px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:13px">${existing?'Update Review':'Save Review'}</button></div>
+  </div>`;
+  // Past reviews
+  const pastReviews=await api.get('/api/reviews');
+  if(pastReviews.length>0){
+    h+=`<div class="review-section"><h3><span class="material-icons-round" style="font-size:16px">history</span>Past Reviews</h3>`;
+    pastReviews.forEach(r=>{
+      h+=`<div style="padding:8px 12px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin-bottom:6px;font-size:12px;display:flex;justify-content:space-between;align-items:center">
+        <span>Week of ${r.week_start}</span><span>${r.tasks_completed} completed / ${r.tasks_created} created</span></div>`;
+    });
+    h+=`</div>`;
+  }
+  c.innerHTML=h;
+  $('rv-save').addEventListener('click',async()=>{
+    const acc=$('rv-acc').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    const refl=$('rv-refl').value;
+    const next=$('rv-next').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    await api.post('/api/reviews',{week_start:data.weekStart,top_accomplishments:acc,reflection:refl,next_week_priorities:next});
+    showToast('Review saved');renderWeeklyReview();
+  });
+}
 
 // ─── KEYBOARD SHORTCUTS ───
 $('kb-btn').addEventListener('click',()=>$('kb-ov').classList.add('active'));
