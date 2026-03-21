@@ -146,6 +146,27 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .review-textarea{width:100%;min-height:80px;padding:8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-family:inherit;font-size:13px;resize:vertical}
 /* Time estimate */
 .time-est{display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--txd);padding:1px 5px;background:var(--bg-c);border-radius:10px}
+/* Time Analytics */
+.ta-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
+@media(max-width:700px){.ta-grid{grid-template-columns:1fr}}
+.ta-card{background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rl);padding:14px}
+.ta-card h4{margin:0 0 10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:4px}
+.ta-bar-h{display:flex;align-items:flex-end;gap:3px;height:100px}
+.ta-bar-v{width:100%;border-radius:3px 3px 0 0;min-height:2px;transition:height .3s}
+.ta-bar-label{font-size:8px;color:var(--txd);text-align:center;margin-top:2px}
+/* Automation Rules */
+.rule-card{padding:12px 14px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.rule-card .rule-name{flex:1;font-size:13px;font-weight:500}
+.rule-card .rule-meta{font-size:11px;color:var(--txd)}
+.rule-toggle{width:36px;height:20px;border-radius:10px;border:none;cursor:pointer;position:relative;transition:background .2s}
+.rule-toggle.on{background:var(--ok)}
+.rule-toggle.off{background:var(--brd)}
+.rule-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s}
+.rule-toggle.on::after{transform:translateX(16px)}
+/* Undo toast */
+.undo-toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 18px;border-radius:var(--rl);font-size:13px;display:flex;align-items:center;gap:10px;z-index:1001;box-shadow:0 4px 12px rgba(0,0,0,.3);animation:slideUp .3s}
+.undo-toast button{background:var(--brand);color:#fff;border:none;padding:4px 12px;border-radius:var(--rs);cursor:pointer;font-size:12px;font-weight:600}
+@keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .al{flex:1;overflow-y:auto;padding:0 10px}
 .ai{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:var(--rs);cursor:pointer;font-size:13px;font-weight:500;color:var(--tx2);transition:all .12s;position:relative}
 .ai:hover{background:var(--bg-h);color:var(--tx)}
@@ -710,6 +731,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <div class="ni" data-view="habits"><span class="material-icons-round">repeat</span>Habits</div>
     <div class="ni" data-view="focushistory"><span class="material-icons-round">timer</span>Focus History</div>
     <div class="ni" data-view="notes"><span class="material-icons-round">note</span>Notes</div>
+    <div class="ni" data-view="timeanalytics"><span class="material-icons-round">analytics</span>Time Analytics</div>
+    <div class="ni" data-view="rules"><span class="material-icons-round">auto_fix_high</span>Automations</div>
     <div class="ni" data-view="settings"><span class="material-icons-round">settings</span>Settings</div>
     </div>
   </div>
@@ -1093,6 +1116,8 @@ async function render(){
   else if(currentView==='inbox')await renderInbox();
   else if(currentView==='review')await renderWeeklyReview();
   else if(currentView==='notes')await renderNotes();
+  else if(currentView==='timeanalytics')await renderTimeAnalytics();
+  else if(currentView==='rules')await renderRules();
   else if(currentView==='filter')await renderSavedFilter();
   else if(currentView==='area')await renderArea();
   else if(currentView==='goal')await renderGoal();
@@ -1119,6 +1144,8 @@ function updateBC(){
   else if(currentView==='inbox'){pt.textContent='Inbox';bc.innerHTML=''}
   else if(currentView==='review'){pt.textContent='Weekly Review';bc.innerHTML=''}
   else if(currentView==='notes'){pt.textContent='Notes';bc.innerHTML=''}
+  else if(currentView==='timeanalytics'){pt.textContent='Time Analytics';bc.innerHTML=''}
+  else if(currentView==='rules'){pt.textContent='Automations';bc.innerHTML=''}
   else if(currentView==='filter'){pt.textContent=activeFilterName||'Saved Filter';bc.innerHTML=''}
   else if(currentView==='area'){
     const a=areas.find(x=>x.id===activeAreaId);
@@ -3453,6 +3480,172 @@ async function renderWeeklyReview(){
     await api.post('/api/reviews',{week_start:data.weekStart,top_accomplishments:acc,reflection:refl,next_week_priorities:next});
     showToast('Review saved');renderWeeklyReview();
   });
+}
+
+// ─── TIME ANALYTICS VIEW ───
+async function renderTimeAnalytics(){
+  const c=$('ct');const data=await api.get('/api/stats/time-analytics');
+  let h='';
+  // Estimation accuracy summary
+  if(data.accuracy&&data.accuracy.total>0){
+    const pct=data.accuracy.avg_ratio?Math.round(data.accuracy.avg_ratio*100):0;
+    const onTime=data.accuracy.on_time||0;const over=data.accuracy.over||0;
+    h+=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">
+      <div class="review-stat"><span class="material-icons-round" style="font-size:14px;color:var(--ok)">timer</span>${data.accuracy.total} tracked tasks</div>
+      <div class="review-stat"><span class="material-icons-round" style="font-size:14px;color:var(--brand)">speed</span>${pct}% avg accuracy</div>
+      <div class="review-stat" style="color:var(--ok)">${onTime} on time</div>
+      <div class="review-stat" style="color:var(--err)">${over} over estimate</div>
+    </div>`;
+  }
+  h+=`<div class="ta-grid">`;
+  // Time by area
+  h+=`<div class="ta-card"><h4><span class="material-icons-round" style="font-size:14px">pie_chart</span>Time by Area</h4>`;
+  if(data.byArea.length){
+    const maxA=Math.max(...data.byArea.map(a=>a.total_actual||0),1);
+    data.byArea.forEach(a=>{
+      const est=a.total_estimated||0;const act=a.total_actual||0;
+      h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px">
+        <span style="width:20px">${esc(a.icon)}</span><span style="flex:1">${esc(a.name)}</span>
+        <span style="color:var(--txd)">${act}m actual</span>
+        ${est?`<span style="color:var(--brand);font-size:10px">(est: ${est}m)</span>`:''}
+        <div style="width:60px;height:6px;background:var(--brd);border-radius:3px;overflow:hidden"><div style="width:${Math.round(act/maxA*100)}%;height:100%;background:${escA(a.color)};border-radius:3px"></div></div>
+      </div>`;
+    });
+  } else h+=`<div style="font-size:12px;color:var(--txd)">No tracked data yet</div>`;
+  h+=`</div>`;
+  // Completion by hour
+  h+=`<div class="ta-card"><h4><span class="material-icons-round" style="font-size:14px">schedule</span>Productivity by Hour</h4>`;
+  if(data.byHour.length){
+    const maxH=Math.max(...data.byHour.map(h=>h.count),1);
+    const hours=Array(24).fill(0);data.byHour.forEach(h=>hours[h.hour]=h.count);
+    h+=`<div class="ta-bar-h">`;
+    for(let i=6;i<23;i++){
+      const pct=Math.round(hours[i]/maxH*100);
+      h+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end">
+        <div class="ta-bar-v" style="height:${pct}%;background:${hours[i]?'var(--brand)':'var(--brd)'}"></div>
+        <div class="ta-bar-label">${i}</div></div>`;
+    }
+    h+=`</div>`;
+  } else h+=`<div style="font-size:12px;color:var(--txd)">Complete tasks to see patterns</div>`;
+  h+=`</div>`;
+  // Weekly velocity
+  h+=`<div class="ta-card"><h4><span class="material-icons-round" style="font-size:14px">trending_up</span>Weekly Velocity</h4>`;
+  if(data.weeklyVelocity.length){
+    const maxW=Math.max(...data.weeklyVelocity.map(w=>w.count),1);
+    h+=`<div class="ta-bar-h">`;
+    data.weeklyVelocity.forEach(w=>{
+      const pct=Math.round(w.count/maxW*100);
+      h+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end">
+        <div class="ta-bar-v" style="height:${pct}%;background:var(--ok)"></div>
+        <div class="ta-bar-label">${w.week.slice(-3)}</div>
+        <div style="font-size:8px;font-weight:600">${w.count}</div></div>`;
+    });
+    h+=`</div>`;
+  } else h+=`<div style="font-size:12px;color:var(--txd)">Complete tasks to see velocity</div>`;
+  h+=`</div>`;
+  // Accuracy trend placeholder
+  h+=`<div class="ta-card"><h4><span class="material-icons-round" style="font-size:14px">target</span>Estimation Tips</h4>`;
+  if(data.accuracy&&data.accuracy.avg_ratio){
+    const r=data.accuracy.avg_ratio;
+    if(r>1.3)h+=`<p style="font-size:12px;margin:0;color:var(--warn)">You tend to <b>underestimate</b> tasks. Try adding 30% buffer to your estimates.</p>`;
+    else if(r<0.7)h+=`<p style="font-size:12px;margin:0;color:var(--brand)">You tend to <b>overestimate</b> tasks. Your estimates have room to tighten up.</p>`;
+    else h+=`<p style="font-size:12px;margin:0;color:var(--ok)">Your estimates are pretty accurate! Keep it up.</p>`;
+  } else h+=`<p style="font-size:12px;margin:0;color:var(--txd)">Add time estimates and track actuals to get personalized tips.</p>`;
+  h+=`</div></div>`;
+  c.innerHTML=h;
+}
+
+// ─── AUTOMATION RULES VIEW ───
+async function renderRules(){
+  const c=$('ct');const rules=await api.get('/api/rules');
+  let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <span style="font-size:13px;color:var(--txd)">${rules.length} rule${rules.length!==1?'s':''}</span>
+    <button id="new-rule-btn" style="padding:4px 12px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:12px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:3px">add</span>New Rule</button></div>`;
+  if(!rules.length)h+=emptyS('auto_fix_high','No automation rules','Create rules to automate your workflow');
+  const triggerLabels={task_completed:'When task completed',task_updated:'When task updated',overdue:'When task overdue'};
+  const actionLabels={add_to_myday:'Add to My Day',set_priority:'Set priority',add_tag:'Add tag',create_followup:'Create follow-up task'};
+  rules.forEach(r=>{
+    const tl=triggerLabels[r.trigger_type]||r.trigger_type;
+    const al=actionLabels[r.action_type]||r.action_type;
+    h+=`<div class="rule-card">
+      <button class="rule-toggle ${r.enabled?'on':'off'}" data-id="${r.id}" data-enabled="${r.enabled}"></button>
+      <div style="flex:1"><div class="rule-name">${esc(r.name)}</div><div class="rule-meta">${tl} → ${al}</div></div>
+      <button class="material-icons-round rule-del" data-id="${r.id}" style="background:none;border:none;cursor:pointer;color:var(--txd);font-size:16px">delete</button>
+    </div>`;
+  });
+  c.innerHTML=h;
+  c.querySelector('#new-rule-btn')?.addEventListener('click',showRuleModal);
+  c.querySelectorAll('.rule-toggle').forEach(btn=>btn.addEventListener('click',async()=>{
+    const id=Number(btn.dataset.id);const cur=btn.dataset.enabled==='1';
+    await api.put('/api/rules/'+id,{enabled:cur?0:1});renderRules();
+  }));
+  c.querySelectorAll('.rule-del').forEach(btn=>btn.addEventListener('click',async()=>{
+    if(!confirm('Delete this rule?'))return;
+    await api.delete('/api/rules/'+btn.dataset.id);showToast('Rule deleted');renderRules();
+  }));
+}
+function showRuleModal(){
+  const m=document.createElement('div');m.className='triage-modal';
+  m.innerHTML=`<div class="triage-box" style="width:400px"><h3 style="margin:0 0 12px;font-size:14px">New Automation Rule</h3>
+    <input type="text" id="rule-name" placeholder="Rule name" style="margin-bottom:8px">
+    <label style="font-size:11px;color:var(--txd)">When...</label>
+    <select id="rule-trigger" style="margin-bottom:8px">
+      <option value="task_completed">Task is completed</option>
+      <option value="task_updated">Task is updated</option>
+    </select>
+    <label style="font-size:11px;color:var(--txd)">Then...</label>
+    <select id="rule-action" style="margin-bottom:8px">
+      <option value="add_to_myday">Add to My Day</option>
+      <option value="set_priority">Set priority</option>
+      <option value="add_tag">Add a tag</option>
+      <option value="create_followup">Create follow-up task</option>
+    </select>
+    <div id="rule-action-config"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button id="rule-cancel" style="padding:6px 14px;background:none;border:1px solid var(--brd);border-radius:var(--rs);cursor:pointer;color:var(--tx)">Cancel</button>
+      <button id="rule-save" style="padding:6px 14px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer">Create</button>
+    </div></div>`;
+  document.body.appendChild(m);
+  const updateConfig=()=>{
+    const act=$('rule-action').value;const cfg=$('rule-action-config');
+    if(act==='set_priority')cfg.innerHTML='<select id="rule-pri"><option value="1">Normal</option><option value="2">High</option><option value="3">Critical</option></select>';
+    else if(act==='create_followup')cfg.innerHTML='<input type="text" id="rule-followup" placeholder="Follow-up task title">';
+    else cfg.innerHTML='';
+  };
+  $('rule-action').addEventListener('change',updateConfig);updateConfig();
+  $('rule-cancel').addEventListener('click',()=>m.remove());
+  m.addEventListener('click',e=>{if(e.target===m)m.remove()});
+  $('rule-save').addEventListener('click',async()=>{
+    const name=$('rule-name').value.trim();if(!name){showToast('Name required');return}
+    const trigger_type=$('rule-trigger').value;
+    const action_type=$('rule-action').value;
+    let action_config={};
+    if(action_type==='set_priority')action_config={priority:Number(document.getElementById('rule-pri')?.value||1)};
+    if(action_type==='create_followup')action_config={title:document.getElementById('rule-followup')?.value||'Follow-up'};
+    await api.post('/api/rules',{name,trigger_type,trigger_config:{},action_type,action_config});
+    m.remove();showToast('Rule created');renderRules();
+  });
+}
+
+// ─── GLOBAL UNDO SYSTEM ───
+const undoStack=[];
+function pushUndo(label,undoFn){
+  undoStack.push({label,fn:undoFn,ts:Date.now()});
+  if(undoStack.length>20)undoStack.shift();
+  showUndoToast(label);
+}
+function showUndoToast(label){
+  document.querySelectorAll('.undo-toast').forEach(t=>t.remove());
+  const t=document.createElement('div');t.className='undo-toast';
+  t.innerHTML=`<span>${esc(label)}</span><button>Undo</button>`;
+  document.body.appendChild(t);
+  const btn=t.querySelector('button');
+  btn.addEventListener('click',async()=>{
+    const action=undoStack.pop();
+    if(action&&action.fn){await action.fn();await loadAreas();render();loadOverdueBadge()}
+    t.remove();
+  });
+  setTimeout(()=>t.remove(),5000);
 }
 
 // ─── KEYBOARD SHORTCUTS ───

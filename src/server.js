@@ -608,6 +608,16 @@ app.put('/api/tasks/:id', (req, res) => {
     const insTag = db.prepare('INSERT OR IGNORE INTO task_tags (task_id,tag_id) VALUES (?,?)');
     oldTags.forEach(tt => insTag.run(r.lastInsertRowid, tt.tag_id));
   }
+  // Execute automation rules on completion
+  if (status === 'done' && ex.status !== 'done') {
+    const updated = db.prepare('SELECT t.*, g.area_id FROM tasks t JOIN goals g ON t.goal_id=g.id WHERE t.id=?').get(id);
+    if (updated) executeRules('task_completed', updated);
+  }
+  // Execute rules on task creation (for overdue auto-add etc.)
+  if (status && status !== ex.status && status !== 'done') {
+    const updated = db.prepare('SELECT t.*, g.area_id FROM tasks t JOIN goals g ON t.goal_id=g.id WHERE t.id=?').get(id);
+    if (updated) executeRules('task_updated', updated);
+  }
   res.json(enrichTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(id)));
 });
 app.delete('/api/tasks/:id', (req, res) => {
@@ -1330,6 +1340,109 @@ app.get('/api/stats/trends', (req, res) => {
   }
   res.json(weeks);
 });
+
+// ─── TIME ANALYTICS ───
+app.get('/api/stats/time-analytics', (req, res) => {
+  // Estimate vs actual per area
+  const byArea = db.prepare(`
+    SELECT la.name, la.icon, la.color,
+      SUM(t.estimated_minutes) as total_estimated,
+      SUM(t.actual_minutes) as total_actual,
+      COUNT(CASE WHEN t.estimated_minutes > 0 THEN 1 END) as estimated_count,
+      COUNT(*) as task_count
+    FROM tasks t
+    JOIN goals g ON t.goal_id = g.id
+    JOIN life_areas la ON g.area_id = la.id
+    WHERE t.status = 'done'
+    GROUP BY la.id ORDER BY total_actual DESC
+  `).all();
+  // Completion by hour of day
+  const byHour = db.prepare(`
+    SELECT CAST(strftime('%H', completed_at) AS INTEGER) as hour, COUNT(*) as count
+    FROM tasks WHERE status='done' AND completed_at IS NOT NULL
+    GROUP BY hour ORDER BY hour
+  `).all();
+  // Weekly velocity (last 8 weeks)
+  const weeklyVelocity = db.prepare(`
+    SELECT strftime('%Y-W%W', completed_at) as week, COUNT(*) as count,
+      SUM(actual_minutes) as minutes
+    FROM tasks WHERE status='done' AND completed_at >= date('now', '-56 days')
+    GROUP BY week ORDER BY week
+  `).all();
+  // Estimation accuracy
+  const accuracy = db.prepare(`
+    SELECT COUNT(*) as total,
+      SUM(CASE WHEN actual_minutes <= estimated_minutes THEN 1 ELSE 0 END) as on_time,
+      SUM(CASE WHEN actual_minutes > estimated_minutes THEN 1 ELSE 0 END) as over,
+      AVG(CASE WHEN estimated_minutes > 0 THEN CAST(actual_minutes AS FLOAT) / estimated_minutes END) as avg_ratio
+    FROM tasks WHERE status='done' AND estimated_minutes > 0 AND actual_minutes > 0
+  `).get();
+  res.json({ byArea, byHour, weeklyVelocity, accuracy });
+});
+
+// ─── AUTOMATION RULES ENGINE ───
+db.exec(`CREATE TABLE IF NOT EXISTS automation_rules (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  trigger_type TEXT NOT NULL,
+  trigger_config TEXT DEFAULT '{}',
+  action_type TEXT NOT NULL,
+  action_config TEXT DEFAULT '{}',
+  enabled INTEGER DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
+
+app.get('/api/rules', (req, res) => {
+  res.json(db.prepare('SELECT * FROM automation_rules ORDER BY created_at DESC').all());
+});
+app.post('/api/rules', (req, res) => {
+  const { name, trigger_type, trigger_config, action_type, action_config } = req.body;
+  if (!name || !trigger_type || !action_type) return res.status(400).json({ error: 'name, trigger_type, action_type required' });
+  const r = db.prepare('INSERT INTO automation_rules (name, trigger_type, trigger_config, action_type, action_config) VALUES (?,?,?,?,?)').run(
+    name.trim(), trigger_type, JSON.stringify(trigger_config || {}), action_type, JSON.stringify(action_config || {})
+  );
+  res.status(201).json(db.prepare('SELECT * FROM automation_rules WHERE id=?').get(r.lastInsertRowid));
+});
+app.put('/api/rules/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const ex = db.prepare('SELECT * FROM automation_rules WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Not found' });
+  const { name, trigger_type, trigger_config, action_type, action_config, enabled } = req.body;
+  db.prepare('UPDATE automation_rules SET name=COALESCE(?,name), trigger_type=COALESCE(?,trigger_type), trigger_config=COALESCE(?,trigger_config), action_type=COALESCE(?,action_type), action_config=COALESCE(?,action_config), enabled=COALESCE(?,enabled) WHERE id=?').run(
+    name || null, trigger_type || null, trigger_config ? JSON.stringify(trigger_config) : null, action_type || null, action_config ? JSON.stringify(action_config) : null, enabled !== undefined ? (enabled ? 1 : 0) : null, id
+  );
+  res.json(db.prepare('SELECT * FROM automation_rules WHERE id=?').get(id));
+});
+app.delete('/api/rules/:id', (req, res) => {
+  db.prepare('DELETE FROM automation_rules WHERE id=?').run(Number(req.params.id));
+  res.json({ ok: true });
+});
+
+// Execute rules on task status change (called internally)
+function executeRules(event, task) {
+  const rules = db.prepare('SELECT * FROM automation_rules WHERE enabled=1 AND trigger_type=?').all(event);
+  rules.forEach(rule => {
+    const tc = JSON.parse(rule.trigger_config || '{}');
+    const ac = JSON.parse(rule.action_config || '{}');
+    // Check trigger conditions
+    if (tc.area_id && task.area_id !== tc.area_id) return;
+    if (tc.goal_id && task.goal_id !== tc.goal_id) return;
+    if (tc.priority !== undefined && task.priority !== tc.priority) return;
+    // Execute action
+    if (rule.action_type === 'add_to_myday') {
+      db.prepare('UPDATE tasks SET my_day=1 WHERE id=?').run(task.id);
+    } else if (rule.action_type === 'set_priority' && ac.priority !== undefined) {
+      db.prepare('UPDATE tasks SET priority=? WHERE id=?').run(ac.priority, task.id);
+    } else if (rule.action_type === 'add_tag' && ac.tag_id) {
+      db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?,?)').run(task.id, ac.tag_id);
+    } else if (rule.action_type === 'create_followup' && ac.title) {
+      const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM tasks WHERE goal_id=?').get(task.goal_id);
+      db.prepare('INSERT INTO tasks (goal_id, title, priority, position) VALUES (?,?,?,?)').run(
+        task.goal_id, ac.title, ac.priority || 0, mp.p
+      );
+    }
+  });
+}
 
 // ─── INBOX API ───
 app.get('/api/inbox', (req, res) => {
