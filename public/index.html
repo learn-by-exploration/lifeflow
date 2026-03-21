@@ -3048,8 +3048,45 @@ function vimMove(delta){
 async function renderSettings(){
   await loadSettings();
   const c=$('ct');
+  // Settings tabs
+  const settingsTabDefs=[
+    {id:'general',label:'General',icon:'tune'},
+    {id:'appearance',label:'Appearance',icon:'palette'},
+    {id:'tags',label:'Tags',icon:'label'},
+    {id:'templates',label:'Templates',icon:'content_copy'},
+    {id:'automations',label:'Automations',icon:'auto_fix_high'},
+    {id:'data',label:'Data',icon:'storage'},
+    {id:'shortcuts',label:'Shortcuts',icon:'keyboard'}
+  ];
+  if(!window._settingsTab)window._settingsTab='general';
+  let tabsHtml=`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;border-bottom:1px solid var(--brd);padding-bottom:8px">`;
+  settingsTabDefs.forEach(t=>{
+    const isActive=window._settingsTab===t.id;
+    tabsHtml+=`<button class="btn-c settings-tab${isActive?' active':''}" data-stab="${t.id}" style="font-size:12px;padding:6px 12px;border-radius:var(--rs);${isActive?'background:var(--brand);color:#fff;border-color:var(--brand)':''}"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">${t.icon}</span>${t.label}</button>`;
+  });
+  tabsHtml+=`</div>`;
+
+  if(window._settingsTab==='tags'){
+    await renderTags();
+    c.insertAdjacentHTML('afterbegin',tabsHtml);
+    c.querySelectorAll('.settings-tab').forEach(btn=>btn.addEventListener('click',()=>{window._settingsTab=btn.dataset.stab;renderSettings()}));
+    return;
+  }
+  if(window._settingsTab==='templates'){
+    await renderTemplates();
+    c.insertAdjacentHTML('afterbegin',tabsHtml);
+    c.querySelectorAll('.settings-tab').forEach(btn=>btn.addEventListener('click',()=>{window._settingsTab=btn.dataset.stab;renderSettings()}));
+    return;
+  }
+  if(window._settingsTab==='automations'){
+    await renderRules();
+    c.insertAdjacentHTML('afterbegin',tabsHtml);
+    c.querySelectorAll('.settings-tab').forEach(btn=>btn.addEventListener('click',()=>{window._settingsTab=btn.dataset.stab;renderSettings()}));
+    return;
+  }
+
   const themes=[['midnight','Midnight'],['ocean','Ocean'],['forest','Forest'],['sunset','Sunset'],['lavender','Lavender'],['nord','Nord']];
-  const views=[['myday','My Day'],['upcoming','Upcoming'],['calendar','Calendar'],['areas','Areas']];
+  const views=[['myday','Today'],['upcoming','Upcoming'],['calendar','Calendar'],['areas','Areas']];
   const priorities=[['0','None'],['1','Normal'],['2','High'],['3','Critical']];
   const dateFormats=[['relative','Relative (Today, Tomorrow)'],['iso','ISO (2026-03-20)'],['us','US (Mar 20, 2026)'],['eu','EU (20/03/2026)']];
   const weekDays=[['0','Sunday'],['1','Monday']];
@@ -3057,11 +3094,12 @@ async function renderSettings(){
   function selOpts(opts,cur){return opts.map(([v,l])=>`<option value="${v}"${String(cur)===String(v)?' selected':''}>${esc(l)}</option>`).join('')}
   function tog(key,cur){return `<label class="set-toggle"><input type="checkbox" data-key="${key}" ${cur==='true'?'checked':''}><span class="set-slider"></span></label>`}
 
-  c.innerHTML=`<div class="settings-grid">
+  let content='';
+  if(window._settingsTab==='general'){
+    content=`<div class="settings-grid">
   <section class="settings-section">
     <h3>General</h3>
     <div class="set-row"><label>Default View</label><select data-key="defaultView">${selOpts(views,appSettings.defaultView)}</select></div>
-    <div class="set-row"><label>Theme</label><select data-key="theme">${selOpts(themes,appSettings.theme)}</select></div>
     <div class="set-row"><label>Date Format</label><select data-key="dateFormat">${selOpts(dateFormats,appSettings.dateFormat)}</select></div>
     <div class="set-row"><label>Week Starts On</label><select data-key="weekStart">${selOpts(weekDays,appSettings.weekStart)}</select></div>
   </section>
@@ -3074,16 +3112,45 @@ async function renderSettings(){
   <section class="settings-section">
     <h3>Tasks</h3>
     <div class="set-row"><label>Default Priority</label><select data-key="defaultPriority">${selOpts(priorities,appSettings.defaultPriority)}</select></div>
-    <div class="set-row"><label>Auto-add to My Day</label>${tog('autoMyDay',appSettings.autoMyDay)}</div>
+    <div class="set-row"><label>Auto-add to Today</label>${tog('autoMyDay',appSettings.autoMyDay)}</div>
     <div class="set-row"><label>Show Completed Tasks</label>${tog('showCompleted',appSettings.showCompleted)}</div>
     <div class="set-row"><label>Confirm Before Delete</label>${tog('confirmDelete',appSettings.confirmDelete)}</div>
   </section>
-  <section class="settings-section set-danger">
-    <h3>Data</h3>
-    <div class="set-row"><button class="set-btn" id="set-export">Export Data (JSON)</button></div>
-    <div class="set-row"><button class="set-btn danger" id="set-reset">Reset All Settings</button></div>
-  </section>
 </div>`;
+  } else if(window._settingsTab==='appearance'){
+    const themeColors={midnight:'#2563EB',charcoal:'#8B5CF6',forest:'#00E676',ocean:'#29B6F6',rose:'#FF4081',light:'#2563EB',nord:'#88C0D0',sunset:'#FF7043'};
+    content=`<div class="settings-grid"><section class="settings-section"><h3>Theme</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px">`;
+    [['midnight','Midnight'],['charcoal','Charcoal'],['forest','Forest'],['ocean','Ocean'],['rose','Rose'],['light','Light'],['nord','Nord'],['sunset','Sunset']].forEach(([id,name])=>{
+      const isActive=(appSettings.theme||localStorage.getItem('lf-theme')||'midnight')===id;
+      content+=`<div class="theme-card${isActive?' active':''}" data-theme="${id}" style="padding:12px;background:var(--bg-c);border:2px solid ${isActive?'var(--brand)':'var(--brd)'};border-radius:var(--rs);cursor:pointer;text-align:center;transition:all .15s">
+        <div style="width:24px;height:24px;border-radius:50%;background:${themeColors[id]||'var(--brand)'};margin:0 auto 6px"></div>
+        <div style="font-size:12px;font-weight:${isActive?'600':'400'}">${name}</div>
+      </div>`;
+    });
+    content+=`</div></section></div>`;
+  } else if(window._settingsTab==='data'){
+    content=`<div class="settings-grid"><section class="settings-section">
+    <h3>Import / Export</h3>
+    <div class="set-row"><button class="set-btn" id="set-export">Export Data (JSON)</button></div>
+    <div class="set-row"><button class="set-btn" id="set-import">Import Data</button></div>
+    <div class="set-row"><button class="set-btn danger" id="set-reset">Reset All Settings</button></div>
+    </section></div>`;
+  } else if(window._settingsTab==='shortcuts'){
+    content=`<div class="settings-grid"><section class="settings-section"><h3>Keyboard Shortcuts</h3>`;
+    const shortcuts=[['Ctrl+K','Search / Command Palette'],['N','Quick add task'],['1','Today'],['2','All Tasks'],['3','Board'],['4','Calendar'],['5','Dashboard'],['6','Weekly Plan'],['7','Matrix'],['8','Activity Log'],['M','Multi-select mode'],['R','Daily Review'],['J / K','Move down / up'],['X','Complete selected task'],['Enter','Open selected task'],['Esc','Close panel / overlay'],['?','Show shortcuts help']];
+    shortcuts.forEach(([key,desc])=>{
+      content+=`<div class="kb-row" style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--brd)"><span style="font-size:13px">${desc}</span><span class="kb-key" style="font-size:11px;padding:2px 8px;background:var(--bg-c);border:1px solid var(--brd);border-radius:4px;font-family:monospace">${key}</span></div>`;
+    });
+    content+=`</section></div>`;
+  }
+
+  c.innerHTML=tabsHtml+content;
+
+  // Wire tab clicks
+  c.querySelectorAll('.settings-tab').forEach(btn=>btn.addEventListener('click',()=>{
+    window._settingsTab=btn.dataset.stab;renderSettings();
+  }));
 
   // Auto-save on change for selects and number inputs
   c.querySelectorAll('select[data-key], input[type="number"][data-key]').forEach(el=>{
@@ -3104,6 +3171,14 @@ async function renderSettings(){
       showSavedIndicator(el.closest('.set-toggle'));
     });
   });
+  // Theme cards
+  c.querySelectorAll('.theme-card').forEach(card=>card.addEventListener('click',async()=>{
+    const theme=card.dataset.theme;
+    document.documentElement.setAttribute('data-theme',theme);
+    localStorage.setItem('lf-theme',theme);
+    await saveSetting('theme',theme);
+    renderSettings();
+  }));
   // Export
   $('set-export')?.addEventListener('click',async()=>{
     try{
@@ -3115,6 +3190,8 @@ async function renderSettings(){
       URL.revokeObjectURL(url);showToast('Data exported!');
     }catch(e){showToast('Export failed')}
   });
+  // Import
+  $('set-import')?.addEventListener('click',()=>$('import-file').click());
   // Reset
   $('set-reset')?.addEventListener('click',async()=>{
     if(!confirm('Reset all settings to defaults?'))return;
