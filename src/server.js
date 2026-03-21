@@ -363,7 +363,9 @@ app.get('/api/areas', (req, res) => {
   res.json(db.prepare(`
     SELECT a.*,
       (SELECT COUNT(*) FROM goals g WHERE g.area_id=a.id) as goal_count,
-      (SELECT COUNT(*) FROM tasks t JOIN goals g ON t.goal_id=g.id WHERE g.area_id=a.id AND t.status!='done') as pending_tasks
+      (SELECT COUNT(*) FROM tasks t JOIN goals g ON t.goal_id=g.id WHERE g.area_id=a.id AND t.status!='done') as pending_tasks,
+      (SELECT COUNT(*) FROM tasks t JOIN goals g ON t.goal_id=g.id WHERE g.area_id=a.id) as total_tasks,
+      (SELECT COUNT(*) FROM tasks t JOIN goals g ON t.goal_id=g.id WHERE g.area_id=a.id AND t.status='done') as done_tasks
     FROM life_areas a ORDER BY a.position
   `).all());
 });

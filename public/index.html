@@ -737,6 +737,20 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .cp-task-preview{padding:8px 14px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin:4px 12px;font-size:12px}
 .cp-task-preview .cp-tp-title{font-weight:600}
 .cp-task-preview .cp-tp-meta{color:var(--txd);font-size:11px;margin-top:2px}
+
+/* Smooth view transitions */
+#ct{animation:fadeIn .15s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* Goal progress mini-bar in area view */
+.goal-progress{height:3px;background:var(--bg-c);border-radius:2px;margin-top:6px;overflow:hidden}
+.goal-progress-fill{height:100%;background:var(--ok);border-radius:2px;transition:width .3s ease}
+
+/* Onboarding hint cards */
+.hint-card{background:var(--bg-s);border:1px solid var(--brand);border-left:3px solid var(--brand);border-radius:var(--rs);padding:10px 14px;margin-bottom:10px;font-size:12px;display:flex;align-items:center;gap:10px;animation:fadeIn .3s ease}
+.hint-card .hint-dismiss{margin-left:auto;cursor:pointer;color:var(--txd);font-size:14px}
+.hint-card .hint-dismiss:hover{color:var(--tx)}
+.hint-card .material-icons-round{font-size:16px;color:var(--brand);flex-shrink:0}
 </style>
 </head>
 <body>
@@ -1043,6 +1057,8 @@ function buildSwatches(containerId, hiddenId, active){
 
 let areas=[],goals=[],tasks=[],allTags=[];
 let currentView='myday',activeAreaId=null,activeGoalId=null,goalTab='list';
+// Restore last view from localStorage
+{const lv=localStorage.getItem('lf-lastView');if(lv&&['myday','all','board','calendar','overdue','dashboard','weekly','matrix','logbook','tags','focushistory','templates','settings','habits','planner','inbox','review','notes','timeanalytics','rules'].includes(lv))currentView=lv}
 let calY,calM;{const n=new Date();calY=n.getFullYear();calM=n.getMonth()}
 let editingId=null;
 const expandedTasks=new Set();
@@ -1138,11 +1154,13 @@ async function loadTags(){allTags=await api.get('/api/tags')}
 
 function renderAreas(){
   const el=$('area-list');
-  el.innerHTML=areas.map(a=>`<div class="ai ${a.id===activeAreaId?'active':''}" data-id="${a.id}">
+  el.innerHTML=areas.map(a=>{
+    const pct=a.total_tasks?Math.round(a.done_tasks/a.total_tasks*100):0;
+    return`<div class="ai ${a.id===activeAreaId?'active':''}" data-id="${a.id}">
     <span style="font-size:15px">${esc(a.icon)}</span><span class="an">${esc(a.name)}</span>
-    <span class="ac">${a.pending_tasks||0}</span>
+    ${a.total_tasks?`<span class="ac" title="${a.done_tasks}/${a.total_tasks} done (${pct}%)">${a.pending_tasks||0}</span>`:`<span class="ac">0</span>`}
     <button class="da material-icons-round" data-id="${a.id}">close</button>
-  </div>`).join('');
+  </div>`}).join('');
   el.querySelectorAll('.ai').forEach(item=>item.addEventListener('click',e=>{
     if(e.target.classList.contains('da'))return;
     activeAreaId=Number(item.dataset.id);activeGoalId=null;currentView='area';
@@ -1176,6 +1194,8 @@ function renderAreas(){
 async function render(){
   $('vt').style.display=(currentView==='goal')?'flex':'none';
   hideMultiSelectBar();selectedIds.clear();msMode=false;document.body.classList.remove('ms-mode');
+  // Persist last view
+  if(!['area','goal','filter','smartlist'].includes(currentView))localStorage.setItem('lf-lastView',currentView);
   if(currentView==='myday')await renderMyDay();
   else if(currentView==='all')await renderAll();
   else if(currentView==='board')await renderGlobalBoard();
@@ -1253,18 +1273,21 @@ async function renderMyDay(){
   const c=$('ct');
   const ds=new Date().toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   let h=`<div style="font-size:13px;color:var(--tx2);margin-bottom:14px">${ds}</div>`;
+  h+=hintCard('cmd-palette','keyboard','Press Ctrl+K to open the command palette — search tasks, navigate, and more');
   if(!t.length){await showBriefing();return}
   const p=t.filter(x=>x.status!=='done'),d=t.filter(x=>x.status==='done');
   if(p.length){h+=`<div class="sl">To Do <span class="c">${p.length}</span></div>`;p.forEach(tk=>h+=tcHtml(tk,true))}
   if(d.length&&appSettings.showCompleted!=='false'){h+=`<div class="sl" style="color:var(--ok)">Done <span class="c">${d.length}</span></div>`;d.forEach(tk=>h+=tcHtml(tk,true))}
-  c.innerHTML=h;attachTE();
+  c.innerHTML=h;attachTE();wireHints();
 }
 
 // ─── ALL ───
 async function renderAll(){
   const t=await api.get('/api/tasks/all');
   const c=$('ct');
-  if(!t.length){c.innerHTML=emptyS('checklist','No tasks yet','Create a life area, add a goal, then add tasks');return}
+  if(!t.length){c.innerHTML=emptyS('checklist','No tasks yet','Create a life area, add a goal, then add tasks',
+    `<button class="btn-s" onclick="openQuickCapture()"><span class="material-icons-round" style="font-size:14px">add</span>Quick Add</button>
+     <button class="btn-c" onclick="go('inbox')">Open Inbox</button>`);return}
   const p=t.filter(x=>x.status!=='done'),d=t.filter(x=>x.status==='done');
   let h='';
   if(p.length){h+=`<div class="sl">Active <span class="c">${p.length}</span></div>`;p.forEach(tk=>h+=tcHtml(tk,true))}
@@ -2047,16 +2070,15 @@ $('dp-save').addEventListener('click',async()=>{
     estimated_minutes:Number($('dp-est').value)||null, actual_minutes:Number($('dp-act').value)||0
   });
   await api.put('/api/tasks/'+dpTask.id+'/tags',{tagIds:dpTags});
-  $('dp').classList.remove('open');showToast('Task saved');await loadAreas();render();loadBellReminders
-  $('dp').classList.remove('open');showToast('Task saved');await loadAreas();render();
+  $('dp').classList.remove('open');showToast('Task saved');await loadAreas();render();loadBellReminders();
 });
 
 // ─── AREA MODAL ───
 $('add-area-btn').addEventListener('click',()=>{editingId=null;$('am-t').textContent='New Life Area';$('am-name').value='';$('am-icon').value='📋';$('am-color').value='#2563EB';buildSwatches('am-sw','am-color','#2563EB');$('am').classList.add('active');$('am-name').focus()});
 $('am-cancel').addEventListener('click',()=>$('am').classList.remove('active'));
 $('am-save').addEventListener('click',async()=>{const n=$('am-name').value.trim();if(!n)return;await api.post('/api/areas',{name:n,icon:$('am-icon').value||'📋',color:$('am-color').value});$('am').classList.remove('active');await loadAreas();render()});
+,actions){let h=`<div class="empty"><span class="material-icons-round">${i}</span><p>${t}</p><p style="font-size:11px">${s}</p>`;if(actions)h+=`<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${actions}</div>`;h+=`</div>`;return h
 
-// ─── GOAL MODAL ───
 function openGM(id){
   if(id){editingId=id;const g=goals.find(x=>x.id===id);if(!g)return;$('gm-t').textContent='Edit Goal';$('gm-title').value=g.title;$('gm-desc').value=g.description||'';$('gm-due').value=g.due_date||'';$('gm-color').value=g.color||'#6C63FF';buildSwatches('gm-sw','gm-color',g.color||'#6C63FF');}
   else{editingId=null;$('gm-t').textContent='New Goal';$('gm-title').value='';$('gm-desc').value='';$('gm-due').value='';$('gm-color').value='#6C63FF';buildSwatches('gm-sw','gm-color','#6C63FF');}
@@ -2069,7 +2091,19 @@ $('gm-save').addEventListener('click',async()=>{const t=$('gm-title').value.trim
   $('gm').classList.remove('active');await loadAreas();render()});
 
 document.querySelectorAll('.mo').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('active')}));
-function emptyS(i,t,s){return`<div class="empty"><span class="material-icons-round">${i}</span><p>${t}</p><p style="font-size:11px">${s}</p></div>`}
+function emptyS(i,t,s,actions){let h=`<div class="empty"><span class="material-icons-round">${i}</span><p>${t}</p><p style="font-size:11px">${s}</p>`;if(actions)h+=`<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${actions}</div>`;h+=`</div>`;return h}
+
+function hintCard(key,icon,text){
+  if(localStorage.getItem('lf-hint-'+key))return'';
+  return`<div class="hint-card" data-hint="${key}"><span class="material-icons-round">${icon}</span><span>${text}</span><span class="material-icons-round hint-dismiss" data-hint="${key}" title="Dismiss">close</span></div>`;
+}
+function wireHints(){
+  document.querySelectorAll('.hint-dismiss').forEach(btn=>btn.addEventListener('click',e=>{
+    e.stopPropagation();const k=btn.dataset.hint;
+    localStorage.setItem('lf-hint-'+k,'1');
+    btn.closest('.hint-card').remove();
+  }));
+}
 
 // ─── THEMES ───
 const THEMES=[
@@ -2852,7 +2886,8 @@ async function renderFocusHistory(){
       </div>`;
     });
   }
-  // Session list
+  // Session list,
+    `<button class="btn-s" onclick="go('dashboard')"><span class="material-icons-round" style="font-size:14px">play_arrow</span>Start a Focus Session</button>`
   h+=`<div class="sl" style="margin-top:12px">Recent Sessions</div>`;
   if(!hist.items||!hist.items.length){h+=emptyS('timer','No focus sessions','Use the Pomodoro timer to track focus')}
   else{hist.items.forEach(s=>{
