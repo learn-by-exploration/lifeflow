@@ -174,9 +174,13 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .ai .an{flex:1}.ai .ac{font-size:11px;color:var(--txd)}
 .ai .da{display:none;background:none;border:none;color:var(--err);cursor:pointer;font-size:15px;padding:2px;position:absolute;right:6px}
 .ai:hover .da{display:block}.ai:hover .ac{display:none}
-.sb-bot{padding:6px 10px 14px}
+.sb-bot{padding:6px 10px 14px;margin-top:auto}
+.sb-bot-icons{display:flex;gap:4px}
+.sb-bot-icon{flex:1;justify-content:center}
 .ab{display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:var(--rs);color:var(--brand);cursor:pointer;font-size:13px;font-weight:500;border:none;background:none;width:100%}
 .ab:hover{background:var(--bg-h)}
+.overdue-pip{margin-left:2px;font-size:9px;padding:1px 5px;border-radius:8px;color:#fff}
+.today-stat{display:flex;align-items:center;gap:4px;font-size:12px;padding:6px 10px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);white-space:nowrap}
 
 /* Main */
 .mn{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
@@ -761,63 +765,49 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 
 <aside class="sb" id="sb" role="navigation" aria-label="Sidebar navigation">
   <div class="sb-brand"><div class="logo">L</div><h1>LifeFlow</h1></div>
+  <!-- Primary Navigation (5 items — always visible) -->
   <div class="ns">
-    <div class="ns-label">Core</div>
     <div class="ni" data-view="inbox"><span class="material-icons-round">inbox</span>Inbox<span class="badge" id="inbox-badge">0</span></div>
-    <div class="ni active" data-view="myday"><span class="material-icons-round">wb_sunny</span>My Day<span class="badge" id="myday-badge">0</span></div>
+    <div class="ni active" data-view="myday"><span class="material-icons-round">wb_sunny</span>Today<span class="badge" id="myday-badge">0</span><span class="badge overdue-pip" id="overdue-badge" style="background:var(--err);display:none">0</span></div>
     <div class="ni" data-view="all"><span class="material-icons-round">list</span>All Tasks</div>
-    <div class="ni" data-view="board"><span class="material-icons-round">view_kanban</span>Board</div>
-    <div class="ni" data-view="overdue"><span class="material-icons-round">warning</span>Overdue<span class="badge" id="overdue-badge">0</span></div>
-    <div class="ni" data-view="dashboard"><span class="material-icons-round">dashboard</span>Dashboard</div>
+    <div class="ni" data-view="calendar"><span class="material-icons-round">calendar_month</span>Calendar</div>
   </div>
+  <!-- Life Areas (promoted to primary level) -->
+  <div class="ns"><div class="ns-label" style="display:flex;align-items:center;justify-content:space-between">Life Areas <span class="material-icons-round" id="add-area-btn" style="font-size:16px;cursor:pointer;opacity:.6" title="New Life Area">add_circle_outline</span></div></div>
+  <div class="al" id="area-list"></div>
+  <!-- Plan (collapsible — 3 items) -->
   <div class="ns sb-collapsible">
     <div class="ns-label sb-toggle" data-sec="plan">Plan <span class="material-icons-round sb-arrow">expand_more</span></div>
     <div class="sb-sec" id="sb-plan">
-    <div class="ni" data-view="calendar"><span class="material-icons-round">calendar_month</span>Calendar</div>
+    <div class="ni" data-view="board"><span class="material-icons-round">view_kanban</span>Board</div>
     <div class="ni" data-view="weekly"><span class="material-icons-round">view_week</span>Weekly Plan</div>
-    <div class="ni" data-view="planner"><span class="material-icons-round">schedule</span>Day Planner</div>
     <div class="ni" data-view="matrix"><span class="material-icons-round">grid_view</span>Matrix</div>
-    <div class="ni" data-view="review"><span class="material-icons-round">rate_review</span>Weekly Review</div>
     </div>
   </div>
-  <div class="ns sb-collapsible">
-    <div class="ns-label sb-toggle" data-sec="manage">Manage <span class="material-icons-round sb-arrow">expand_more</span></div>
-    <div class="sb-sec" id="sb-manage">
-    <div class="ni" data-view="logbook"><span class="material-icons-round">history</span>Activity Log</div>
-    <div class="ni" data-view="tags"><span class="material-icons-round">label</span>Tag Manager</div>
-    <div class="ni" data-view="templates"><span class="material-icons-round">content_copy</span>Templates</div>
-    <div class="ni" data-view="habits"><span class="material-icons-round">repeat</span>Habits</div>
-    <div class="ni" data-view="focushistory"><span class="material-icons-round">timer</span>Focus History</div>
-    <div class="ni" data-view="notes"><span class="material-icons-round">note</span>Notes</div>
-    <div class="ni" data-view="timeanalytics"><span class="material-icons-round">analytics</span>Time Analytics</div>
-    <div class="ni" data-view="rules"><span class="material-icons-round">auto_fix_high</span>Automations</div>
-    <div class="ni" data-view="settings"><span class="material-icons-round">settings</span>Settings</div>
-    </div>
-  </div>
-  <div class="ns" id="smart-sec"><div class="ns-label">Smart Lists</div>
+  <!-- Filters (collapsible — smart lists + saved filters merged) -->
+  <div class="ns sb-collapsible" id="filters-sec">
+    <div class="ns-label sb-toggle" data-sec="filters">Filters <span class="material-icons-round sb-arrow">expand_more</span></div>
+    <div class="sb-sec" id="sb-filters">
     <div id="smart-list">
       <div class="sf-item" data-smart="stale"><span class="sf-icon">⏳</span><span>Stale Tasks</span><span class="sf-badge" id="smart-stale-cnt"></span></div>
       <div class="sf-item" data-smart="quickwins"><span class="sf-icon">⚡</span><span>Quick Wins</span><span class="sf-badge" id="smart-qw-cnt"></span></div>
       <div class="sf-item" data-smart="blocked"><span class="sf-icon">🔒</span><span>Blocked</span><span class="sf-badge" id="smart-blocked-cnt"></span></div>
     </div>
+    <div id="sf-list"></div>
+    </div>
   </div>
-  <div class="ns" id="sf-section" style="display:none"><div class="ns-label">Saved Filters</div><div id="sf-list"></div></div>
-  <div style="padding:8px 12px"><button class="ab" id="dr-btn" style="width:100%;background:var(--brand);color:#fff;border-color:var(--brand)"><span class="material-icons-round">self_improvement</span>Daily Review</button></div>
-  <div class="ns"><div class="ns-label">Life Areas</div></div>
-  <div class="al" id="area-list"></div>
+  <!-- Bottom bar: Settings + Reports icons -->
   <div class="sb-bot">
-    <button class="ab" id="add-area-btn"><span class="material-icons-round">add_circle_outline</span>New Life Area</button>
-    <button class="ab" id="export-btn"><span class="material-icons-round">download</span>Export Data</button>
-    <button class="ab" id="import-btn"><span class="material-icons-round">upload</span>Import Data</button>
     <input type="file" id="import-file" accept=".json" style="display:none">
-    <button class="ab" id="kb-btn"><span class="material-icons-round">keyboard</span>Shortcuts <span style="margin-left:auto;font-size:10px;opacity:.5">?</span></button>
-    <div class="ns" style="padding-top:4px"><div class="ns-label">Theme</div></div>
-    <div class="tp" id="tp"></div>
+    <div class="sb-bot-icons">
+      <button class="ab sb-bot-icon" id="sb-settings-btn" title="Settings"><span class="material-icons-round">settings</span>Settings</button>
+      <button class="ab sb-bot-icon" id="sb-reports-btn" title="Reports"><span class="material-icons-round">assessment</span>Reports</button>
+    </div>
   </div>
 </aside>
 
 <main class="mn">
-  <div class="tb"><div class="bc" id="bc"></div><h2 id="pt">My Day</h2>
+  <div class="tb"><div class="bc" id="bc"></div><h2 id="pt">Today</h2>
     <div class="bell-wrap" id="bell-wrap">
       <button class="bell-btn" id="bell-btn"><span class="material-icons-round">notifications</span><span class="bell-badge" id="bell-badge"></span></button>
       <div class="bell-dd" id="bell-dd"></div>
@@ -1080,8 +1070,7 @@ let activeFilterParams={};
 async function loadSavedFilters(){
   try{
     savedFilters=await api.get('/api/filters');
-    const sec=$('sf-section');
-    if(savedFilters.length){sec.style.display='';renderSFList()}else{sec.style.display='none'}
+    renderSFList();
   }catch(e){}
 }
 function renderSFList(){
@@ -1217,6 +1206,7 @@ async function render(){
   else if(currentView==='notes')await renderNotes();
   else if(currentView==='timeanalytics')await renderTimeAnalytics();
   else if(currentView==='rules')await renderRules();
+  else if(currentView==='reports')await renderReports();
   else if(currentView==='smartlist')await renderSmartList();
   else if(currentView==='filter')await renderSavedFilter();
   else if(currentView==='area')await renderArea();
@@ -1226,7 +1216,7 @@ async function render(){
 
 function updateBC(){
   const bc=$('bc'),pt=$('pt');let html='';
-  if(currentView==='myday'){pt.textContent='My Day';bc.innerHTML=''}
+  if(currentView==='myday'){pt.textContent='Today';bc.innerHTML=''}
   else if(currentView==='all'){pt.textContent='All Tasks';bc.innerHTML=''}
   else if(currentView==='board'){pt.textContent='Board';bc.innerHTML=''}
   else if(currentView==='calendar'){pt.textContent='Calendar';bc.innerHTML=''}
@@ -1246,6 +1236,7 @@ function updateBC(){
   else if(currentView==='notes'){pt.textContent='Notes';bc.innerHTML=''}
   else if(currentView==='timeanalytics'){pt.textContent='Time Analytics';bc.innerHTML=''}
   else if(currentView==='rules'){pt.textContent='Automations';bc.innerHTML=''}
+  else if(currentView==='reports'){pt.textContent='Reports';bc.innerHTML=''}
   else if(currentView==='smartlist'){
     const names={stale:'Stale Tasks',quickwins:'Quick Wins',blocked:'Blocked'};
     pt.textContent=names[activeSmartFilter]||'Smart List';bc.innerHTML='';
@@ -1268,18 +1259,133 @@ function updateBC(){
 }
 
 // ─── MY DAY ───
-async function renderMyDay(){
-  const t=await api.get('/api/tasks/my-day');
-  $('myday-badge').textContent=t.filter(x=>x.status!=='done').length;
+let todayTab='list';
+async function renderMyDay(){return renderToday()}
+async function renderToday(){
   const c=$('ct');
   const ds=new Date().toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  let h=`<div style="font-size:13px;color:var(--tx2);margin-bottom:14px">${ds}</div>`;
-  h+=hintCard('cmd-palette','keyboard','Press Ctrl+K to open the command palette — search tasks, navigate, and more');
-  if(!t.length){await showBriefing();return}
-  const p=t.filter(x=>x.status!=='done'),d=t.filter(x=>x.status==='done');
-  if(p.length){h+=`<div class="sl">To Do <span class="c">${p.length}</span></div>`;p.forEach(tk=>h+=tcHtml(tk,true))}
-  if(d.length&&appSettings.showCompleted!=='false'){h+=`<div class="sl" style="color:var(--ok)">Done <span class="c">${d.length}</span></div>`;d.forEach(tk=>h+=tcHtml(tk,true))}
-  c.innerHTML=h;attachTE();wireHints();
+  // Parallel fetch: my-day tasks, overdue, stats, streaks, habits
+  const [t,overdue,stats,streakData,habits]=await Promise.all([
+    api.get('/api/tasks/my-day'),
+    api.get('/api/tasks/overdue'),
+    api.get('/api/stats'),
+    api.get('/api/stats/streaks'),
+    api.get('/api/habits').catch(()=>[])
+  ]);
+  $('myday-badge').textContent=t.filter(x=>x.status!=='done').length;
+  const pct=stats.total?Math.round(stats.done/stats.total*100):0;
+  let h=`<div style="font-size:13px;color:var(--tx2);margin-bottom:10px">${ds}</div>`;
+  // Stats bar
+  h+=`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--ok)">check_circle</span>${stats.done||0}/${stats.total||0} done</div>
+    <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--brand)">timer</span>${stats.focusMinutes||0}min focus</div>
+    <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--warn)">local_fire_department</span>${streakData.streak||0} streak</div>
+    <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--err)">warning</span>${overdue.length} overdue</div>
+  </div>`;
+  // Tab toggle
+  h+=`<div style="display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--brd);padding-bottom:8px">
+    <button class="btn-c today-tab${todayTab==='list'?' active':''}" data-ttab="list" style="font-size:12px;padding:6px 14px;${todayTab==='list'?'background:var(--brand);color:#fff;border-color:var(--brand)':''}">
+      <span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">list</span>List</button>
+    <button class="btn-c today-tab${todayTab==='timeline'?' active':''}" data-ttab="timeline" style="font-size:12px;padding:6px 14px;${todayTab==='timeline'?'background:var(--brand);color:#fff;border-color:var(--brand)':''}">
+      <span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">schedule</span>Timeline</button>
+  </div>`;
+
+  if(todayTab==='list'){
+    h+=hintCard('cmd-palette','keyboard','Press Ctrl+K to open the command palette — search tasks, navigate, and more');
+    if(!t.length&&!overdue.length){
+      // Habits strip even when empty
+      h+=todayHabitsStrip(habits);
+      c.innerHTML=h;wireHints();wireTodayTabs(c);wireTodayHabits(c);
+      await showBriefing();return;
+    }
+    // Overdue section
+    if(overdue.length){
+      h+=`<div class="sl" style="color:var(--err)"><span class="material-icons-round" style="font-size:14px;vertical-align:middle">warning</span> Overdue <span class="c">${overdue.length}</span></div>`;
+      overdue.forEach(tk=>h+=tcHtml(tk,true));
+    }
+    const p=t.filter(x=>x.status!=='done'),d=t.filter(x=>x.status==='done');
+    if(p.length){h+=`<div class="sl">To Do <span class="c">${p.length}</span></div>`;p.forEach(tk=>h+=tcHtml(tk,true))}
+    if(d.length&&appSettings.showCompleted!=='false'){h+=`<div class="sl" style="color:var(--ok)">Done <span class="c">${d.length}</span></div>`;d.forEach(tk=>h+=tcHtml(tk,true))}
+  }else{
+    // Timeline tab — inline planner
+    const planDate=new Date().toISOString().slice(0,10);
+    let planData={scheduled:[],unscheduled:[]};
+    try{planData=await api.get('/api/planner/'+planDate)}catch(e){}
+    const myDayUnscheduled=t.filter(tk=>!tk.time_block_start&&tk.status!=='done');
+    const allUnsched=[...planData.unscheduled,...myDayUnscheduled.filter(u=>!planData.unscheduled.find(x=>x.id===u.id))];
+    h+=`<div class="planner-wrap"><div class="planner-timeline">`;
+    for(let hr=6;hr<=22;hr++){
+      const label=hr<12?(hr+' AM'):hr===12?'12 PM':((hr-12)+' PM');
+      const hKey=String(hr).padStart(2,'0');
+      const slotTasks=planData.scheduled.filter(st=>st.time_block_start&&parseInt(st.time_block_start.split(':')[0])===hr);
+      h+=`<div class="planner-hour" data-hour="${hKey}"><div class="planner-hour-label">${label}</div><div class="planner-hour-tasks" data-hour="${hKey}">`;
+      slotTasks.forEach(st=>{
+        h+=`<div class="planner-task ${st.status==='done'?'done':''}" draggable="true" data-id="${st.id}" style="border-left-color:${escA(st.goal_color||'var(--brand)')};background:${escA(st.goal_color||'var(--brand)')}15">
+          <span style="flex:1">${esc(st.title)}</span>
+          <span style="font-size:10px;color:var(--txd)">${st.time_block_start}${st.time_block_end?'–'+st.time_block_end:''}</span>
+          <span class="material-icons-round" style="font-size:12px;cursor:pointer;color:var(--txd)" data-unblock="${st.id}">close</span></div>`;
+      });
+      h+=`</div></div>`;
+    }
+    h+=`</div><div class="planner-sidebar"><div class="planner-unscheduled"><h4>Unscheduled (${allUnsched.length})</h4>`;
+    if(!allUnsched.length)h+=`<div style="text-align:center;padding:12px;color:var(--txd);font-size:12px">Drag tasks to time slots</div>`;
+    allUnsched.forEach(u=>{
+      h+=`<div class="planner-task" draggable="true" data-id="${u.id}" style="border-left-color:${escA(u.goal_color||'var(--brand)')};background:${escA(u.goal_color||'var(--brand)')}15;margin-bottom:4px"><span style="flex:1">${esc(u.title)}</span></div>`;
+    });
+    h+=`</div></div></div>`;
+  }
+  // Habits strip
+  h+=todayHabitsStrip(habits);
+  c.innerHTML=h;attachTE();wireHints();wireTodayTabs(c);wireTodayHabits(c);
+  // Timeline drag&drop
+  if(todayTab==='timeline'){
+    c.querySelectorAll('.planner-task[draggable]').forEach(el=>{
+      el.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',el.dataset.id);el.classList.add('planner-task-drag')});
+      el.addEventListener('dragend',()=>el.classList.remove('planner-task-drag'));
+    });
+    c.querySelectorAll('.planner-hour-tasks').forEach(slot=>{
+      slot.addEventListener('dragover',e=>{e.preventDefault();slot.classList.add('dragover')});
+      slot.addEventListener('dragleave',()=>slot.classList.remove('dragover'));
+      slot.addEventListener('drop',async e=>{
+        e.preventDefault();slot.classList.remove('dragover');
+        const taskId=Number(e.dataTransfer.getData('text/plain'));if(!taskId)return;
+        const hour=slot.dataset.hour;const endHr=String(Number(hour)+1).padStart(2,'0');
+        await api.put('/api/tasks/'+taskId,{due_date:new Date().toISOString().slice(0,10),time_block_start:hour+':00',time_block_end:endHr+':00'});
+        renderToday();
+      });
+    });
+    c.querySelectorAll('.planner-task[data-id]').forEach(el=>{
+      el.addEventListener('click',e=>{if(e.target.closest('[data-unblock]'))return;openDP(Number(el.dataset.id))});
+    });
+    c.querySelectorAll('[data-unblock]').forEach(el=>el.addEventListener('click',async e=>{
+      e.stopPropagation();
+      await api.put('/api/tasks/'+Number(el.dataset.unblock),{time_block_start:null,time_block_end:null});
+      renderToday();
+    }));
+  }
+}
+function todayHabitsStrip(habits){
+  if(!habits||!habits.length)return '';
+  const today=new Date().toISOString().slice(0,10);
+  let h=`<div style="margin-top:16px;border-top:1px solid var(--brd);padding-top:12px"><div class="sl" style="margin-bottom:8px">Habits</div><div style="display:flex;gap:8px;flex-wrap:wrap">`;
+  habits.forEach(hab=>{
+    const done=hab.logged_today||false;
+    h+=`<button class="btn-c today-hab${done?' done':''}" data-habid="${hab.id}" style="font-size:12px;padding:6px 12px;border-radius:16px;${done?'background:var(--ok);color:#fff;border-color:var(--ok)':''}">
+      ${esc(hab.icon||'⚡')} ${esc(hab.name)}${done?' ✓':''}</button>`;
+  });
+  h+=`</div></div>`;
+  return h;
+}
+function wireTodayTabs(c){
+  c.querySelectorAll('.today-tab').forEach(btn=>btn.addEventListener('click',()=>{todayTab=btn.dataset.ttab;renderToday()}));
+}
+function wireTodayHabits(c){
+  c.querySelectorAll('.today-hab').forEach(btn=>btn.addEventListener('click',async()=>{
+    const hid=Number(btn.dataset.habid);
+    if(btn.classList.contains('done')){await api.del('/api/habits/'+hid+'/log')}
+    else{await api.post('/api/habits/'+hid+'/log',{})}
+    renderToday();
+  }));
 }
 
 // ─── ALL ───
@@ -2324,7 +2430,7 @@ setInterval(loadBellReminders,60000);
 // ─── SEARCH + COMMAND PALETTE ───
 let srTimer=null,srIdx=-1,cpMode=false;
 const CP_COMMANDS=[
-  {id:'go-myday',label:'Go to My Day',icon:'wb_sunny',key:'1',action:()=>{closeSearch();go('myday')}},
+  {id:'go-myday',label:'Go to Today',icon:'wb_sunny',key:'1',action:()=>{closeSearch();go('myday')}},
   {id:'go-all',label:'Go to All Tasks',icon:'list',key:'2',action:()=>{closeSearch();go('all')}},
   {id:'go-board',label:'Go to Board',icon:'view_kanban',key:'3',action:()=>{closeSearch();go('board')}},
   {id:'go-calendar',label:'Go to Calendar',icon:'calendar_month',key:'4',action:()=>{closeSearch();go('calendar')}},
@@ -2556,8 +2662,9 @@ $('fab-btn').addEventListener('click',openQuickCapture);
 // ─── OVERDUE ───
 async function loadOverdueBadge(){
   const r=await api.get('/api/tasks/overdue');
-  $('overdue-badge').textContent=r.length;
-  $('overdue-badge').style.color=r.length?'var(--err)':'';
+  const badge=$('overdue-badge');
+  badge.textContent=r.length;
+  badge.style.display=r.length?'inline-block':'none';
   // Inbox badge
   const inbox=await api.get('/api/inbox');
   $('inbox-badge').textContent=inbox.length;
@@ -2785,14 +2892,14 @@ function renderMd(text){
 }
 
 // ─── EXPORT ───
-$('export-btn').addEventListener('click',async()=>{
+$('export-btn')?.addEventListener('click',async()=>{
   const a=document.createElement('a');
   a.href='/api/export';a.download='lifeflow-export.json';
   document.body.appendChild(a);a.click();document.body.removeChild(a);
 });
 
 // ─── IMPORT ───
-$('import-btn').addEventListener('click',()=>$('import-file').click());
+$('import-btn')?.addEventListener('click',()=>$('import-file').click());
 $('import-file').addEventListener('change',async e=>{
   const file=e.target.files[0];if(!file)return;
   try{
@@ -3056,9 +3163,46 @@ function vimMove(delta){
 // ─── SETTINGS PAGE ───
 async function renderSettings(){
   await loadSettings();
-  const c=$('cp-body');
+  const c=$('ct');
+  // Settings tabs
+  const settingsTabDefs=[
+    {id:'general',label:'General',icon:'tune'},
+    {id:'appearance',label:'Appearance',icon:'palette'},
+    {id:'tags',label:'Tags',icon:'label'},
+    {id:'templates',label:'Templates',icon:'content_copy'},
+    {id:'automations',label:'Automations',icon:'auto_fix_high'},
+    {id:'data',label:'Data',icon:'storage'},
+    {id:'shortcuts',label:'Shortcuts',icon:'keyboard'}
+  ];
+  if(!window._settingsTab)window._settingsTab='general';
+  let tabsHtml=`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;border-bottom:1px solid var(--brd);padding-bottom:8px">`;
+  settingsTabDefs.forEach(t=>{
+    const isActive=window._settingsTab===t.id;
+    tabsHtml+=`<button class="btn-c settings-tab${isActive?' active':''}" data-stab="${t.id}" style="font-size:12px;padding:6px 12px;border-radius:var(--rs);${isActive?'background:var(--brand);color:#fff;border-color:var(--brand)':''}"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">${t.icon}</span>${t.label}</button>`;
+  });
+  tabsHtml+=`</div>`;
+
+  if(window._settingsTab==='tags'){
+    await renderTags();
+    c.insertAdjacentHTML('afterbegin',tabsHtml);
+    c.querySelectorAll('.settings-tab').forEach(btn=>btn.addEventListener('click',()=>{window._settingsTab=btn.dataset.stab;renderSettings()}));
+    return;
+  }
+  if(window._settingsTab==='templates'){
+    await renderTemplates();
+    c.insertAdjacentHTML('afterbegin',tabsHtml);
+    c.querySelectorAll('.settings-tab').forEach(btn=>btn.addEventListener('click',()=>{window._settingsTab=btn.dataset.stab;renderSettings()}));
+    return;
+  }
+  if(window._settingsTab==='automations'){
+    await renderRules();
+    c.insertAdjacentHTML('afterbegin',tabsHtml);
+    c.querySelectorAll('.settings-tab').forEach(btn=>btn.addEventListener('click',()=>{window._settingsTab=btn.dataset.stab;renderSettings()}));
+    return;
+  }
+
   const themes=[['midnight','Midnight'],['ocean','Ocean'],['forest','Forest'],['sunset','Sunset'],['lavender','Lavender'],['nord','Nord']];
-  const views=[['myday','My Day'],['upcoming','Upcoming'],['calendar','Calendar'],['areas','Areas']];
+  const views=[['myday','Today'],['upcoming','Upcoming'],['calendar','Calendar'],['areas','Areas']];
   const priorities=[['0','None'],['1','Normal'],['2','High'],['3','Critical']];
   const dateFormats=[['relative','Relative (Today, Tomorrow)'],['iso','ISO (2026-03-20)'],['us','US (Mar 20, 2026)'],['eu','EU (20/03/2026)']];
   const weekDays=[['0','Sunday'],['1','Monday']];
@@ -3066,11 +3210,12 @@ async function renderSettings(){
   function selOpts(opts,cur){return opts.map(([v,l])=>`<option value="${v}"${String(cur)===String(v)?' selected':''}>${esc(l)}</option>`).join('')}
   function tog(key,cur){return `<label class="set-toggle"><input type="checkbox" data-key="${key}" ${cur==='true'?'checked':''}><span class="set-slider"></span></label>`}
 
-  c.innerHTML=`<div class="settings-grid">
+  let content='';
+  if(window._settingsTab==='general'){
+    content=`<div class="settings-grid">
   <section class="settings-section">
     <h3>General</h3>
     <div class="set-row"><label>Default View</label><select data-key="defaultView">${selOpts(views,appSettings.defaultView)}</select></div>
-    <div class="set-row"><label>Theme</label><select data-key="theme">${selOpts(themes,appSettings.theme)}</select></div>
     <div class="set-row"><label>Date Format</label><select data-key="dateFormat">${selOpts(dateFormats,appSettings.dateFormat)}</select></div>
     <div class="set-row"><label>Week Starts On</label><select data-key="weekStart">${selOpts(weekDays,appSettings.weekStart)}</select></div>
   </section>
@@ -3083,16 +3228,45 @@ async function renderSettings(){
   <section class="settings-section">
     <h3>Tasks</h3>
     <div class="set-row"><label>Default Priority</label><select data-key="defaultPriority">${selOpts(priorities,appSettings.defaultPriority)}</select></div>
-    <div class="set-row"><label>Auto-add to My Day</label>${tog('autoMyDay',appSettings.autoMyDay)}</div>
+    <div class="set-row"><label>Auto-add to Today</label>${tog('autoMyDay',appSettings.autoMyDay)}</div>
     <div class="set-row"><label>Show Completed Tasks</label>${tog('showCompleted',appSettings.showCompleted)}</div>
     <div class="set-row"><label>Confirm Before Delete</label>${tog('confirmDelete',appSettings.confirmDelete)}</div>
   </section>
-  <section class="settings-section set-danger">
-    <h3>Data</h3>
-    <div class="set-row"><button class="set-btn" id="set-export">Export Data (JSON)</button></div>
-    <div class="set-row"><button class="set-btn danger" id="set-reset">Reset All Settings</button></div>
-  </section>
 </div>`;
+  } else if(window._settingsTab==='appearance'){
+    const themeColors={midnight:'#2563EB',charcoal:'#8B5CF6',forest:'#00E676',ocean:'#29B6F6',rose:'#FF4081',light:'#2563EB',nord:'#88C0D0',sunset:'#FF7043'};
+    content=`<div class="settings-grid"><section class="settings-section"><h3>Theme</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px">`;
+    [['midnight','Midnight'],['charcoal','Charcoal'],['forest','Forest'],['ocean','Ocean'],['rose','Rose'],['light','Light'],['nord','Nord'],['sunset','Sunset']].forEach(([id,name])=>{
+      const isActive=(appSettings.theme||localStorage.getItem('lf-theme')||'midnight')===id;
+      content+=`<div class="theme-card${isActive?' active':''}" data-theme="${id}" style="padding:12px;background:var(--bg-c);border:2px solid ${isActive?'var(--brand)':'var(--brd)'};border-radius:var(--rs);cursor:pointer;text-align:center;transition:all .15s">
+        <div style="width:24px;height:24px;border-radius:50%;background:${themeColors[id]||'var(--brand)'};margin:0 auto 6px"></div>
+        <div style="font-size:12px;font-weight:${isActive?'600':'400'}">${name}</div>
+      </div>`;
+    });
+    content+=`</div></section></div>`;
+  } else if(window._settingsTab==='data'){
+    content=`<div class="settings-grid"><section class="settings-section">
+    <h3>Import / Export</h3>
+    <div class="set-row"><button class="set-btn" id="set-export">Export Data (JSON)</button></div>
+    <div class="set-row"><button class="set-btn" id="set-import">Import Data</button></div>
+    <div class="set-row"><button class="set-btn danger" id="set-reset">Reset All Settings</button></div>
+    </section></div>`;
+  } else if(window._settingsTab==='shortcuts'){
+    content=`<div class="settings-grid"><section class="settings-section"><h3>Keyboard Shortcuts</h3>`;
+    const shortcuts=[['Ctrl+K','Search / Command Palette'],['N','Quick add task'],['1','Today'],['2','All Tasks'],['3','Board'],['4','Calendar'],['5','Dashboard'],['6','Weekly Plan'],['7','Matrix'],['8','Activity Log'],['M','Multi-select mode'],['R','Daily Review'],['J / K','Move down / up'],['X','Complete selected task'],['Enter','Open selected task'],['Esc','Close panel / overlay'],['?','Show shortcuts help']];
+    shortcuts.forEach(([key,desc])=>{
+      content+=`<div class="kb-row" style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--brd)"><span style="font-size:13px">${desc}</span><span class="kb-key" style="font-size:11px;padding:2px 8px;background:var(--bg-c);border:1px solid var(--brd);border-radius:4px;font-family:monospace">${key}</span></div>`;
+    });
+    content+=`</section></div>`;
+  }
+
+  c.innerHTML=tabsHtml+content;
+
+  // Wire tab clicks
+  c.querySelectorAll('.settings-tab').forEach(btn=>btn.addEventListener('click',()=>{
+    window._settingsTab=btn.dataset.stab;renderSettings();
+  }));
 
   // Auto-save on change for selects and number inputs
   c.querySelectorAll('select[data-key], input[type="number"][data-key]').forEach(el=>{
@@ -3113,6 +3287,14 @@ async function renderSettings(){
       showSavedIndicator(el.closest('.set-toggle'));
     });
   });
+  // Theme cards
+  c.querySelectorAll('.theme-card').forEach(card=>card.addEventListener('click',async()=>{
+    const theme=card.dataset.theme;
+    document.documentElement.setAttribute('data-theme',theme);
+    localStorage.setItem('lf-theme',theme);
+    await saveSetting('theme',theme);
+    renderSettings();
+  }));
   // Export
   $('set-export')?.addEventListener('click',async()=>{
     try{
@@ -3124,6 +3306,8 @@ async function renderSettings(){
       URL.revokeObjectURL(url);showToast('Data exported!');
     }catch(e){showToast('Export failed')}
   });
+  // Import
+  $('set-import')?.addEventListener('click',()=>$('import-file').click());
   // Reset
   $('set-reset')?.addEventListener('click',async()=>{
     if(!confirm('Reset all settings to defaults?'))return;
@@ -3142,7 +3326,7 @@ function applySettingsToTimer(){
 
 // ─── HABITS VIEW ───
 async function renderHabits(){
-  const mc=$('mc');
+  const mc=$('ct');
   let habits=[];
   try{habits=await api.get('/api/habits')}catch(e){}
   let h=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><h2 style="margin:0">Habits</h2><button class="btn-s" id="hab-add-btn">+ New Habit</button></div>`;
@@ -3238,7 +3422,7 @@ async function renderHabits(){
 
 // ─── SAVED FILTER VIEW ───
 async function renderSavedFilter(){
-  const mc=$('mc');
+  const mc=$('ct');
   const params=activeFilterParams||{};
   let h=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><h2 style="margin:0">${esc(activeFilterName||'Filter')}</h2><button class="btn-c" id="fb-edit-btn">Edit Filter</button></div>`;
   // Filter builder (hidden by default if activeFilterId is set)
@@ -3314,7 +3498,7 @@ async function renderSavedFilter(){
 // ─── DAY PLANNER VIEW ───
 let plannerDate = new Date().toISOString().slice(0,10);
 async function renderPlanner(){
-  const mc=$('mc');
+  const mc=$('ct');
   const d=new Date(plannerDate+'T00:00:00');
   const dayLabel=d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
   const isToday=plannerDate===new Date().toISOString().slice(0,10);
@@ -3505,7 +3689,10 @@ function renderDRStep3(body){
     renderDR();
   }));
 }
-$('dr-btn').addEventListener('click',openDailyReview);
+$('dr-btn')?.addEventListener('click',openDailyReview);
+// Sidebar bottom buttons
+$('sb-settings-btn')?.addEventListener('click',()=>go('settings'));
+$('sb-reports-btn')?.addEventListener('click',()=>go('reports'));
 $('dr-ov').addEventListener('click',e=>{if(e.target===$('dr-ov'))closeDR()});
 $('dr-skip').addEventListener('click',closeDR);
 $('dr-next').addEventListener('click',async()=>{
@@ -3867,6 +4054,37 @@ function showUndoToast(label){
   setTimeout(()=>t.remove(),5000);
 }
 
+// ─── REPORTS VIEW (Phase D — consolidates analytics/review views) ───
+let reportsTab='overview';
+async function renderReports(){
+  const c=$('ct');
+  const tabs=[
+    {id:'overview',label:'Overview',icon:'dashboard'},
+    {id:'activity',label:'Activity',icon:'history'},
+    {id:'habits',label:'Habits',icon:'repeat'},
+    {id:'focus',label:'Focus',icon:'timer'},
+    {id:'analytics',label:'Analytics',icon:'analytics'},
+    {id:'reviews',label:'Reviews',icon:'rate_review'},
+    {id:'notes',label:'Notes',icon:'note'}
+  ];
+  let tabsHtml=`<div class="reports-tabs" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;border-bottom:1px solid var(--brd);padding-bottom:8px">`;
+  tabs.forEach(t=>{
+    const isActive=reportsTab===t.id;
+    tabsHtml+=`<button class="btn-c reports-tab${isActive?' active':''}" data-rtab="${t.id}" style="font-size:12px;padding:6px 12px;border-radius:var(--rs);${isActive?'background:var(--brand);color:#fff;border-color:var(--brand)':''}"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">${t.icon}</span>${t.label}</button>`;
+  });
+  tabsHtml+=`</div>`;
+  // Render the sub-view directly into ct (each render function writes to $('ct'))
+  const subRenders={overview:renderDashboard,activity:renderLogbook,habits:renderHabits,focus:renderFocusHistory,analytics:renderTimeAnalytics,reviews:renderWeeklyReview,notes:renderNotes};
+  const fn=subRenders[reportsTab]||renderDashboard;
+  await fn();
+  // Prepend tabs bar above the rendered content
+  c.insertAdjacentHTML('afterbegin',tabsHtml);
+  // Wire tab clicks
+  c.querySelectorAll('.reports-tab').forEach(btn=>btn.addEventListener('click',()=>{
+    reportsTab=btn.dataset.rtab;renderReports();
+  }));
+}
+
 // ─── SMART LIST VIEW ───
 async function renderSmartList(){
   const c=$('ct');
@@ -3992,7 +4210,7 @@ function updateMultiSelectBar(){
 }
 
 // ─── KEYBOARD SHORTCUTS ───
-$('kb-btn').addEventListener('click',()=>$('kb-ov').classList.add('active'));
+$('kb-btn')?.addEventListener('click',()=>$('kb-ov').classList.add('active'));
 $('kb-ov').addEventListener('click',e=>{if(e.target===$('kb-ov'))$('kb-ov').classList.remove('active')});
 document.addEventListener('keydown',e=>{
   // Skip if typing in input/textarea/select or contenteditable
