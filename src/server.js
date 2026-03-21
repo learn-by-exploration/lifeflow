@@ -1270,6 +1270,8 @@ app.post('/api/habits', (req, res) => {
 app.put('/api/habits/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM habits WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Not found' });
   const { name, icon, color, frequency, target, archived } = req.body;
   db.prepare('UPDATE habits SET name=COALESCE(?,name),icon=COALESCE(?,icon),color=COALESCE(?,color),frequency=COALESCE(?,frequency),target=COALESCE(?,target),archived=COALESCE(?,archived) WHERE id=?').run(
     name||null, icon||null, color||null, frequency||null, target!==undefined?target:null, archived!==undefined?archived:null, id
@@ -1286,6 +1288,8 @@ app.delete('/api/habits/:id', (req, res) => {
 app.post('/api/habits/:id/log', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const habit = db.prepare('SELECT * FROM habits WHERE id=?').get(id);
+  if (!habit) return res.status(404).json({ error: 'Not found' });
   const date = req.body.date || new Date().toISOString().slice(0, 10);
   const existing = db.prepare('SELECT * FROM habit_logs WHERE habit_id=? AND date=?').get(id, date);
   if (existing) {
@@ -1300,6 +1304,8 @@ app.post('/api/habits/:id/log', (req, res) => {
 app.delete('/api/habits/:id/log', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const habit = db.prepare('SELECT * FROM habits WHERE id=?').get(id);
+  if (!habit) return res.status(404).json({ error: 'Not found' });
   const date = (req.body && req.body.date) || new Date().toISOString().slice(0, 10);
   const existing = db.prepare('SELECT * FROM habit_logs WHERE habit_id=? AND date=?').get(id, date);
   if (existing && existing.count > 1) {
@@ -1313,6 +1319,8 @@ app.delete('/api/habits/:id/log', (req, res) => {
 app.get('/api/habits/:id/heatmap', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const habit = db.prepare('SELECT * FROM habits WHERE id=?').get(id);
+  if (!habit) return res.status(404).json({ error: 'Not found' });
   const logs = db.prepare("SELECT date, count FROM habit_logs WHERE habit_id=? AND date >= date('now','-90 days') ORDER BY date").all(id);
   res.json(logs);
 });
