@@ -3056,7 +3056,7 @@ function vimMove(delta){
 // ─── SETTINGS PAGE ───
 async function renderSettings(){
   await loadSettings();
-  const c=$('cp-body');
+  const c=$('ct');
   const themes=[['midnight','Midnight'],['ocean','Ocean'],['forest','Forest'],['sunset','Sunset'],['lavender','Lavender'],['nord','Nord']];
   const views=[['myday','My Day'],['upcoming','Upcoming'],['calendar','Calendar'],['areas','Areas']];
   const priorities=[['0','None'],['1','Normal'],['2','High'],['3','Critical']];
@@ -3142,7 +3142,7 @@ function applySettingsToTimer(){
 
 // ─── HABITS VIEW ───
 async function renderHabits(){
-  const mc=$('mc');
+  const mc=$('ct');
   let habits=[];
   try{habits=await api.get('/api/habits')}catch(e){}
   let h=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><h2 style="margin:0">Habits</h2><button class="btn-s" id="hab-add-btn">+ New Habit</button></div>`;
@@ -3238,7 +3238,7 @@ async function renderHabits(){
 
 // ─── SAVED FILTER VIEW ───
 async function renderSavedFilter(){
-  const mc=$('mc');
+  const mc=$('ct');
   const params=activeFilterParams||{};
   let h=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><h2 style="margin:0">${esc(activeFilterName||'Filter')}</h2><button class="btn-c" id="fb-edit-btn">Edit Filter</button></div>`;
   // Filter builder (hidden by default if activeFilterId is set)
@@ -3314,7 +3314,7 @@ async function renderSavedFilter(){
 // ─── DAY PLANNER VIEW ───
 let plannerDate = new Date().toISOString().slice(0,10);
 async function renderPlanner(){
-  const mc=$('mc');
+  const mc=$('ct');
   const d=new Date(plannerDate+'T00:00:00');
   const dayLabel=d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
   const isToday=plannerDate===new Date().toISOString().slice(0,10);
