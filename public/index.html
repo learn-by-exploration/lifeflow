@@ -180,6 +180,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .ab{display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:var(--rs);color:var(--brand);cursor:pointer;font-size:13px;font-weight:500;border:none;background:none;width:100%}
 .ab:hover{background:var(--bg-h)}
 .overdue-pip{margin-left:2px;font-size:9px;padding:1px 5px;border-radius:8px;color:#fff}
+.today-stat{display:flex;align-items:center;gap:4px;font-size:12px;padding:6px 10px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);white-space:nowrap}
 
 /* Main */
 .mn{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
@@ -1258,18 +1259,133 @@ function updateBC(){
 }
 
 // ─── MY DAY ───
-async function renderMyDay(){
-  const t=await api.get('/api/tasks/my-day');
-  $('myday-badge').textContent=t.filter(x=>x.status!=='done').length;
+let todayTab='list';
+async function renderMyDay(){return renderToday()}
+async function renderToday(){
   const c=$('ct');
   const ds=new Date().toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  let h=`<div style="font-size:13px;color:var(--tx2);margin-bottom:14px">${ds}</div>`;
-  h+=hintCard('cmd-palette','keyboard','Press Ctrl+K to open the command palette — search tasks, navigate, and more');
-  if(!t.length){await showBriefing();return}
-  const p=t.filter(x=>x.status!=='done'),d=t.filter(x=>x.status==='done');
-  if(p.length){h+=`<div class="sl">To Do <span class="c">${p.length}</span></div>`;p.forEach(tk=>h+=tcHtml(tk,true))}
-  if(d.length&&appSettings.showCompleted!=='false'){h+=`<div class="sl" style="color:var(--ok)">Done <span class="c">${d.length}</span></div>`;d.forEach(tk=>h+=tcHtml(tk,true))}
-  c.innerHTML=h;attachTE();wireHints();
+  // Parallel fetch: my-day tasks, overdue, stats, streaks, habits
+  const [t,overdue,stats,streakData,habits]=await Promise.all([
+    api.get('/api/tasks/my-day'),
+    api.get('/api/tasks/overdue'),
+    api.get('/api/stats'),
+    api.get('/api/stats/streaks'),
+    api.get('/api/habits').catch(()=>[])
+  ]);
+  $('myday-badge').textContent=t.filter(x=>x.status!=='done').length;
+  const pct=stats.total?Math.round(stats.done/stats.total*100):0;
+  let h=`<div style="font-size:13px;color:var(--tx2);margin-bottom:10px">${ds}</div>`;
+  // Stats bar
+  h+=`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--ok)">check_circle</span>${stats.done||0}/${stats.total||0} done</div>
+    <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--brand)">timer</span>${stats.focusMinutes||0}min focus</div>
+    <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--warn)">local_fire_department</span>${streakData.streak||0} streak</div>
+    <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--err)">warning</span>${overdue.length} overdue</div>
+  </div>`;
+  // Tab toggle
+  h+=`<div style="display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--brd);padding-bottom:8px">
+    <button class="btn-c today-tab${todayTab==='list'?' active':''}" data-ttab="list" style="font-size:12px;padding:6px 14px;${todayTab==='list'?'background:var(--brand);color:#fff;border-color:var(--brand)':''}">
+      <span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">list</span>List</button>
+    <button class="btn-c today-tab${todayTab==='timeline'?' active':''}" data-ttab="timeline" style="font-size:12px;padding:6px 14px;${todayTab==='timeline'?'background:var(--brand);color:#fff;border-color:var(--brand)':''}">
+      <span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">schedule</span>Timeline</button>
+  </div>`;
+
+  if(todayTab==='list'){
+    h+=hintCard('cmd-palette','keyboard','Press Ctrl+K to open the command palette — search tasks, navigate, and more');
+    if(!t.length&&!overdue.length){
+      // Habits strip even when empty
+      h+=todayHabitsStrip(habits);
+      c.innerHTML=h;wireHints();wireTodayTabs(c);wireTodayHabits(c);
+      await showBriefing();return;
+    }
+    // Overdue section
+    if(overdue.length){
+      h+=`<div class="sl" style="color:var(--err)"><span class="material-icons-round" style="font-size:14px;vertical-align:middle">warning</span> Overdue <span class="c">${overdue.length}</span></div>`;
+      overdue.forEach(tk=>h+=tcHtml(tk,true));
+    }
+    const p=t.filter(x=>x.status!=='done'),d=t.filter(x=>x.status==='done');
+    if(p.length){h+=`<div class="sl">To Do <span class="c">${p.length}</span></div>`;p.forEach(tk=>h+=tcHtml(tk,true))}
+    if(d.length&&appSettings.showCompleted!=='false'){h+=`<div class="sl" style="color:var(--ok)">Done <span class="c">${d.length}</span></div>`;d.forEach(tk=>h+=tcHtml(tk,true))}
+  }else{
+    // Timeline tab — inline planner
+    const planDate=new Date().toISOString().slice(0,10);
+    let planData={scheduled:[],unscheduled:[]};
+    try{planData=await api.get('/api/planner/'+planDate)}catch(e){}
+    const myDayUnscheduled=t.filter(tk=>!tk.time_block_start&&tk.status!=='done');
+    const allUnsched=[...planData.unscheduled,...myDayUnscheduled.filter(u=>!planData.unscheduled.find(x=>x.id===u.id))];
+    h+=`<div class="planner-wrap"><div class="planner-timeline">`;
+    for(let hr=6;hr<=22;hr++){
+      const label=hr<12?(hr+' AM'):hr===12?'12 PM':((hr-12)+' PM');
+      const hKey=String(hr).padStart(2,'0');
+      const slotTasks=planData.scheduled.filter(st=>st.time_block_start&&parseInt(st.time_block_start.split(':')[0])===hr);
+      h+=`<div class="planner-hour" data-hour="${hKey}"><div class="planner-hour-label">${label}</div><div class="planner-hour-tasks" data-hour="${hKey}">`;
+      slotTasks.forEach(st=>{
+        h+=`<div class="planner-task ${st.status==='done'?'done':''}" draggable="true" data-id="${st.id}" style="border-left-color:${escA(st.goal_color||'var(--brand)')};background:${escA(st.goal_color||'var(--brand)')}15">
+          <span style="flex:1">${esc(st.title)}</span>
+          <span style="font-size:10px;color:var(--txd)">${st.time_block_start}${st.time_block_end?'–'+st.time_block_end:''}</span>
+          <span class="material-icons-round" style="font-size:12px;cursor:pointer;color:var(--txd)" data-unblock="${st.id}">close</span></div>`;
+      });
+      h+=`</div></div>`;
+    }
+    h+=`</div><div class="planner-sidebar"><div class="planner-unscheduled"><h4>Unscheduled (${allUnsched.length})</h4>`;
+    if(!allUnsched.length)h+=`<div style="text-align:center;padding:12px;color:var(--txd);font-size:12px">Drag tasks to time slots</div>`;
+    allUnsched.forEach(u=>{
+      h+=`<div class="planner-task" draggable="true" data-id="${u.id}" style="border-left-color:${escA(u.goal_color||'var(--brand)')};background:${escA(u.goal_color||'var(--brand)')}15;margin-bottom:4px"><span style="flex:1">${esc(u.title)}</span></div>`;
+    });
+    h+=`</div></div></div>`;
+  }
+  // Habits strip
+  h+=todayHabitsStrip(habits);
+  c.innerHTML=h;attachTE();wireHints();wireTodayTabs(c);wireTodayHabits(c);
+  // Timeline drag&drop
+  if(todayTab==='timeline'){
+    c.querySelectorAll('.planner-task[draggable]').forEach(el=>{
+      el.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',el.dataset.id);el.classList.add('planner-task-drag')});
+      el.addEventListener('dragend',()=>el.classList.remove('planner-task-drag'));
+    });
+    c.querySelectorAll('.planner-hour-tasks').forEach(slot=>{
+      slot.addEventListener('dragover',e=>{e.preventDefault();slot.classList.add('dragover')});
+      slot.addEventListener('dragleave',()=>slot.classList.remove('dragover'));
+      slot.addEventListener('drop',async e=>{
+        e.preventDefault();slot.classList.remove('dragover');
+        const taskId=Number(e.dataTransfer.getData('text/plain'));if(!taskId)return;
+        const hour=slot.dataset.hour;const endHr=String(Number(hour)+1).padStart(2,'0');
+        await api.put('/api/tasks/'+taskId,{due_date:new Date().toISOString().slice(0,10),time_block_start:hour+':00',time_block_end:endHr+':00'});
+        renderToday();
+      });
+    });
+    c.querySelectorAll('.planner-task[data-id]').forEach(el=>{
+      el.addEventListener('click',e=>{if(e.target.closest('[data-unblock]'))return;openDP(Number(el.dataset.id))});
+    });
+    c.querySelectorAll('[data-unblock]').forEach(el=>el.addEventListener('click',async e=>{
+      e.stopPropagation();
+      await api.put('/api/tasks/'+Number(el.dataset.unblock),{time_block_start:null,time_block_end:null});
+      renderToday();
+    }));
+  }
+}
+function todayHabitsStrip(habits){
+  if(!habits||!habits.length)return '';
+  const today=new Date().toISOString().slice(0,10);
+  let h=`<div style="margin-top:16px;border-top:1px solid var(--brd);padding-top:12px"><div class="sl" style="margin-bottom:8px">Habits</div><div style="display:flex;gap:8px;flex-wrap:wrap">`;
+  habits.forEach(hab=>{
+    const done=hab.logged_today||false;
+    h+=`<button class="btn-c today-hab${done?' done':''}" data-habid="${hab.id}" style="font-size:12px;padding:6px 12px;border-radius:16px;${done?'background:var(--ok);color:#fff;border-color:var(--ok)':''}">
+      ${esc(hab.icon||'⚡')} ${esc(hab.name)}${done?' ✓':''}</button>`;
+  });
+  h+=`</div></div>`;
+  return h;
+}
+function wireTodayTabs(c){
+  c.querySelectorAll('.today-tab').forEach(btn=>btn.addEventListener('click',()=>{todayTab=btn.dataset.ttab;renderToday()}));
+}
+function wireTodayHabits(c){
+  c.querySelectorAll('.today-hab').forEach(btn=>btn.addEventListener('click',async()=>{
+    const hid=Number(btn.dataset.habid);
+    if(btn.classList.contains('done')){await api.del('/api/habits/'+hid+'/log')}
+    else{await api.post('/api/habits/'+hid+'/log',{})}
+    renderToday();
+  }));
 }
 
 // ─── ALL ───
@@ -2314,7 +2430,7 @@ setInterval(loadBellReminders,60000);
 // ─── SEARCH + COMMAND PALETTE ───
 let srTimer=null,srIdx=-1,cpMode=false;
 const CP_COMMANDS=[
-  {id:'go-myday',label:'Go to My Day',icon:'wb_sunny',key:'1',action:()=>{closeSearch();go('myday')}},
+  {id:'go-myday',label:'Go to Today',icon:'wb_sunny',key:'1',action:()=>{closeSearch();go('myday')}},
   {id:'go-all',label:'Go to All Tasks',icon:'list',key:'2',action:()=>{closeSearch();go('all')}},
   {id:'go-board',label:'Go to Board',icon:'view_kanban',key:'3',action:()=>{closeSearch();go('board')}},
   {id:'go-calendar',label:'Go to Calendar',icon:'calendar_month',key:'4',action:()=>{closeSearch();go('calendar')}},
