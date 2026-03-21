@@ -174,9 +174,12 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .ai .an{flex:1}.ai .ac{font-size:11px;color:var(--txd)}
 .ai .da{display:none;background:none;border:none;color:var(--err);cursor:pointer;font-size:15px;padding:2px;position:absolute;right:6px}
 .ai:hover .da{display:block}.ai:hover .ac{display:none}
-.sb-bot{padding:6px 10px 14px}
+.sb-bot{padding:6px 10px 14px;margin-top:auto}
+.sb-bot-icons{display:flex;gap:4px}
+.sb-bot-icon{flex:1;justify-content:center}
 .ab{display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:var(--rs);color:var(--brand);cursor:pointer;font-size:13px;font-weight:500;border:none;background:none;width:100%}
 .ab:hover{background:var(--bg-h)}
+.overdue-pip{margin-left:2px;font-size:9px;padding:1px 5px;border-radius:8px;color:#fff}
 
 /* Main */
 .mn{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
@@ -761,63 +764,49 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 
 <aside class="sb" id="sb" role="navigation" aria-label="Sidebar navigation">
   <div class="sb-brand"><div class="logo">L</div><h1>LifeFlow</h1></div>
+  <!-- Primary Navigation (5 items — always visible) -->
   <div class="ns">
-    <div class="ns-label">Core</div>
     <div class="ni" data-view="inbox"><span class="material-icons-round">inbox</span>Inbox<span class="badge" id="inbox-badge">0</span></div>
-    <div class="ni active" data-view="myday"><span class="material-icons-round">wb_sunny</span>My Day<span class="badge" id="myday-badge">0</span></div>
+    <div class="ni active" data-view="myday"><span class="material-icons-round">wb_sunny</span>Today<span class="badge" id="myday-badge">0</span><span class="badge overdue-pip" id="overdue-badge" style="background:var(--err);display:none">0</span></div>
     <div class="ni" data-view="all"><span class="material-icons-round">list</span>All Tasks</div>
-    <div class="ni" data-view="board"><span class="material-icons-round">view_kanban</span>Board</div>
-    <div class="ni" data-view="overdue"><span class="material-icons-round">warning</span>Overdue<span class="badge" id="overdue-badge">0</span></div>
-    <div class="ni" data-view="dashboard"><span class="material-icons-round">dashboard</span>Dashboard</div>
+    <div class="ni" data-view="calendar"><span class="material-icons-round">calendar_month</span>Calendar</div>
   </div>
+  <!-- Life Areas (promoted to primary level) -->
+  <div class="ns"><div class="ns-label" style="display:flex;align-items:center;justify-content:space-between">Life Areas <span class="material-icons-round" id="add-area-btn" style="font-size:16px;cursor:pointer;opacity:.6" title="New Life Area">add_circle_outline</span></div></div>
+  <div class="al" id="area-list"></div>
+  <!-- Plan (collapsible — 3 items) -->
   <div class="ns sb-collapsible">
     <div class="ns-label sb-toggle" data-sec="plan">Plan <span class="material-icons-round sb-arrow">expand_more</span></div>
     <div class="sb-sec" id="sb-plan">
-    <div class="ni" data-view="calendar"><span class="material-icons-round">calendar_month</span>Calendar</div>
+    <div class="ni" data-view="board"><span class="material-icons-round">view_kanban</span>Board</div>
     <div class="ni" data-view="weekly"><span class="material-icons-round">view_week</span>Weekly Plan</div>
-    <div class="ni" data-view="planner"><span class="material-icons-round">schedule</span>Day Planner</div>
     <div class="ni" data-view="matrix"><span class="material-icons-round">grid_view</span>Matrix</div>
-    <div class="ni" data-view="review"><span class="material-icons-round">rate_review</span>Weekly Review</div>
     </div>
   </div>
-  <div class="ns sb-collapsible">
-    <div class="ns-label sb-toggle" data-sec="manage">Manage <span class="material-icons-round sb-arrow">expand_more</span></div>
-    <div class="sb-sec" id="sb-manage">
-    <div class="ni" data-view="logbook"><span class="material-icons-round">history</span>Activity Log</div>
-    <div class="ni" data-view="tags"><span class="material-icons-round">label</span>Tag Manager</div>
-    <div class="ni" data-view="templates"><span class="material-icons-round">content_copy</span>Templates</div>
-    <div class="ni" data-view="habits"><span class="material-icons-round">repeat</span>Habits</div>
-    <div class="ni" data-view="focushistory"><span class="material-icons-round">timer</span>Focus History</div>
-    <div class="ni" data-view="notes"><span class="material-icons-round">note</span>Notes</div>
-    <div class="ni" data-view="timeanalytics"><span class="material-icons-round">analytics</span>Time Analytics</div>
-    <div class="ni" data-view="rules"><span class="material-icons-round">auto_fix_high</span>Automations</div>
-    <div class="ni" data-view="settings"><span class="material-icons-round">settings</span>Settings</div>
-    </div>
-  </div>
-  <div class="ns" id="smart-sec"><div class="ns-label">Smart Lists</div>
+  <!-- Filters (collapsible — smart lists + saved filters merged) -->
+  <div class="ns sb-collapsible" id="filters-sec">
+    <div class="ns-label sb-toggle" data-sec="filters">Filters <span class="material-icons-round sb-arrow">expand_more</span></div>
+    <div class="sb-sec" id="sb-filters">
     <div id="smart-list">
       <div class="sf-item" data-smart="stale"><span class="sf-icon">⏳</span><span>Stale Tasks</span><span class="sf-badge" id="smart-stale-cnt"></span></div>
       <div class="sf-item" data-smart="quickwins"><span class="sf-icon">⚡</span><span>Quick Wins</span><span class="sf-badge" id="smart-qw-cnt"></span></div>
       <div class="sf-item" data-smart="blocked"><span class="sf-icon">🔒</span><span>Blocked</span><span class="sf-badge" id="smart-blocked-cnt"></span></div>
     </div>
+    <div id="sf-list"></div>
+    </div>
   </div>
-  <div class="ns" id="sf-section" style="display:none"><div class="ns-label">Saved Filters</div><div id="sf-list"></div></div>
-  <div style="padding:8px 12px"><button class="ab" id="dr-btn" style="width:100%;background:var(--brand);color:#fff;border-color:var(--brand)"><span class="material-icons-round">self_improvement</span>Daily Review</button></div>
-  <div class="ns"><div class="ns-label">Life Areas</div></div>
-  <div class="al" id="area-list"></div>
+  <!-- Bottom bar: Settings + Reports icons -->
   <div class="sb-bot">
-    <button class="ab" id="add-area-btn"><span class="material-icons-round">add_circle_outline</span>New Life Area</button>
-    <button class="ab" id="export-btn"><span class="material-icons-round">download</span>Export Data</button>
-    <button class="ab" id="import-btn"><span class="material-icons-round">upload</span>Import Data</button>
     <input type="file" id="import-file" accept=".json" style="display:none">
-    <button class="ab" id="kb-btn"><span class="material-icons-round">keyboard</span>Shortcuts <span style="margin-left:auto;font-size:10px;opacity:.5">?</span></button>
-    <div class="ns" style="padding-top:4px"><div class="ns-label">Theme</div></div>
-    <div class="tp" id="tp"></div>
+    <div class="sb-bot-icons">
+      <button class="ab sb-bot-icon" id="sb-settings-btn" title="Settings"><span class="material-icons-round">settings</span>Settings</button>
+      <button class="ab sb-bot-icon" id="sb-reports-btn" title="Reports"><span class="material-icons-round">assessment</span>Reports</button>
+    </div>
   </div>
 </aside>
 
 <main class="mn">
-  <div class="tb"><div class="bc" id="bc"></div><h2 id="pt">My Day</h2>
+  <div class="tb"><div class="bc" id="bc"></div><h2 id="pt">Today</h2>
     <div class="bell-wrap" id="bell-wrap">
       <button class="bell-btn" id="bell-btn"><span class="material-icons-round">notifications</span><span class="bell-badge" id="bell-badge"></span></button>
       <div class="bell-dd" id="bell-dd"></div>
@@ -1080,8 +1069,7 @@ let activeFilterParams={};
 async function loadSavedFilters(){
   try{
     savedFilters=await api.get('/api/filters');
-    const sec=$('sf-section');
-    if(savedFilters.length){sec.style.display='';renderSFList()}else{sec.style.display='none'}
+    renderSFList();
   }catch(e){}
 }
 function renderSFList(){
@@ -1217,6 +1205,7 @@ async function render(){
   else if(currentView==='notes')await renderNotes();
   else if(currentView==='timeanalytics')await renderTimeAnalytics();
   else if(currentView==='rules')await renderRules();
+  else if(currentView==='reports')await renderReports();
   else if(currentView==='smartlist')await renderSmartList();
   else if(currentView==='filter')await renderSavedFilter();
   else if(currentView==='area')await renderArea();
@@ -1226,7 +1215,7 @@ async function render(){
 
 function updateBC(){
   const bc=$('bc'),pt=$('pt');let html='';
-  if(currentView==='myday'){pt.textContent='My Day';bc.innerHTML=''}
+  if(currentView==='myday'){pt.textContent='Today';bc.innerHTML=''}
   else if(currentView==='all'){pt.textContent='All Tasks';bc.innerHTML=''}
   else if(currentView==='board'){pt.textContent='Board';bc.innerHTML=''}
   else if(currentView==='calendar'){pt.textContent='Calendar';bc.innerHTML=''}
@@ -1246,6 +1235,7 @@ function updateBC(){
   else if(currentView==='notes'){pt.textContent='Notes';bc.innerHTML=''}
   else if(currentView==='timeanalytics'){pt.textContent='Time Analytics';bc.innerHTML=''}
   else if(currentView==='rules'){pt.textContent='Automations';bc.innerHTML=''}
+  else if(currentView==='reports'){pt.textContent='Reports';bc.innerHTML=''}
   else if(currentView==='smartlist'){
     const names={stale:'Stale Tasks',quickwins:'Quick Wins',blocked:'Blocked'};
     pt.textContent=names[activeSmartFilter]||'Smart List';bc.innerHTML='';
@@ -2556,8 +2546,9 @@ $('fab-btn').addEventListener('click',openQuickCapture);
 // ─── OVERDUE ───
 async function loadOverdueBadge(){
   const r=await api.get('/api/tasks/overdue');
-  $('overdue-badge').textContent=r.length;
-  $('overdue-badge').style.color=r.length?'var(--err)':'';
+  const badge=$('overdue-badge');
+  badge.textContent=r.length;
+  badge.style.display=r.length?'inline-block':'none';
   // Inbox badge
   const inbox=await api.get('/api/inbox');
   $('inbox-badge').textContent=inbox.length;
@@ -2785,14 +2776,14 @@ function renderMd(text){
 }
 
 // ─── EXPORT ───
-$('export-btn').addEventListener('click',async()=>{
+$('export-btn')?.addEventListener('click',async()=>{
   const a=document.createElement('a');
   a.href='/api/export';a.download='lifeflow-export.json';
   document.body.appendChild(a);a.click();document.body.removeChild(a);
 });
 
 // ─── IMPORT ───
-$('import-btn').addEventListener('click',()=>$('import-file').click());
+$('import-btn')?.addEventListener('click',()=>$('import-file').click());
 $('import-file').addEventListener('change',async e=>{
   const file=e.target.files[0];if(!file)return;
   try{
@@ -3505,7 +3496,10 @@ function renderDRStep3(body){
     renderDR();
   }));
 }
-$('dr-btn').addEventListener('click',openDailyReview);
+$('dr-btn')?.addEventListener('click',openDailyReview);
+// Sidebar bottom buttons
+$('sb-settings-btn')?.addEventListener('click',()=>go('settings'));
+$('sb-reports-btn')?.addEventListener('click',()=>go('reports'));
 $('dr-ov').addEventListener('click',e=>{if(e.target===$('dr-ov'))closeDR()});
 $('dr-skip').addEventListener('click',closeDR);
 $('dr-next').addEventListener('click',async()=>{
@@ -3867,6 +3861,37 @@ function showUndoToast(label){
   setTimeout(()=>t.remove(),5000);
 }
 
+// ─── REPORTS VIEW (Phase D — consolidates analytics/review views) ───
+let reportsTab='overview';
+async function renderReports(){
+  const c=$('ct');
+  const tabs=[
+    {id:'overview',label:'Overview',icon:'dashboard'},
+    {id:'activity',label:'Activity',icon:'history'},
+    {id:'habits',label:'Habits',icon:'repeat'},
+    {id:'focus',label:'Focus',icon:'timer'},
+    {id:'analytics',label:'Analytics',icon:'analytics'},
+    {id:'reviews',label:'Reviews',icon:'rate_review'},
+    {id:'notes',label:'Notes',icon:'note'}
+  ];
+  let tabsHtml=`<div class="reports-tabs" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;border-bottom:1px solid var(--brd);padding-bottom:8px">`;
+  tabs.forEach(t=>{
+    const isActive=reportsTab===t.id;
+    tabsHtml+=`<button class="btn-c reports-tab${isActive?' active':''}" data-rtab="${t.id}" style="font-size:12px;padding:6px 12px;border-radius:var(--rs);${isActive?'background:var(--brand);color:#fff;border-color:var(--brand)':''}"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">${t.icon}</span>${t.label}</button>`;
+  });
+  tabsHtml+=`</div>`;
+  // Render the sub-view directly into ct (each render function writes to $('ct'))
+  const subRenders={overview:renderDashboard,activity:renderLogbook,habits:renderHabits,focus:renderFocusHistory,analytics:renderTimeAnalytics,reviews:renderWeeklyReview,notes:renderNotes};
+  const fn=subRenders[reportsTab]||renderDashboard;
+  await fn();
+  // Prepend tabs bar above the rendered content
+  c.insertAdjacentHTML('afterbegin',tabsHtml);
+  // Wire tab clicks
+  c.querySelectorAll('.reports-tab').forEach(btn=>btn.addEventListener('click',()=>{
+    reportsTab=btn.dataset.rtab;renderReports();
+  }));
+}
+
 // ─── SMART LIST VIEW ───
 async function renderSmartList(){
   const c=$('ct');
@@ -3992,7 +4017,7 @@ function updateMultiSelectBar(){
 }
 
 // ─── KEYBOARD SHORTCUTS ───
-$('kb-btn').addEventListener('click',()=>$('kb-ov').classList.add('active'));
+$('kb-btn')?.addEventListener('click',()=>$('kb-ov').classList.add('active'));
 $('kb-ov').addEventListener('click',e=>{if(e.target===$('kb-ov'))$('kb-ov').classList.remove('active')});
 document.addEventListener('keydown',e=>{
   // Skip if typing in input/textarea/select or contenteditable
