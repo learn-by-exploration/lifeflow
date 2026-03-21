@@ -694,6 +694,49 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .sti .st-handle{cursor:grab;color:var(--txd);font-size:14px;opacity:.4}
 .sti:hover .st-handle{opacity:1}
 .sti.dragging-sub{opacity:.35}
+
+/* Smart filter badges */
+.sf-item .sf-badge{margin-left:auto;background:var(--bg-c);color:var(--txd);font-size:10px;padding:0 6px;border-radius:10px;min-width:18px;text-align:center;font-weight:600}
+.sf-item .sf-badge:empty{display:none}
+.smart-sec{padding:4px 16px 2px;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--txd)}
+
+/* Task card hover quick actions */
+.tc .qa-row{display:none;position:absolute;right:0;top:50%;transform:translateY(-50%);background:var(--bg-s);border:1px solid var(--brd);border-radius:6px;padding:2px;box-shadow:0 2px 8px rgba(0,0,0,.12);gap:1px;z-index:5}
+.tc:hover .qa-row{display:flex}
+.tc:hover .ta{display:none}
+.qa-row .qa-btn{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;color:var(--tx2);font-size:16px;display:flex;align-items:center;justify-content:center}
+.qa-row .qa-btn:hover{background:var(--bg-h);color:var(--tx)}
+.qa-btn.pri-0{color:var(--txd)}.qa-btn.pri-1{color:#3B82F6}.qa-btn.pri-2{color:#F59E0B}.qa-btn.pri-3{color:#EF4444}
+
+/* Priority cycle button indicator */
+.qa-pri-dot{width:6px;height:6px;border-radius:50%;margin-left:2px}
+
+/* Inline date picker dropdown */
+.qa-dd{position:absolute;right:0;top:100%;background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--rs);box-shadow:var(--shd);z-index:20;min-width:160px;padding:4px}
+.qa-dd .qa-opt{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:12px;border-radius:4px;color:var(--tx)}
+.qa-dd .qa-opt:hover{background:var(--bg-h)}
+
+/* Bulk action bar - enhanced */
+.ms-bar .ms-move-dd{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--rs);box-shadow:var(--shd);max-height:200px;overflow-y:auto;min-width:200px;padding:4px;margin-bottom:4px}
+.ms-bar .ms-move-dd .ms-mv-item{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:12px;border-radius:4px}
+.ms-bar .ms-move-dd .ms-mv-item:hover{background:var(--bg-h)}
+
+/* Daily briefing */
+.briefing-card{background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--r);padding:20px;margin-bottom:16px}
+.briefing-card h3{margin:0 0 12px;font-size:15px;display:flex;align-items:center;gap:8px}
+.briefing-sec{margin-bottom:12px}
+.briefing-sec h4{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--txd);margin:0 0 6px;display:flex;align-items:center;gap:4px}
+.briefing-item{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px}
+.briefing-item input[type=checkbox]{width:16px;height:16px;accent-color:var(--brand)}
+.briefing-item .bi-reason{font-size:10px;color:var(--txd);margin-left:auto}
+.briefing-start{margin-top:12px;display:flex;gap:8px;align-items:center}
+
+/* Command palette quick create */
+.cp-create{padding:10px 14px;border-top:1px solid var(--brd);font-size:12px;color:var(--brand);cursor:pointer;display:flex;align-items:center;gap:8px}
+.cp-create:hover{background:var(--bg-h)}
+.cp-task-preview{padding:8px 14px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin:4px 12px;font-size:12px}
+.cp-task-preview .cp-tp-title{font-weight:600}
+.cp-task-preview .cp-tp-meta{color:var(--txd);font-size:11px;margin-top:2px}
 </style>
 </head>
 <body>
@@ -734,6 +777,13 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <div class="ni" data-view="timeanalytics"><span class="material-icons-round">analytics</span>Time Analytics</div>
     <div class="ni" data-view="rules"><span class="material-icons-round">auto_fix_high</span>Automations</div>
     <div class="ni" data-view="settings"><span class="material-icons-round">settings</span>Settings</div>
+    </div>
+  </div>
+  <div class="ns" id="smart-sec"><div class="ns-label">Smart Lists</div>
+    <div id="smart-list">
+      <div class="sf-item" data-smart="stale"><span class="sf-icon">⏳</span><span>Stale Tasks</span><span class="sf-badge" id="smart-stale-cnt"></span></div>
+      <div class="sf-item" data-smart="quickwins"><span class="sf-icon">⚡</span><span>Quick Wins</span><span class="sf-badge" id="smart-qw-cnt"></span></div>
+      <div class="sf-item" data-smart="blocked"><span class="sf-icon">🔒</span><span>Blocked</span><span class="sf-badge" id="smart-blocked-cnt"></span></div>
     </div>
   </div>
   <div class="ns" id="sf-section" style="display:none"><div class="ns-label">Saved Filters</div><div id="sf-list"></div></div>
@@ -1019,7 +1069,7 @@ async function loadSavedFilters(){
 }
 function renderSFList(){
   const list=$('sf-list');
-  list.innerHTML=savedFilters.map(f=>`<div class="sf-item ${activeFilterId===f.id?'active':''}" data-fid="${f.id}"><span class="sf-icon">${esc(f.icon)}</span><span>${esc(f.name)}</span><span class="material-icons-round sf-del" data-fid="${f.id}" title="Delete">close</span></div>`).join('');
+  list.innerHTML=savedFilters.map(f=>`<div class="sf-item ${activeFilterId===f.id?'active':''}" data-fid="${f.id}"><span class="sf-icon">${esc(f.icon)}</span><span>${esc(f.name)}</span><span class="sf-badge" data-fid="${f.id}"></span><span class="material-icons-round sf-del" data-fid="${f.id}" title="Delete">close</span></div>`).join('');
   list.querySelectorAll('.sf-item').forEach(el=>el.addEventListener('click',e=>{
     if(e.target.closest('.sf-del')){
       const fid=Number(e.target.dataset.fid);
@@ -1032,6 +1082,34 @@ function renderSFList(){
     document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));
     el.classList.add('active');closeMobileSb();render();
   }));
+  // Load badge counts for saved filters
+  api.get('/api/filters/counts').then(counts=>{
+    counts.forEach(c=>{
+      const badge=list.querySelector(`.sf-badge[data-fid="${c.id}"]`);
+      if(badge)badge.textContent=c.count||'';
+    });
+  }).catch(()=>{});
+}
+
+// Smart list handlers
+let activeSmartFilter=null;
+document.querySelectorAll('#smart-list .sf-item').forEach(el=>el.addEventListener('click',()=>{
+  activeSmartFilter=el.dataset.smart;
+  currentView='smartlist';activeAreaId=null;activeGoalId=null;
+  document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));
+  el.classList.add('active');closeMobileSb();render();
+}));
+async function loadSmartCounts(){
+  try{
+    const [stale,qw,blocked]=await Promise.all([
+      api.get('/api/filters/smart/stale'),
+      api.get('/api/filters/smart/quickwins'),
+      api.get('/api/filters/smart/blocked')
+    ]);
+    $('smart-stale-cnt').textContent=stale.length||'';
+    $('smart-qw-cnt').textContent=qw.length||'';
+    $('smart-blocked-cnt').textContent=blocked.length||'';
+  }catch(e){}
 }
 
 // Sidebar nav
@@ -1118,6 +1196,7 @@ async function render(){
   else if(currentView==='notes')await renderNotes();
   else if(currentView==='timeanalytics')await renderTimeAnalytics();
   else if(currentView==='rules')await renderRules();
+  else if(currentView==='smartlist')await renderSmartList();
   else if(currentView==='filter')await renderSavedFilter();
   else if(currentView==='area')await renderArea();
   else if(currentView==='goal')await renderGoal();
@@ -1146,6 +1225,10 @@ function updateBC(){
   else if(currentView==='notes'){pt.textContent='Notes';bc.innerHTML=''}
   else if(currentView==='timeanalytics'){pt.textContent='Time Analytics';bc.innerHTML=''}
   else if(currentView==='rules'){pt.textContent='Automations';bc.innerHTML=''}
+  else if(currentView==='smartlist'){
+    const names={stale:'Stale Tasks',quickwins:'Quick Wins',blocked:'Blocked'};
+    pt.textContent=names[activeSmartFilter]||'Smart List';bc.innerHTML='';
+  }
   else if(currentView==='filter'){pt.textContent=activeFilterName||'Saved Filter';bc.innerHTML=''}
   else if(currentView==='area'){
     const a=areas.find(x=>x.id===activeAreaId);
@@ -1170,7 +1253,7 @@ async function renderMyDay(){
   const c=$('ct');
   const ds=new Date().toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   let h=`<div style="font-size:13px;color:var(--tx2);margin-bottom:14px">${ds}</div>`;
-  if(!t.length){h+=emptyS('wb_sunny','No tasks for today','Mark tasks as "My Day" or set a due date for today');c.innerHTML=h;return}
+  if(!t.length){await showBriefing();return}
   const p=t.filter(x=>x.status!=='done'),d=t.filter(x=>x.status==='done');
   if(p.length){h+=`<div class="sl">To Do <span class="c">${p.length}</span></div>`;p.forEach(tk=>h+=tcHtml(tk,true))}
   if(d.length&&appSettings.showCompleted!=='false'){h+=`<div class="sl" style="color:var(--ok)">Done <span class="c">${d.length}</span></div>`;d.forEach(tk=>h+=tcHtml(tk,true))}
@@ -1409,11 +1492,13 @@ function tcHtml(t,ctx){
       <span class="stx-inline">${esc(s.title)}</span>${s.note?`<span class="material-icons-round" style="font-size:11px;color:var(--txd);margin-left:2px" title="${escA(s.note)}">sticky_note_2</span>`:''}
     </div>`).join('')+`</div>`
   }
+  const nextPri=(t.priority+1)%4;
   return`<div class="${cls.join(' ')} ${selectedIds.has(t.id)?'selected':''}" data-id="${t.id}" draggable="true">
     <div class="ms-chk" data-id="${t.id}"></div>
     <div class="tk" data-id="${t.id}"><span class="material-icons-round">check</span></div>
     <div class="tb2"><div class="tt">${esc(t.title)}</div>${meta?`<div class="tm">${meta}</div>`:''}${stBar}${stList}</div>
     <div class="ta" style="position:relative">${currentView!=='myday'?`<span class="material-icons-round myday-toggle ${t.my_day?'active':''}" data-id="${t.id}" title="${t.my_day?'Remove from My Day':'Add to My Day'}">${t.my_day?'wb_sunny':'light_mode'}</span>`:''}<button class="material-icons-round snz-btn" data-id="${t.id}" title="Reschedule">schedule</button><button class="material-icons-round ft-start" data-id="${t.id}" title="Focus timer">timer</button><button class="material-icons-round et" data-id="${t.id}">edit</button><button class="material-icons-round dt" data-id="${t.id}">delete_outline</button></div>
+    <div class="qa-row"><button class="qa-btn qa-pri pri-${t.priority}" data-id="${t.id}" data-next="${nextPri}" title="Cycle priority (${PL[t.priority]||'None'}→${PL[nextPri]||'None'})"><span class="material-icons-round">flag</span></button><button class="qa-btn qa-date" data-id="${t.id}" title="Set due date"><span class="material-icons-round">event</span></button><button class="qa-btn qa-myday" data-id="${t.id}" title="${t.my_day?'Remove from':'Add to'} My Day"><span class="material-icons-round">${t.my_day?'wb_sunny':'light_mode'}</span></button>${t.recurring?`<button class="qa-btn qa-skip" data-id="${t.id}" title="Skip occurrence"><span class="material-icons-round">skip_next</span></button>`:''}<button class="qa-btn" data-id="${t.id}" onclick="openDP(${t.id})" title="Edit"><span class="material-icons-round">edit</span></button></div>
   </div>`;
 }
 
@@ -1550,6 +1635,48 @@ function attachTE(){
   }));
   // Drag-and-drop reorder in list views
   attachDragReorder();
+  // Quick action: cycle priority
+  document.querySelectorAll('.qa-pri').forEach(b=>b.addEventListener('click',async e=>{
+    e.stopPropagation();const id=Number(b.dataset.id);const next=Number(b.dataset.next);
+    await api.put('/api/tasks/'+id,{priority:next});
+    showToast('Priority → '+(PL[next]||'None'));await loadAreas();render();loadOverdueBadge();
+  }));
+  // Quick action: inline date picker
+  document.querySelectorAll('.qa-date').forEach(b=>b.addEventListener('click',e=>{
+    e.stopPropagation();
+    document.querySelectorAll('.qa-dd').forEach(d=>d.remove());
+    const card=b.closest('.tc');
+    const dd=document.createElement('div');dd.className='qa-dd';
+    const today=new Date();
+    const fmt=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dy=String(d.getDate()).padStart(2,'0');return y+'-'+m+'-'+dy};
+    const tom=new Date(today);tom.setDate(tom.getDate()+1);
+    const nextMon=new Date(today);nextMon.setDate(nextMon.getDate()+((8-nextMon.getDay())%7||7));
+    const nextWk=new Date(today);nextWk.setDate(nextWk.getDate()+7);
+    dd.innerHTML=[
+      {l:'Today',d:fmt(today)},{l:'Tomorrow',d:fmt(tom)},{l:'Next Monday',d:fmt(nextMon)},{l:'+1 Week',d:fmt(nextWk)},{l:'No Date',d:''}
+    ].map(o=>`<div class="qa-opt" data-date="${o.d}">${o.l}</div>`).join('');
+    b.parentElement.appendChild(dd);
+    dd.querySelectorAll('.qa-opt').forEach(opt=>opt.addEventListener('click',async ev=>{
+      ev.stopPropagation();const id=Number(b.dataset.id);
+      await api.put('/api/tasks/'+id,{due_date:opt.dataset.date||null});
+      dd.remove();showToast('Due date updated');await loadAreas();render();loadOverdueBadge();
+    }));
+    setTimeout(()=>document.addEventListener('click',function closer(){dd.remove();document.removeEventListener('click',closer)},{once:false}),10);
+  }));
+  // Quick action: my day toggle
+  document.querySelectorAll('.qa-myday').forEach(b=>b.addEventListener('click',async e=>{
+    e.stopPropagation();const id=Number(b.dataset.id);
+    const card=b.closest('.tc');const allT=await api.get('/api/tasks/all');
+    const tk=allT.find(t=>t.id===id);if(!tk)return;
+    await api.put('/api/tasks/'+id,{my_day:tk.my_day?0:1});
+    showToast(tk.my_day?'Removed from My Day':'Added to My Day');await loadAreas();render();loadOverdueBadge();
+  }));
+  // Quick action: skip recurring
+  document.querySelectorAll('.qa-skip').forEach(b=>b.addEventListener('click',async e=>{
+    e.stopPropagation();const id=Number(b.dataset.id);
+    await api.post('/api/tasks/'+id+'/skip');
+    showToast('Occurrence skipped');await loadAreas();render();loadOverdueBadge();
+  }));
 }
 
 // ─── DRAG REORDER ───
@@ -1592,37 +1719,6 @@ function toggleMultiSelect(){
   msMode=!msMode;
   document.body.classList.toggle('ms-mode',msMode);
   if(!msMode){selectedIds.clear();document.querySelectorAll('.tc.selected').forEach(c=>c.classList.remove('selected'));hideMultiSelectBar()}
-}
-function updateMultiSelectBar(){
-  if(selectedIds.size===0){hideMultiSelectBar();return}
-  let bar=document.getElementById('ms-bar');
-  if(!bar){
-    bar=document.createElement('div');bar.className='ms-bar';bar.id='ms-bar';
-    bar.innerHTML=`<span class="ms-cnt"></span>
-      <button id="ms-done"><span class="material-icons-round" style="font-size:15px">check_circle</span>Complete</button>
-      <button id="ms-pri"><span class="material-icons-round" style="font-size:15px">flag</span>Priority</button>
-      <button class="ms-del" id="ms-del"><span class="material-icons-round" style="font-size:15px">delete_outline</span>Delete</button>
-      <button id="ms-clear"><span class="material-icons-round" style="font-size:15px">close</span>Clear</button>`;
-    document.body.appendChild(bar);
-    document.getElementById('ms-done').addEventListener('click',async()=>{
-      for(const id of selectedIds)await api.put('/api/tasks/'+id,{status:'done'});
-      showToast(selectedIds.size+' tasks completed');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
-    });
-    document.getElementById('ms-del').addEventListener('click',async()=>{
-      if(!confirm('Delete '+selectedIds.size+' tasks?'))return;
-      for(const id of selectedIds)await api.del('/api/tasks/'+id);
-      showToast(selectedIds.size+' tasks deleted');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
-    });
-    document.getElementById('ms-pri').addEventListener('click',async()=>{
-      const p=prompt('Set priority (0=None, 1=Normal, 2=High, 3=Critical):','2');
-      if(p===null)return;const pn=Number(p);if(![0,1,2,3].includes(pn))return;
-      for(const id of selectedIds)await api.put('/api/tasks/'+id,{priority:pn});
-      showToast(selectedIds.size+' tasks updated');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();
-    });
-    document.getElementById('ms-clear').addEventListener('click',()=>{selectedIds.clear();document.querySelectorAll('.tc.selected').forEach(c=>c.classList.remove('selected'));hideMultiSelectBar()});
-  }
-  bar.querySelector('.ms-cnt').textContent=selectedIds.size+' selected';
-  bar.style.display='flex';
 }
 function hideMultiSelectBar(){const b=document.getElementById('ms-bar');if(b)b.style.display='none'}
 function attachBD(){
@@ -2027,7 +2123,7 @@ $('sb-ov').addEventListener('click', () => { $('sb').classList.remove('open'); $
 function closeMobileSb() { $('sb').classList.remove('open'); $('sb-ov').classList.remove('open'); }
 
 // Boot
-Promise.all([loadSettings(),loadAreas(),loadTags(),loadSavedFilters()]).then(()=>{
+Promise.all([loadSettings(),loadAreas(),loadTags(),loadSavedFilters(),loadSmartCounts()]).then(()=>{
   // Apply settings on load
   if(appSettings.theme){
     document.documentElement.setAttribute('data-theme',appSettings.theme);
@@ -2211,6 +2307,17 @@ const CP_COMMANDS=[
   {id:'export-data',label:'Export Data (JSON)',icon:'download',key:'',action:async()=>{closeSearch();go('settings');setTimeout(()=>$('set-export')?.click(),200)}},
   {id:'multi-select',label:'Toggle Multi-Select Mode',icon:'checklist',key:'M',action:()=>{closeSearch();toggleMultiSelect()}},
   {id:'shortcuts',label:'Show Keyboard Shortcuts',icon:'keyboard',key:'?',action:()=>{closeSearch();$('kb-ov').classList.add('active')}},
+  {id:'go-inbox',label:'Go to Inbox',icon:'inbox',key:'',action:()=>{closeSearch();go('inbox')}},
+  {id:'go-notes',label:'Go to Notes',icon:'note',key:'',action:()=>{closeSearch();go('notes')}},
+  {id:'go-habits',label:'Go to Habits',icon:'repeat',key:'',action:()=>{closeSearch();go('habits')}},
+  {id:'go-analytics',label:'Go to Time Analytics',icon:'analytics',key:'',action:()=>{closeSearch();go('timeanalytics')}},
+  {id:'go-rules',label:'Go to Automations',icon:'auto_fix_high',key:'',action:()=>{closeSearch();go('rules')}},
+  {id:'go-review',label:'Go to Weekly Review',icon:'rate_review',key:'',action:()=>{closeSearch();go('review')}},
+  {id:'go-planner',label:'Go to Day Planner',icon:'view_timeline',key:'',action:()=>{closeSearch();go('planner')}},
+  {id:'smart-stale',label:'View Stale Tasks',icon:'hourglass_empty',key:'<b>&gt;</b> commands · <b>/</b> quick createtiveSmartFilter='stale';currentView='smartlist';render()}},
+  {id:'smart-quickwins',label:'View Quick Wins',icon:'bolt',key:'',action:()=>{closeSearch();activeSmartFilter='quickwins';currentView='smartlist';render()}},
+  {id:'smart-blocked',label:'View Blocked Tasks',icon:'lock',key:'',action:()=>{closeSearch();activeSmartFilter='blocked';currentView='smartlist';render()}},
+  {id:'plan-day',label:'Plan My Day (Briefing)',icon:'wb_sunny',key:'',action:()=>{closeSearch();currentView='myday';render()}},
 ];
 function openSearch(commandMode){
   cpMode=!!commandMode;
@@ -2240,9 +2347,31 @@ function runSearch(){
     // Command palette mode
     if(raw.startsWith('>')){cpMode=true;renderCommands(raw.slice(1).trim());return}
     cpMode=false;
+    // Quick create mode with /
+    if(raw.startsWith('/')){
+      const text=raw.slice(1).trim();
+      if(!text){$('sr-results').innerHTML='<div class="sr-empty">Type a task to create: <b>/Buy groceries #shopping !high due:friday</b></div>';srIdx=-1;return}
+      try{
+        const parsed=await api.post('/api/tasks/parse',{text});
+        let preview=`<div class="cp-task-preview"><div class="cp-tp-title">${esc(parsed.title||text)}</div><div class="cp-tp-meta">`;
+        if(parsed.priority>0)preview+=`<span style="color:${PC[parsed.priority]}">${PL[parsed.priority]}</span> `;
+        if(parsed.due_date)preview+=`📅 ${fmtDue(parsed.due_date)} `;
+        if(parsed.tags&&parsed.tags.length)parsed.tags.forEach(tg=>preview+=`<span class="tag" style="background:var(--brand)">${esc(tg)}</span> `);
+        preview+=`</div></div>`;
+        preview+=`<div class="cp-create" id="cp-quick-create"><span class="material-icons-round" style="font-size:16px">add_circle</span>Create task · <b>Enter</b></div>`;
+        $('sr-results').innerHTML=preview;srIdx=-1;
+        $('cp-quick-create').addEventListener('click',async()=>{
+          await createFromPalette(text);
+        });
+      }catch{
+        $('sr-results').innerHTML=`<div class="cp-create" id="cp-quick-create"><span class="material-icons-round" style="font-size:16px">add_circle</span>Create "${esc(text)}" · <b>Enter</b></div>`;
+        $('cp-quick-create').addEventListener('click',async()=>{await createFromPalette(text)});
+      }
+      return;
+    }
     const q=raw.trim();
     const areaId=$('sr-area').value;const goalId=$('sr-goal').value;const status=$('sr-status').value;
-    if(!q&&!areaId&&!goalId&&!status){$('sr-results').innerHTML='<div class="sr-empty">Type to search · Press <b>&gt;</b> for commands</div>';srIdx=-1;return}
+    if(!q&&!areaId&&!goalId&&!status){$('sr-results').innerHTML='<div class="sr-empty">Type to search · <b>&gt;</b> commands · <b>/</b> quick create</div>';srIdx=-1;return}
     let url='/api/tasks/search?q='+encodeURIComponent(q);
     if(areaId)url+='&area_id='+areaId;if(goalId)url+='&goal_id='+goalId;if(status)url+='&status='+status;
     const r=await api.get(url);
@@ -2266,12 +2395,41 @@ $('sr-inp').addEventListener('keydown',e=>{
   const items=$('sr-results').querySelectorAll('.sr-item');
   if(e.key==='ArrowDown'){e.preventDefault();srIdx=Math.min(srIdx+1,items.length-1);items.forEach((it,i)=>it.classList.toggle('sel',i===srIdx));items[srIdx]?.scrollIntoView({block:'nearest'})}
   else if(e.key==='ArrowUp'){e.preventDefault();srIdx=Math.max(srIdx-1,0);items.forEach((it,i)=>it.classList.toggle('sel',i===srIdx));items[srIdx]?.scrollIntoView({block:'nearest'})}
-  else if(e.key==='Enter'&&srIdx>=0&&items[srIdx]){
-    if(cpMode){const cmd=CP_COMMANDS.find(c=>c.id===items[srIdx].dataset.cmd);if(cmd)cmd.action()}
-    else{closeSearch();openDP(Number(items[srIdx].dataset.id))}
+  else if(e.key==='Enter'){
+    if($('sr-inp').value.startsWith('/')){e.preventDefault();await createFromPalette($('sr-inp').value.slice(1).trim());return}
+    if(srIdx>=0&&items[srIdx]){
+      if(cpMode){const cmd=CP_COMMANDS.find(c=>c.id===items[srIdx].dataset.cmd);if(cmd)cmd.action()}
+      else{closeSearch();openDP(Number(items[srIdx].dataset.id))}
+    }
   }
   else if(e.key==='Escape')closeSearch();
 });
+
+// ─── CREATE FROM COMMAND PALETTE ───
+async function createFromPalette(text){
+  if(!text)return;
+  try{
+    const parsed=await api.post('/api/tasks/parse',{text});
+    // Find first goal to assign to
+    const allGoals=await api.get('/api/goals');
+    const goalId=parsed.goal_id||allGoals[0]?.id;
+    if(!goalId){showToast('Create a goal first');closeSearch();return}
+    await api.post('/api/goals/'+goalId+'/tasks',{
+      title:parsed.title||text,
+      priority:parsed.priority||0,
+      due_date:parsed.due_date||null,
+      my_day:parsed.my_day?1:0,
+      tagIds:parsed.tag_ids||[]
+    });
+    closeSearch();showToast('Task created!');await loadAreas();render();loadOverdueBadge();
+  }catch{
+    // Fallback: create with raw text
+    const allGoals=await api.get('/api/goals');
+    if(!allGoals.length){showToast('Create a goal first');closeSearch();return}
+    await api.post('/api/goals/'+allGoals[0].id+'/tasks',{title:text});
+    closeSearch();showToast('Task created!');await loadAreas();render();loadOverdueBadge();
+  }
+}
 
 // ─── QUICK CAPTURE ───
 let allGoals=[];
@@ -3056,7 +3214,7 @@ async function renderSavedFilter(){
       const tasks=await api.get('/api/filters/execute'+(qs?'?'+qs:''));
       if(!tasks.length){$('fb-results').innerHTML='<div style="text-align:center;padding:20px;color:var(--txd)">No tasks match this filter</div>';return}
       $('fb-results').innerHTML=`<div style="margin-bottom:8px;font-size:12px;color:var(--txd)">${tasks.length} task${tasks.length!==1?'s':''}</div>`+tasks.map(t=>tcHtml(t,true)).join('');
-      wireTC($('fb-results'));
+      attachTE();attachBD();
     }catch(e){$('fb-results').innerHTML='<div style="color:var(--dn)">Error loading results</div>'}
   }
   await execFilter();
@@ -3646,6 +3804,130 @@ function showUndoToast(label){
     t.remove();
   });
   setTimeout(()=>t.remove(),5000);
+}
+
+// ─── SMART LIST VIEW ───
+async function renderSmartList(){
+  const c=$('ct');
+  const tasks=await api.get('/api/filters/smart/'+activeSmartFilter);
+  const names={stale:'Stale Tasks',quickwins:'Quick Wins',blocked:'Blocked'};
+  const descs={stale:'Tasks with no activity for 7+ days',quickwins:'Tasks ≤15 min, not blocked',blocked:'Tasks waiting on dependencies'};
+  let h=`<div style="font-size:13px;color:var(--tx2);margin-bottom:14px">${descs[activeSmartFilter]||''} · ${tasks.length} task${tasks.length!==1?'s':''}</div>`;
+  if(!tasks.length){h+=emptyS('filter_list','No tasks','Nothing matches this smart filter right now');c.innerHTML=h;return}
+  tasks.forEach(t=>h+=tcHtml(t,true));
+  c.innerHTML=h;attachTE();attachBD();
+}
+
+// ─── DAILY BRIEFING ───
+async function showBriefing(){
+  const suggest=await api.get('/api/planner/suggest');
+  const c=$('ct');
+  let h=`<div style="font-size:13px;color:var(--tx2);margin-bottom:14px">${new Date().toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>`;
+  h+=`<div class="briefing-card"><h3><span class="material-icons-round" style="font-size:18px;color:var(--brand)">wb_sunny</span>Plan Your Day</h3>`;
+  const sections=[
+    {key:'overdue',label:'Overdue',icon:'warning',reason:'overdue',forced:true},
+    {key:'dueToday',label:'Due Today',icon:'today',reason:'due today',forced:true},
+    {key:'highPriority',label:'High Priority',icon:'flag',reason:'high priority'},
+    {key:'upcoming',label:'Coming Up (3 days)',icon:'upcoming',reason:'due soon'}
+  ];
+  let anyItems=false;
+  for(const sec of sections){
+    const items=suggest[sec.key];
+    if(!items||!items.length)continue;
+    anyItems=true;
+    h+=`<div class="briefing-sec"><h4><span class="material-icons-round" style="font-size:12px">${sec.icon}</span>${sec.label} (${items.length})</h4>`;
+    items.forEach(t=>{
+      h+=`<div class="briefing-item"><input type="checkbox" data-id="${t.id}" ${sec.forced?'checked disabled':'checked'}><span>${esc(t.title)}</span><span class="bi-reason">${sec.reason}</span></div>`;
+    });
+    h+=`</div>`;
+  }
+  if(!anyItems){
+    h+=`<p style="color:var(--txd);font-size:13px;margin:8px 0">Nothing urgent! Pick tasks you want to focus on today.</p>`;
+  }
+  h+=`<div class="briefing-start"><button class="btn-s" id="briefing-go"><span class="material-icons-round" style="font-size:14px">play_arrow</span>Start My Day</button><span style="font-size:11px;color:var(--txd)">Selected tasks will be added to My Day</span></div></div>`;
+  c.innerHTML=h;
+  $('briefing-go').addEventListener('click',async()=>{
+    const checked=[...c.querySelectorAll('.briefing-item input[type=checkbox]:checked')].map(cb=>Number(cb.dataset.id)).filter(Boolean);
+    if(checked.length){
+      await api.post('/api/tasks/bulk-myday',{ids:checked});
+      showToast(checked.length+' tasks added to My Day');
+    }
+    await loadAreas();render();loadOverdueBadge();
+  });
+}
+
+// ─── ENHANCED MULTI-SELECT BAR ───
+function updateMultiSelectBar(){
+  if(selectedIds.size===0){hideMultiSelectBar();return}
+  let bar=document.getElementById('ms-bar');
+  if(!bar){
+    bar=document.createElement('div');bar.className='ms-bar';bar.id='ms-bar';
+    bar.innerHTML=`<span class="ms-cnt"></span>
+      <button id="ms-done"><span class="material-icons-round" style="font-size:15px">check_circle</span>Complete</button>
+      <button id="ms-pri"><span class="material-icons-round" style="font-size:15px">flag</span>Priority</button>
+      <button id="ms-due"><span class="material-icons-round" style="font-size:15px">event</span>Due Date</button>
+      <button id="ms-myday"><span class="material-icons-round" style="font-size:15px">wb_sunny</span>My Day</button>
+      <button id="ms-move"><span class="material-icons-round" style="font-size:15px">drive_file_move</span>Move</button>
+      <button id="ms-tag"><span class="material-icons-round" style="font-size:15px">label</span>Tag</button>
+      <button class="ms-del" id="ms-del"><span class="material-icons-round" style="font-size:15px">delete_outline</span>Delete</button>
+      <button id="ms-clear"><span class="material-icons-round" style="font-size:15px">close</span>Clear</button>`;
+    document.body.appendChild(bar);
+    document.getElementById('ms-done').addEventListener('click',async()=>{
+      await api.put('/api/tasks/bulk',{ids:[...selectedIds],changes:{status:'done'}});
+      showToast(selectedIds.size+' tasks completed');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
+    });
+    document.getElementById('ms-del').addEventListener('click',async()=>{
+      if(!confirm('Delete '+selectedIds.size+' tasks?'))return;
+      for(const id of selectedIds)await api.del('/api/tasks/'+id);
+      showToast(selectedIds.size+' tasks deleted');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
+    });
+    document.getElementById('ms-pri').addEventListener('click',async()=>{
+      const p=prompt('Set priority (0=None, 1=Normal, 2=High, 3=Critical):','2');
+      if(p===null)return;const pn=Number(p);if(![0,1,2,3].includes(pn))return;
+      await api.put('/api/tasks/bulk',{ids:[...selectedIds],changes:{priority:pn}});
+      showToast(selectedIds.size+' tasks updated');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();
+    });
+    document.getElementById('ms-due').addEventListener('click',async()=>{
+      const d=prompt('Set due date (YYYY-MM-DD or "today"/"tomorrow"/"none"):','today');
+      if(d===null)return;
+      let date=d;
+      if(d==='today')date=new Date().toISOString().split('T')[0];
+      else if(d==='tomorrow'){const t=new Date();t.setDate(t.getDate()+1);date=t.toISOString().split('T')[0]}
+      else if(d==='none')date=null;
+      await api.put('/api/tasks/bulk',{ids:[...selectedIds],changes:{due_date:date}});
+      showToast(selectedIds.size+' tasks rescheduled');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
+    });
+    document.getElementById('ms-myday').addEventListener('click',async()=>{
+      await api.post('/api/tasks/bulk-myday',{ids:[...selectedIds]});
+      showToast(selectedIds.size+' added to My Day');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();
+    });
+    document.getElementById('ms-move').addEventListener('click',async()=>{
+      // Show goal picker dropdown
+      const allGoals=await api.get('/api/goals');
+      let dd=bar.querySelector('.ms-move-dd');if(dd)dd.remove();
+      dd=document.createElement('div');dd.className='ms-move-dd';
+      dd.innerHTML=allGoals.map(g=>`<div class="ms-mv-item" data-gid="${g.id}"><span style="color:${escA(g.color||'var(--brand)')}">●</span>${esc(g.title)}</div>`).join('');
+      bar.appendChild(dd);
+      dd.querySelectorAll('.ms-mv-item').forEach(it=>it.addEventListener('click',async()=>{
+        await api.put('/api/tasks/bulk',{ids:[...selectedIds],changes:{goal_id:Number(it.dataset.gid)}});
+        showToast(selectedIds.size+' tasks moved');selectedIds.clear();hideMultiSelectBar();dd.remove();await loadAreas();render();
+      }));
+      setTimeout(()=>document.addEventListener('click',function closer(ev){if(!dd.contains(ev.target)){dd.remove();document.removeEventListener('click',closer)}},{once:false}),10);
+    });
+    document.getElementById('ms-tag').addEventListener('click',async()=>{
+      if(!allTags.length){showToast('No tags yet');return}
+      const tagList=allTags.map(t=>t.name).join(', ');
+      const name=prompt('Tag name to add ('+tagList+'):');
+      if(!name)return;
+      const tag=allTags.find(t=>t.name.toLowerCase()===name.trim().toLowerCase());
+      if(!tag){showToast('Tag not found');return}
+      await api.put('/api/tasks/bulk',{ids:[...selectedIds],changes:{add_tag_id:tag.id}});
+      showToast(selectedIds.size+' tasks tagged');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();
+    });
+    document.getElementById('ms-clear').addEventListener('click',()=>{selectedIds.clear();document.querySelectorAll('.tc.selected').forEach(c=>c.classList.remove('selected'));hideMultiSelectBar()});
+  }
+  bar.querySelector('.ms-cnt').textContent=selectedIds.size+' selected';
+  bar.style.display='flex';
 }
 
 // ─── KEYBOARD SHORTCUTS ───

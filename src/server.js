@@ -542,6 +542,15 @@ app.get('/api/tasks/overdue', (req, res) => {
   `).all()));
 });
 
+// Recurring tasks list (before :id to avoid param capture)
+app.get('/api/tasks/recurring', (req, res) => {
+  const tasks = enrichTasks(db.prepare(`SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.recurring IS NOT NULL AND t.status!='done'
+    ORDER BY t.due_date`).all());
+  res.json(tasks);
+});
+
 // Single task GET
 app.get('/api/tasks/:id', (req, res) => {
   const id = Number(req.params.id);
@@ -576,6 +585,44 @@ function nextDueDate(dueDate, recurrence) {
   const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
   return `${y}-${m}-${day}`;
 }
+
+// ─── BULK OPERATIONS (before :id to avoid param capture) ───
+app.put('/api/tasks/bulk', (req, res) => {
+  const { ids, changes } = req.body;
+  if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
+  if (!changes || typeof changes !== 'object') return res.status(400).json({ error: 'changes object required' });
+  const results = [];
+  const selectTask = db.prepare('SELECT * FROM tasks WHERE id=?');
+  for (const rawId of ids) {
+    const id = Number(rawId);
+    if (!Number.isInteger(id)) continue;
+    const ex = selectTask.get(id);
+    if (!ex) continue;
+    const sets = [], vals = [];
+    if (changes.priority !== undefined) { sets.push('priority=?'); vals.push(changes.priority); }
+    if (changes.due_date !== undefined) { sets.push('due_date=?'); vals.push(changes.due_date); }
+    if (changes.my_day !== undefined) { sets.push('my_day=?'); vals.push(changes.my_day ? 1 : 0); }
+    if (changes.goal_id !== undefined) { sets.push('goal_id=?'); vals.push(changes.goal_id); }
+    if (changes.status !== undefined) {
+      sets.push('status=?'); vals.push(changes.status);
+      if (changes.status === 'done' && ex.status !== 'done') {
+        sets.push('completed_at=?'); vals.push(new Date().toISOString());
+      }
+    }
+    if (sets.length) {
+      vals.push(id);
+      db.prepare(`UPDATE tasks SET ${sets.join(',')} WHERE id=?`).run(...vals);
+    }
+    if (changes.add_tag_id) {
+      db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?,?)').run(id, Number(changes.add_tag_id));
+    }
+    if (changes.remove_tag_id) {
+      db.prepare('DELETE FROM task_tags WHERE task_id=? AND tag_id=?').run(id, Number(changes.remove_tag_id));
+    }
+    results.push(id);
+  }
+  res.json({ updated: results.length, ids: results });
+});
 
 app.put('/api/tasks/:id', (req, res) => {
   const id = Number(req.params.id);
@@ -1138,6 +1185,9 @@ app.get('/api/filters/execute', (req, res) => {
   }
   if (req.query.my_day) { whereParts.push('t.my_day=1'); }
   if (req.query.has_time) { whereParts.push('t.due_time IS NOT NULL'); }
+  if (req.query.stale_days) { whereParts.push("t.status!='done'"); whereParts.push("t.created_at <= datetime('now','-' || ? || ' days')"); params.push(Number(req.query.stale_days)); whereParts.push("t.completed_at IS NULL"); }
+  if (req.query.max_estimated) { whereParts.push('t.estimated_minutes IS NOT NULL'); whereParts.push('t.estimated_minutes<=?'); params.push(Number(req.query.max_estimated)); whereParts.push("t.status!='done'"); }
+  if (req.query.is_blocked) { whereParts.push("EXISTS (SELECT 1 FROM task_deps td JOIN tasks bt ON td.blocked_by_id=bt.id WHERE td.task_id=t.id AND bt.status!='done')"); }
   const where = whereParts.length ? 'WHERE ' + whereParts.join(' AND ') : '';
   res.json(enrichTasks(db.prepare(`
     SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
@@ -1233,6 +1283,30 @@ app.get('/api/habits/:id/heatmap', (req, res) => {
 });
 
 // ─── DAY PLANNER API ───
+// Suggest endpoint must come before :date to avoid param capture
+app.get('/api/planner/suggest', (req, res) => {
+  const today = new Date().toISOString().split('T')[0];
+  const in3days = new Date(Date.now() + 3*86400000).toISOString().split('T')[0];
+
+  const overdue = enrichTasks(db.prepare(`SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.status!='done' AND t.due_date < ? ORDER BY t.due_date LIMIT 20`).all(today));
+
+  const dueToday = enrichTasks(db.prepare(`SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.status!='done' AND t.due_date=? AND t.my_day=0 ORDER BY t.priority DESC LIMIT 20`).all(today));
+
+  const highPriority = enrichTasks(db.prepare(`SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.status!='done' AND t.priority>=2 AND t.my_day=0 AND (t.due_date IS NULL OR t.due_date>=?) ORDER BY t.priority DESC LIMIT 10`).all(today));
+
+  const upcoming = enrichTasks(db.prepare(`SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.status!='done' AND t.due_date>? AND t.due_date<=? AND t.my_day=0 ORDER BY t.due_date LIMIT 10`).all(today, in3days));
+
+  res.json({ overdue, dueToday, highPriority, upcoming });
+});
+
 app.get('/api/planner/:date', (req, res) => {
   const date = req.params.date;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Invalid date format' });
@@ -1588,6 +1662,117 @@ app.post('/api/reviews', (req, res) => {
     );
     res.status(201).json(db.prepare('SELECT * FROM weekly_reviews WHERE id=?').get(r.lastInsertRowid));
   }
+});
+
+// ─── SMART FILTERS: Extended execute + counts + smart lists ───
+app.get('/api/filters/counts', (req, res) => {
+  const filters = db.prepare('SELECT * FROM saved_filters ORDER BY position').all();
+  const counts = filters.map(f => {
+    const p = JSON.parse(f.filters || '{}');
+    let w = [], pa = [];
+    if (p.area_id) { w.push('a.id=?'); pa.push(Number(p.area_id)); }
+    if (p.goal_id) { w.push('g.id=?'); pa.push(Number(p.goal_id)); }
+    if (p.priority) { w.push('t.priority=?'); pa.push(Number(p.priority)); }
+    if (p.status) { w.push('t.status=?'); pa.push(p.status); }
+    if (p.tag_id) { w.push('EXISTS (SELECT 1 FROM task_tags tt WHERE tt.task_id=t.id AND tt.tag_id=?)'); pa.push(Number(p.tag_id)); }
+    if (p.due === 'today') w.push("t.due_date=date('now')");
+    else if (p.due === 'week') w.push("t.due_date BETWEEN date('now') AND date('now','+7 days')");
+    else if (p.due === 'overdue') w.push("t.due_date < date('now') AND t.status!='done'");
+    else if (p.due === 'none') w.push('t.due_date IS NULL');
+    if (p.my_day) w.push('t.my_day=1');
+    if (p.stale_days) { w.push("t.status!='done'"); w.push("t.created_at <= datetime('now','-' || ? || ' days')"); pa.push(Number(p.stale_days)); w.push("(t.completed_at IS NULL)"); }
+    if (p.max_estimated) { w.push('t.estimated_minutes IS NOT NULL'); w.push('t.estimated_minutes<=?'); pa.push(Number(p.max_estimated)); w.push("t.status!='done'"); }
+    if (p.is_blocked) { w.push("EXISTS (SELECT 1 FROM task_deps td JOIN tasks bt ON td.blocked_by_id=bt.id WHERE td.task_id=t.id AND bt.status!='done')"); }
+    const where = w.length ? 'WHERE ' + w.join(' AND ') : '';
+    const c = db.prepare(`SELECT COUNT(DISTINCT t.id) as c FROM tasks t LEFT JOIN goals g ON t.goal_id=g.id LEFT JOIN life_areas a ON g.area_id=a.id ${where}`).get(...pa);
+    return { id: f.id, count: c.c };
+  });
+  res.json(counts);
+});
+
+// Smart lists (built-in)
+app.get('/api/filters/smart/:type', (req, res) => {
+  const type = req.params.type;
+  let sql;
+  if (type === 'stale') {
+    sql = `SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+      FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+      WHERE t.status!='done' AND t.created_at <= datetime('now','-7 days') AND t.completed_at IS NULL
+      ORDER BY t.created_at ASC LIMIT 100`;
+  } else if (type === 'quickwins') {
+    sql = `SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+      FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+      WHERE t.status!='done' AND t.estimated_minutes IS NOT NULL AND t.estimated_minutes<=15
+      AND NOT EXISTS (SELECT 1 FROM task_deps td JOIN tasks bt ON td.blocked_by_id=bt.id WHERE td.task_id=t.id AND bt.status!='done')
+      ORDER BY t.estimated_minutes ASC, t.priority DESC LIMIT 100`;
+  } else if (type === 'blocked') {
+    sql = `SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+      FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+      WHERE t.status!='done'
+      AND EXISTS (SELECT 1 FROM task_deps td JOIN tasks bt ON td.blocked_by_id=bt.id WHERE td.task_id=t.id AND bt.status!='done')
+      ORDER BY t.priority DESC LIMIT 100`;
+  } else {
+    return res.status(400).json({ error: 'Unknown smart filter type' });
+  }
+  res.json(enrichTasks(db.prepare(sql).all()));
+});
+
+// Batch set my_day
+app.post('/api/tasks/bulk-myday', (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids array required' });
+  const stmt = db.prepare('UPDATE tasks SET my_day=1 WHERE id=?');
+  ids.forEach(id => stmt.run(Number(id)));
+  res.json({ updated: ids.length });
+});
+
+// Batch reschedule (clear my_day or set new due date)
+app.post('/api/tasks/reschedule', (req, res) => {
+  const { ids, due_date, clear_myday } = req.body;
+  if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids array required' });
+  if (clear_myday) {
+    const stmt = db.prepare('UPDATE tasks SET my_day=0 WHERE id=?');
+    ids.forEach(id => stmt.run(Number(id)));
+  }
+  if (due_date !== undefined) {
+    const stmt = db.prepare('UPDATE tasks SET due_date=? WHERE id=?');
+    ids.forEach(id => stmt.run(due_date, Number(id)));
+  }
+  res.json({ updated: ids.length });
+});
+
+// ─── RECURRING TASKS: Skip & Pause ───
+app.post('/api/tasks/:id/skip', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM tasks WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Not found' });
+  if (!ex.recurring) return res.status(400).json({ error: 'Not a recurring task' });
+  // Mark as skipped (done but not actually completed)
+  db.prepare("UPDATE tasks SET status='done', completed_at=? WHERE id=?").run(new Date().toISOString(), id);
+  // Spawn next occurrence
+  const nd = nextDueDate(ex.due_date, ex.recurring);
+  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM tasks WHERE goal_id=?').get(ex.goal_id);
+  const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position) VALUES (?,?,?,?,?,?,?,?,?,?)').run(
+    ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.due_time, ex.recurring, ex.assigned_to, 0, mp.p
+  );
+  const oldTags = db.prepare('SELECT tag_id FROM task_tags WHERE task_id=?').all(id);
+  oldTags.forEach(tt => db.prepare('INSERT OR IGNORE INTO task_tags (task_id,tag_id) VALUES (?,?)').run(r.lastInsertRowid, tt.tag_id));
+  res.json({ skipped: id, next: enrichTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(r.lastInsertRowid)) });
+});
+
+// Move task to different goal
+app.post('/api/tasks/:id/move', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const { goal_id } = req.body;
+  if (!goal_id) return res.status(400).json({ error: 'goal_id required' });
+  const ex = db.prepare('SELECT * FROM tasks WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Not found' });
+  const goal = db.prepare('SELECT * FROM goals WHERE id=?').get(Number(goal_id));
+  if (!goal) return res.status(404).json({ error: 'Goal not found' });
+  db.prepare('UPDATE tasks SET goal_id=? WHERE id=?').run(Number(goal_id), id);
+  res.json(enrichTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(id)));
 });
 
 // SPA fallback
