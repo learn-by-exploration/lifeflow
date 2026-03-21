@@ -196,6 +196,39 @@ db.exec(`CREATE TABLE IF NOT EXISTS weekly_reviews (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`);
 
+// ─── FTS5 Virtual Table for Global Search ───
+db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+  type, source_id UNINDEXED, title, body, context,
+  tokenize='porter unicode61'
+)`);
+
+function rebuildSearchIndex() {
+  db.exec('DELETE FROM search_index');
+  const ins = db.prepare('INSERT INTO search_index (type, source_id, title, body, context) VALUES (?,?,?,?,?)');
+  const insertAll = db.transaction(() => {
+    for (const t of db.prepare(`SELECT t.id, t.title, t.note, g.title as goal_title, a.name as area_name
+      FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id`).all()) {
+      ins.run('task', t.id, t.title, t.note || '', `${t.area_name} \u2192 ${t.goal_title}`);
+    }
+    for (const n of db.prepare('SELECT id, title, content FROM notes').all()) {
+      ins.run('note', n.id, n.title, n.content || '', '');
+    }
+    for (const g of db.prepare(`SELECT g.id, g.title, g.description, a.name as area_name
+      FROM goals g JOIN life_areas a ON g.area_id=a.id`).all()) {
+      ins.run('goal', g.id, g.title, g.description || '', g.area_name);
+    }
+    for (const c of db.prepare(`SELECT tc.id, tc.text, t.title as task_title
+      FROM task_comments tc JOIN tasks t ON tc.task_id=t.id`).all()) {
+      ins.run('comment', c.id, '', c.text || '', c.task_title);
+    }
+    for (const i of db.prepare('SELECT id, title, note FROM inbox').all()) {
+      ins.run('inbox', i.id, i.title, i.note || '', '');
+    }
+  });
+  insertAll();
+}
+rebuildSearchIndex();
+
 // Seed
 const cnt = db.prepare('SELECT COUNT(*) as c FROM life_areas').get();
 if (cnt.c === 0) {
@@ -1309,6 +1342,45 @@ app.get('/api/planner/suggest', (req, res) => {
   res.json({ overdue, dueToday, highPriority, upcoming });
 });
 
+// ─── Smart Day Planning (scoring algorithm) ───
+app.get('/api/planner/smart', (req, res) => {
+  const maxMin = Number(req.query.max_minutes) || 240;
+  const tasks = db.prepare(`
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.status != 'done' AND t.my_day = 0
+    ORDER BY t.priority DESC, t.due_date
+  `).all();
+  const today = new Date().toISOString().slice(0, 10);
+  const scored = tasks.map(t => {
+    let score = 0;
+    const reasons = [];
+    if (t.due_date && t.due_date <= today) { score += 50; reasons.push('overdue'); }
+    else if (t.due_date) {
+      const daysLeft = Math.ceil((new Date(t.due_date) - new Date(today)) / 86400000);
+      if (daysLeft <= 1) { score += 40; reasons.push('due tomorrow'); }
+      else if (daysLeft <= 3) { score += 25; reasons.push('due soon'); }
+      else if (daysLeft <= 7) { score += 10; reasons.push('due this week'); }
+    }
+    if (t.priority === 3) { score += 30; reasons.push('urgent'); }
+    else if (t.priority === 2) { score += 20; reasons.push('high priority'); }
+    else if (t.priority === 1) { score += 10; reasons.push('medium priority'); }
+    const age = Math.ceil((Date.now() - new Date(t.created_at).getTime()) / 86400000);
+    if (age > 14) { score += 15; reasons.push('stale'); }
+    else if (age > 7) { score += 5; reasons.push('aging'); }
+    if ((t.estimated_minutes || 30) <= 15) { score += 10; reasons.push('quick win'); }
+    return { ...t, score, reasons };
+  }).sort((a, b) => b.score - a.score);
+  let totalMin = 0;
+  const suggested = [];
+  for (const t of scored) {
+    const est = t.estimated_minutes || 30;
+    if (totalMin + est <= maxMin) { suggested.push(t); totalMin += est; }
+    if (suggested.length >= 8) break;
+  }
+  res.json({ suggested: enrichTasks(suggested), total_minutes: totalMin, max_minutes: maxMin });
+});
+
 app.get('/api/planner/:date', (req, res) => {
   const date = req.params.date;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Invalid date format' });
@@ -1775,6 +1847,63 @@ app.post('/api/tasks/:id/move', (req, res) => {
   if (!goal) return res.status(404).json({ error: 'Goal not found' });
   db.prepare('UPDATE tasks SET goal_id=? WHERE id=?').run(Number(goal_id), id);
   res.json(enrichTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(id)));
+});
+
+// ─── Global Unified Search (FTS5) ───
+app.get('/api/search', (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.json({ results: [], query: '' });
+  const sanitized = q.replace(/[^\w\s'-]/g, '').trim();
+  if (!sanitized) return res.json({ results: [], query: q });
+  const ftsQuery = sanitized.split(/\s+/).map(w => w + '*').join(' ');
+  const limit = Math.min(Number(req.query.limit) || 20, 50);
+  try {
+    const rows = db.prepare(`
+      SELECT type, source_id, title, snippet(search_index, 3, '<mark>', '</mark>', '\u2026', 24) as snippet, context, rank
+      FROM search_index WHERE search_index MATCH ?
+      ORDER BY rank LIMIT ?
+    `).all(ftsQuery, limit);
+    res.json({ results: rows, query: q });
+  } catch {
+    const term = '%' + sanitized + '%';
+    const rows = db.prepare(`
+      SELECT type, source_id, title, body as snippet, context, 0 as rank
+      FROM search_index WHERE title LIKE ? OR body LIKE ?
+      ORDER BY type LIMIT ?
+    `).all(term, term, limit);
+    res.json({ results: rows, query: q });
+  }
+});
+
+// ─── iCal Export ───
+app.get('/api/export/ical', (req, res) => {
+  const tasks = db.prepare(`
+    SELECT t.*, g.title as goal_title, a.name as area_name
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.due_date IS NOT NULL AND t.status != 'done'
+    ORDER BY t.due_date
+  `).all();
+  const now = new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');
+  let ical = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//LifeFlow//EN\r\nX-WR-CALNAME:LifeFlow Tasks\r\n';
+  for (const t of tasks) {
+    const d = t.due_date.replace(/-/g, '');
+    const uid = `task-${t.id}@lifeflow`;
+    const summary = t.title.replace(/[\\;,]/g, c => '\\' + c);
+    const desc = `${t.area_name} \u2192 ${t.goal_title}`.replace(/[\\;,]/g, c => '\\' + c);
+    ical += `BEGIN:VEVENT\r\nUID:${uid}\r\nDTSTAMP:${now}\r\nDTSTART;VALUE=DATE:${d}\r\n`;
+    ical += `SUMMARY:${summary}\r\nDESCRIPTION:${desc}\r\n`;
+    if (t.priority >= 2) ical += 'PRIORITY:1\r\n';
+    else if (t.priority === 1) ical += 'PRIORITY:5\r\n';
+    if (t.recurring) {
+      const rmap = { daily: 'DAILY', weekly: 'WEEKLY', monthly: 'MONTHLY', yearly: 'YEARLY' };
+      if (rmap[t.recurring]) ical += `RRULE:FREQ=${rmap[t.recurring]}\r\n`;
+    }
+    ical += 'END:VEVENT\r\n';
+  }
+  ical += 'END:VCALENDAR\r\n';
+  res.set('Content-Type', 'text/calendar; charset=utf-8');
+  res.set('Content-Disposition', 'attachment; filename="lifeflow.ics"');
+  res.send(ical);
 });
 
 // SPA fallback

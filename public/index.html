@@ -740,6 +740,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 
 /* Smooth view transitions */
 #ct{animation:fadeIn .15s ease}
+@media(prefers-reduced-motion:reduce){#ct{animation:none}.hint-card{animation:none}}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 
 /* Goal progress mini-bar in area view */
@@ -758,7 +759,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 <button class="ham" id="ham"><span class="material-icons-round">menu</span></button>
 <div class="sb-overlay" id="sb-ov"></div>
 
-<aside class="sb" id="sb">
+<aside class="sb" id="sb" role="navigation" aria-label="Sidebar navigation">
   <div class="sb-brand"><div class="logo">L</div><h1>LifeFlow</h1></div>
   <div class="ns">
     <div class="ns-label">Core</div>
@@ -826,7 +827,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <button class="vt-btn active" data-tab="list">List</button>
     <button class="vt-btn" data-tab="board">Board</button>
   </div>
-  <div class="ct" id="ct"></div>
+  <main class="ct" id="ct" role="main" aria-label="Content area"></main>
 </main>
 
 <!-- Task detail panel -->
@@ -856,7 +857,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 </div></div>
 
 <!-- Search overlay -->
-<div class="sr-ov" id="sr-ov">
+<div class="sr-ov" id="sr-ov" role="dialog" aria-label="Search and command palette">
   <div class="sr-box">
     <div style="position:relative"><span class="material-icons-round sr-icon">search</span><input class="sr-inp" id="sr-inp" placeholder="Search tasks, notes, subtasks..." autocomplete="off"></div>
     <div style="display:flex;gap:6px;margin:6px 0 2px;flex-wrap:wrap">
@@ -1289,10 +1290,10 @@ async function renderAll(){
     `<button class="btn-s" onclick="openQuickCapture()"><span class="material-icons-round" style="font-size:14px">add</span>Quick Add</button>
      <button class="btn-c" onclick="go('inbox')">Open Inbox</button>`);return}
   const p=t.filter(x=>x.status!=='done'),d=t.filter(x=>x.status==='done');
-  let h='';
+  let h=hintCard('multi-select','check_box','Tip: Click the checkbox on any task, then use the bulk toolbar to update many tasks at once');
   if(p.length){h+=`<div class="sl">Active <span class="c">${p.length}</span></div>`;p.forEach(tk=>h+=tcHtml(tk,true))}
   if(d.length&&appSettings.showCompleted!=='false'){h+=`<div class="sl" style="color:var(--ok)">Completed <span class="c">${d.length}</span></div>`;d.forEach(tk=>h+=tcHtml(tk,true))}
-  c.innerHTML=h;attachTE();
+  c.innerHTML=h;attachTE();wireHints();
 }
 
 // ─── GLOBAL BOARD ───
@@ -2348,10 +2349,12 @@ const CP_COMMANDS=[
   {id:'go-rules',label:'Go to Automations',icon:'auto_fix_high',key:'',action:()=>{closeSearch();go('rules')}},
   {id:'go-review',label:'Go to Weekly Review',icon:'rate_review',key:'',action:()=>{closeSearch();go('review')}},
   {id:'go-planner',label:'Go to Day Planner',icon:'view_timeline',key:'',action:()=>{closeSearch();go('planner')}},
-  {id:'smart-stale',label:'View Stale Tasks',icon:'hourglass_empty',key:'<b>&gt;</b> commands · <b>/</b> quick createtiveSmartFilter='stale';currentView='smartlist';render()}},
+  {id:'smart-stale',label:'View Stale Tasks',icon:'hourglass_empty',key:'',action:()=>{closeSearch();activeSmartFilter='stale';currentView='smartlist';render()}},
   {id:'smart-quickwins',label:'View Quick Wins',icon:'bolt',key:'',action:()=>{closeSearch();activeSmartFilter='quickwins';currentView='smartlist';render()}},
   {id:'smart-blocked',label:'View Blocked Tasks',icon:'lock',key:'',action:()=>{closeSearch();activeSmartFilter='blocked';currentView='smartlist';render()}},
   {id:'plan-day',label:'Plan My Day (Briefing)',icon:'wb_sunny',key:'',action:()=>{closeSearch();currentView='myday';render()}},
+  {id:'export-ical',label:'Export to Calendar (iCal)',icon:'calendar_month',key:'',action:()=>{closeSearch();window.open('/api/export/ical','_blank')}},
+  {id:'smart-plan',label:'Smart Plan My Day',icon:'auto_awesome',key:'',action:async()=>{closeSearch();const r=await api.get('/api/planner/smart');if(r.suggested?.length){for(const t of r.suggested)await api.put('/api/tasks/'+t.id,{my_day:1});showToast(r.suggested.length+' tasks added to My Day');go('myday')}else{showToast('No suggestions available')}}},
 ];
 function openSearch(commandMode){
   cpMode=!!commandMode;
@@ -2406,11 +2409,26 @@ function runSearch(){
     const q=raw.trim();
     const areaId=$('sr-area').value;const goalId=$('sr-goal').value;const status=$('sr-status').value;
     if(!q&&!areaId&&!goalId&&!status){$('sr-results').innerHTML='<div class="sr-empty">Type to search · <b>&gt;</b> commands · <b>/</b> quick create</div>';srIdx=-1;return}
-    let url='/api/tasks/search?q='+encodeURIComponent(q);
-    if(areaId)url+='&area_id='+areaId;if(goalId)url+='&goal_id='+goalId;if(status)url+='&status='+status;
-    const r=await api.get(url);
-    if(!r.length){$('sr-results').innerHTML='<div class="sr-empty">No results'+(q?' for "'+esc(q)+'"':'')+'</div>';srIdx=-1;return}
-    $('sr-results').innerHTML=r.map((t,i)=>{
+    // Unified search: tasks + notes/goals/comments/inbox
+    const hasFilters=areaId||goalId||status;
+    let taskResults=[];let globalResults=[];
+    if(hasFilters||q){let url='/api/tasks/search?q='+encodeURIComponent(q);
+      if(areaId)url+='&area_id='+areaId;if(goalId)url+='&goal_id='+goalId;if(status)url+='&status='+status;
+      taskResults=await api.get(url)}
+    if(q&&!hasFilters){try{const gs=await api.get('/api/search?q='+encodeURIComponent(q));
+      globalResults=(gs.results||[]).filter(r=>r.type!=='task')}catch{}}
+    if(!taskResults.length&&!globalResults.length){$('sr-results').innerHTML='<div class="sr-empty">No results'+(q?' for "'+esc(q)+'"':'')+'</div>';srIdx=-1;return}
+    let html='';
+    if(globalResults.length){
+      const typeIcons={note:'note',goal:'flag',comment:'comment',inbox:'inbox'};
+      html+='<div class="cp-mode-label"><span class="material-icons-round">search</span>Other Results</div>';
+      html+=globalResults.slice(0,5).map(r=>`<div class="sr-item sr-global" data-type="${r.type}" data-id="${r.source_id}">
+        <span class="material-icons-round cp-icon">${typeIcons[r.type]||'article'}</span>
+        <div><div class="sr-ti">${r.title||r.snippet||'Untitled'}</div>
+        <div class="sr-mt">${r.type}${r.context?' · '+esc(r.context):''}</div></div></div>`).join('')}
+    if(taskResults.length){if(globalResults.length)html+='<div class="cp-mode-label"><span class="material-icons-round">task_alt</span>Tasks</div>';
+    const r=taskResults;
+    html+=r.map((t,i)=>{
       const od=isOD(t.due_date)&&t.status!=='done';
       return`<div class="sr-item ${i===srIdx?'sel':''}" data-id="${t.id}">
         <div class="tk" style="width:14px;height:14px;border-width:1.5px;${t.status==='done'?'background:var(--ok);border-color:var(--ok)':''}"><span class="material-icons-round" style="font-size:9px;${t.status==='done'?'display:block':'display:none'}">check</span></div>
@@ -2418,7 +2436,14 @@ function runSearch(){
         <div class="sr-mt">${esc(t.area_icon||'')} ${esc(t.area_name||'')} › ${esc(t.goal_title||'')}${t.due_date?' · '+(od?'<span style="color:var(--err)">':'')+fmtDue(t.due_date)+(od?'</span>':''):''}</div>
       </div>`}).join('');
     srIdx=-1;
-    $('sr-results').querySelectorAll('.sr-item').forEach(it=>it.addEventListener('click',()=>{closeSearch();openDP(Number(it.dataset.id))}));
+    }
+    $('sr-results').innerHTML=html;
+    $('sr-results').querySelectorAll('.sr-item:not(.sr-global)').forEach(it=>it.addEventListener('click',()=>{closeSearch();openDP(Number(it.dataset.id))}));
+    $('sr-results').querySelectorAll('.sr-global').forEach(it=>it.addEventListener('click',()=>{
+      const type=it.dataset.type;closeSearch();
+      if(type==='note')go('notes');else if(type==='goal'&&activeAreaId)go('area');
+      else if(type==='inbox')go('inbox');else go('all');
+    }));
   },200);
 }
 $('sr-inp').addEventListener('input',runSearch);
@@ -3753,7 +3778,8 @@ async function renderRules(){
   const c=$('ct');const rules=await api.get('/api/rules');
   let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
     <span style="font-size:13px;color:var(--txd)">${rules.length} rule${rules.length!==1?'s':''}</span>
-    <button id="new-rule-btn" style="padding:4px 12px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:12px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:3px">add</span>New Rule</button></div>`;
+    <button id="new-rule-btn" style="padding:4px 12px;background:var(--brand);color:#fff;border:none;borde — e.g. auto-add overdue tasks to My Day',
+    `<button class="btn-s" onclick="document.getElementById('new-rule-btn')?.click()"><span class="material-icons-round" style="font-size:14px">add</span>Create Rule</button>`-radius:var(--rs);cursor:pointer;font-size:12px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:3px">add</span>New Rule</button></div>`;
   if(!rules.length)h+=emptyS('auto_fix_high','No automation rules','Create rules to automate your workflow');
   const triggerLabels={task_completed:'When task completed',task_updated:'When task updated',overdue:'When task overdue'};
   const actionLabels={add_to_myday:'Add to My Day',set_priority:'Set priority',add_tag:'Add tag',create_followup:'Create follow-up task'};
