@@ -136,6 +136,30 @@ db.exec(`CREATE TABLE IF NOT EXISTS habit_logs (
   FOREIGN KEY (habit_id) REFERENCES habits(id) ON DELETE CASCADE
 )`);
 
+// ─── Time block columns (nullable HH:MM) ───
+try { db.exec('ALTER TABLE tasks ADD COLUMN time_block_start TEXT DEFAULT NULL'); } catch(e) {}
+try { db.exec('ALTER TABLE tasks ADD COLUMN time_block_end TEXT DEFAULT NULL'); } catch(e) {}
+
+// ─── Task Comments table ───
+db.exec(`CREATE TABLE IF NOT EXISTS task_comments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+)`);
+
+// ─── Goal Milestones table ───
+db.exec(`CREATE TABLE IF NOT EXISTS goal_milestones (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  goal_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  done INTEGER DEFAULT 0,
+  position INTEGER DEFAULT 0,
+  completed_at DATETIME,
+  FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
+)`);
+
 // Seed
 const cnt = db.prepare('SELECT COUNT(*) as c FROM life_areas').get();
 if (cnt.c === 0) {
@@ -419,11 +443,11 @@ app.get('/api/tasks/calendar', (req, res) => {
 app.post('/api/goals/:goalId/tasks', (req, res) => {
   const goalId = Number(req.params.goalId);
   if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'Invalid ID' });
-  const { title, note, priority, due_date, due_time, recurring, assigned_to, my_day, tagIds } = req.body;
+  const { title, note, priority, due_date, due_time, recurring, assigned_to, my_day, tagIds, time_block_start, time_block_end } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
   const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM tasks WHERE goal_id=?').get(goalId);
-  const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position) VALUES (?,?,?,?,?,?,?,?,?,?)').run(
-    goalId,title.trim(),note||'',priority||0,due_date||null,due_time||null,recurring||null,assigned_to||'',my_day?1:0,mp.p
+  const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,time_block_start,time_block_end) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run(
+    goalId,title.trim(),note||'',priority||0,due_date||null,due_time||null,recurring||null,assigned_to||'',my_day?1:0,mp.p,time_block_start||null,time_block_end||null
   );
   const taskId = r.lastInsertRowid;
   if (Array.isArray(tagIds)) {
@@ -522,16 +546,18 @@ app.put('/api/tasks/:id', (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const ex = db.prepare('SELECT * FROM tasks WHERE id=?').get(id);
   if (!ex) return res.status(404).json({ error: 'Not found' });
-  const { title, note, status, priority, due_date, due_time, recurring, assigned_to, my_day, position, goal_id } = req.body;
+  const { title, note, status, priority, due_date, due_time, recurring, assigned_to, my_day, position, goal_id, time_block_start, time_block_end } = req.body;
   const completedAt = status==='done' && ex.status!=='done' ? new Date().toISOString() : (status && status!=='done' ? null : ex.completed_at);
   db.prepare(`UPDATE tasks SET title=COALESCE(?,title),note=COALESCE(?,note),status=COALESCE(?,status),
     priority=COALESCE(?,priority),due_date=?,due_time=?,recurring=?,assigned_to=COALESCE(?,assigned_to),
-    my_day=COALESCE(?,my_day),position=COALESCE(?,position),goal_id=COALESCE(?,goal_id),completed_at=? WHERE id=?`).run(
+    my_day=COALESCE(?,my_day),position=COALESCE(?,position),goal_id=COALESCE(?,goal_id),completed_at=?,
+    time_block_start=?,time_block_end=? WHERE id=?`).run(
     title||null, note!==undefined?note:null, status||null, priority!==undefined?priority:null,
     due_date!==undefined?due_date:ex.due_date, due_time!==undefined?due_time:ex.due_time,
     recurring!==undefined?recurring:ex.recurring,
     assigned_to!==undefined?assigned_to:null, my_day!==undefined?(my_day?1:0):null,
-    position!==undefined?position:null, goal_id||null, completedAt, id
+    position!==undefined?position:null, goal_id||null, completedAt,
+    time_block_start!==undefined?time_block_start:ex.time_block_start, time_block_end!==undefined?time_block_end:ex.time_block_end, id
   );
   // Recurring: spawn next task when completed
   if (status === 'done' && ex.status !== 'done' && ex.recurring) {
@@ -1157,6 +1183,115 @@ app.get('/api/habits/:id/heatmap', (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const logs = db.prepare("SELECT date, count FROM habit_logs WHERE habit_id=? AND date >= date('now','-90 days') ORDER BY date").all(id);
   res.json(logs);
+});
+
+// ─── DAY PLANNER API ───
+app.get('/api/planner/:date', (req, res) => {
+  const date = req.params.date;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Invalid date format' });
+  // Get all tasks for this date: either due on this date OR time-blocked on this date
+  const tasks = db.prepare(`
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE (t.due_date=? OR (t.time_block_start IS NOT NULL AND t.due_date=?)) AND t.status!='done'
+    ORDER BY t.time_block_start, t.priority DESC
+  `).all(date, date);
+  // Unscheduled = tasks due today but without time blocks
+  const scheduled = tasks.filter(t => t.time_block_start);
+  const unscheduled = tasks.filter(t => !t.time_block_start);
+  res.json({ scheduled, unscheduled });
+});
+
+// ─── TASK COMMENTS API ───
+app.get('/api/tasks/:id/comments', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  res.json(db.prepare('SELECT * FROM task_comments WHERE task_id=? ORDER BY created_at ASC').all(id));
+});
+app.post('/api/tasks/:id/comments', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const { text } = req.body;
+  if (!text || !text.trim()) return res.status(400).json({ error: 'Text required' });
+  const r = db.prepare('INSERT INTO task_comments (task_id, text) VALUES (?,?)').run(id, text.trim());
+  res.status(201).json(db.prepare('SELECT * FROM task_comments WHERE id=?').get(r.lastInsertRowid));
+});
+app.delete('/api/tasks/:id/comments/:commentId', (req, res) => {
+  const id = Number(req.params.id);
+  const commentId = Number(req.params.commentId);
+  if (!Number.isInteger(id) || !Number.isInteger(commentId)) return res.status(400).json({ error: 'Invalid ID' });
+  db.prepare('DELETE FROM task_comments WHERE id=? AND task_id=?').run(commentId, id);
+  res.json({ ok: true });
+});
+
+// ─── GOAL MILESTONES API ───
+app.get('/api/goals/:id/milestones', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  res.json(db.prepare('SELECT * FROM goal_milestones WHERE goal_id=? ORDER BY position').all(id));
+});
+app.post('/api/goals/:id/milestones', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const { title } = req.body;
+  if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
+  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM goal_milestones WHERE goal_id=?').get(id);
+  const r = db.prepare('INSERT INTO goal_milestones (goal_id, title, position) VALUES (?,?,?)').run(id, title.trim(), mp.p);
+  res.status(201).json(db.prepare('SELECT * FROM goal_milestones WHERE id=?').get(r.lastInsertRowid));
+});
+app.put('/api/milestones/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const { title, done } = req.body;
+  const ex = db.prepare('SELECT * FROM goal_milestones WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Not found' });
+  const completedAt = done && !ex.done ? new Date().toISOString() : (done ? ex.completed_at : null);
+  db.prepare('UPDATE goal_milestones SET title=COALESCE(?,title), done=COALESCE(?,done), completed_at=? WHERE id=?').run(
+    title || null, done !== undefined ? (done ? 1 : 0) : null, completedAt, id
+  );
+  res.json(db.prepare('SELECT * FROM goal_milestones WHERE id=?').get(id));
+});
+app.delete('/api/milestones/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  db.prepare('DELETE FROM goal_milestones WHERE id=?').run(id);
+  res.json({ ok: true });
+});
+
+// ─── GOAL PROGRESS (enhanced) ───
+app.get('/api/goals/:id/progress', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const goal = db.prepare('SELECT * FROM goals WHERE id=?').get(id);
+  if (!goal) return res.status(404).json({ error: 'Not found' });
+  const tasks = db.prepare('SELECT status, completed_at FROM tasks WHERE goal_id=?').all(id);
+  const total = tasks.length;
+  const done = tasks.filter(t => t.status === 'done').length;
+  const milestones = db.prepare('SELECT * FROM goal_milestones WHERE goal_id=? ORDER BY position').all(id);
+  // Velocity: completions per week over last 4 weeks
+  const velocity = db.prepare(`
+    SELECT strftime('%Y-W%W', completed_at) as week, COUNT(*) as count
+    FROM tasks WHERE goal_id=? AND status='done' AND completed_at >= date('now','-28 days')
+    GROUP BY week ORDER BY week
+  `).all(id);
+  res.json({ goal, total, done, pct: total ? Math.round(done / total * 100) : 0, milestones, velocity });
+});
+
+// Productivity Trends (weekly completion counts for last 8 weeks)
+app.get('/api/stats/trends', (req, res) => {
+  const weeks = [];
+  const now = new Date();
+  for (let i = 7; i >= 0; i--) {
+    const end = new Date(now);
+    end.setDate(end.getDate() - i * 7);
+    const start = new Date(end);
+    start.setDate(start.getDate() - 7);
+    const startStr = start.toISOString().split('T')[0];
+    const endStr = end.toISOString().split('T')[0];
+    const row = db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE status='done' AND completed_at >= ? AND completed_at < ?`).get(startStr, endStr);
+    weeks.push({ week_start: startStr, week_end: endStr, completed: row.count });
+  }
+  res.json(weeks);
 });
 
 // SPA fallback

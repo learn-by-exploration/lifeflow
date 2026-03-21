@@ -102,6 +102,23 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .ni.active{background:var(--bg-c);color:var(--tx)}
 .ni .material-icons-round{font-size:18px}
 .ni .badge{margin-left:auto;font-size:11px;background:rgba(255,255,255,.07);padding:1px 7px;border-radius:10px;color:var(--txd)}
+.sb-toggle{cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none}
+.sb-arrow{font-size:16px;transition:transform .2s}
+.sb-sec{overflow:hidden;transition:max-height .25s ease}
+.sb-sec.collapsed{max-height:0!important;overflow:hidden}
+/* Quick Reschedule Dropdown */
+.snooze-dd{position:absolute;right:0;top:100%;z-index:50;background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--rs);box-shadow:var(--shd);padding:4px 0;min-width:140px;font-size:12px}
+.snooze-dd .snz-opt{padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.snooze-dd .snz-opt:hover{background:var(--bg-h)}
+/* My Day quick toggle */
+.myday-toggle{font-size:16px!important;cursor:pointer;opacity:.4;transition:opacity .12s}
+.myday-toggle:hover,.myday-toggle.active{opacity:1;color:#F59E0B}
+/* Trends chart */
+.trend-bar{display:flex;align-items:flex-end;gap:4px;height:80px;padding:8px 0}
+.trend-col{display:flex;flex-direction:column;align-items:center;flex:1;gap:2px}
+.trend-fill{width:100%;border-radius:3px 3px 0 0;min-height:2px;transition:height .3s}
+.trend-label{font-size:8px;color:var(--txd)}
+.trend-val{font-size:9px;font-weight:600}
 .al{flex:1;overflow-y:auto;padding:0 10px}
 .ai{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:var(--rs);cursor:pointer;font-size:13px;font-weight:500;color:var(--tx2);transition:all .12s;position:relative}
 .ai:hover{background:var(--bg-h);color:var(--tx)}
@@ -369,6 +386,35 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .fb-row label{font-size:11px;font-weight:600;color:var(--txd);min-width:60px}
 .fb-row select,.fb-row input{font-size:12px;padding:6px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-family:inherit}
 .fb-save-row{display:flex;gap:8px;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--brd)}
+/* Day Planner */
+.planner-wrap{display:flex;gap:16px;height:calc(100vh - 120px)}
+.planner-timeline{flex:1;overflow-y:auto;border:1px solid var(--brd);border-radius:var(--r);background:var(--bg-c)}
+.planner-sidebar{width:260px;overflow-y:auto}
+.planner-hour{display:flex;min-height:56px;border-bottom:1px solid var(--brd);position:relative}
+.planner-hour:hover{background:var(--bg-h)}
+.planner-hour-label{width:56px;flex-shrink:0;font-size:11px;font-weight:500;color:var(--txd);padding:4px 8px;border-right:1px solid var(--brd);text-align:right}
+.planner-hour-tasks{flex:1;padding:4px 8px;min-height:48px;display:flex;flex-direction:column;gap:2px}
+.planner-hour-tasks.dragover{background:var(--brand);opacity:.12}
+.planner-task{padding:6px 10px;border-radius:var(--rs);font-size:12px;cursor:grab;display:flex;align-items:center;gap:6px;border-left:3px solid var(--brand)}
+.planner-task .material-icons-round{font-size:14px}
+.planner-task.done{opacity:.5;text-decoration:line-through}
+.planner-unscheduled{padding:8px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--r)}
+.planner-unscheduled h4{font-size:12px;font-weight:600;color:var(--txd);margin:0 0 8px;text-transform:uppercase;letter-spacing:.5px}
+.planner-task-drag{opacity:.6}
+/* Task Comments */
+.dp-comment{display:flex;gap:8px;padding:8px 0;border-bottom:1px solid var(--brd);font-size:12px}
+.dp-comment:last-child{border-bottom:none}
+.dp-comment-time{font-size:10px;color:var(--txd);white-space:nowrap}
+.dp-comment-del{opacity:0;font-size:12px;cursor:pointer;color:var(--txd)}
+.dp-comment:hover .dp-comment-del{opacity:1}
+/* Goal Milestones */
+.ms-item{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px}
+.ms-item.done{text-decoration:line-through;opacity:.6}
+.ms-check{width:16px;height:16px;border-radius:50%;border:2px solid var(--txd);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ms-check.done{border-color:var(--ok);background:var(--ok)}
+.ms-check .material-icons-round{font-size:10px;color:#fff}
+.ms-del{opacity:0;font-size:12px;cursor:pointer;color:var(--txd);margin-left:auto}
+.ms-item:hover .ms-del{opacity:1}
 
 /* Dashboard */
 .ds-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:22px}
@@ -610,21 +656,32 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 <aside class="sb" id="sb">
   <div class="sb-brand"><div class="logo">L</div><h1>LifeFlow</h1></div>
   <div class="ns">
-    <div class="ns-label">Views</div>
+    <div class="ns-label">Core</div>
     <div class="ni active" data-view="myday"><span class="material-icons-round">wb_sunny</span>My Day<span class="badge" id="myday-badge">0</span></div>
     <div class="ni" data-view="all"><span class="material-icons-round">list</span>All Tasks</div>
     <div class="ni" data-view="board"><span class="material-icons-round">view_kanban</span>Board</div>
-    <div class="ni" data-view="calendar"><span class="material-icons-round">calendar_month</span>Calendar</div>
     <div class="ni" data-view="overdue"><span class="material-icons-round">warning</span>Overdue<span class="badge" id="overdue-badge">0</span></div>
     <div class="ni" data-view="dashboard"><span class="material-icons-round">dashboard</span>Dashboard</div>
+  </div>
+  <div class="ns sb-collapsible">
+    <div class="ns-label sb-toggle" data-sec="plan">Plan <span class="material-icons-round sb-arrow">expand_more</span></div>
+    <div class="sb-sec" id="sb-plan">
+    <div class="ni" data-view="calendar"><span class="material-icons-round">calendar_month</span>Calendar</div>
     <div class="ni" data-view="weekly"><span class="material-icons-round">view_week</span>Weekly Plan</div>
+    <div class="ni" data-view="planner"><span class="material-icons-round">schedule</span>Day Planner</div>
     <div class="ni" data-view="matrix"><span class="material-icons-round">grid_view</span>Matrix</div>
+    </div>
+  </div>
+  <div class="ns sb-collapsible">
+    <div class="ns-label sb-toggle" data-sec="manage">Manage <span class="material-icons-round sb-arrow">expand_more</span></div>
+    <div class="sb-sec" id="sb-manage">
     <div class="ni" data-view="logbook"><span class="material-icons-round">history</span>Activity Log</div>
     <div class="ni" data-view="tags"><span class="material-icons-round">label</span>Tag Manager</div>
     <div class="ni" data-view="templates"><span class="material-icons-round">content_copy</span>Templates</div>
     <div class="ni" data-view="habits"><span class="material-icons-round">repeat</span>Habits</div>
     <div class="ni" data-view="focushistory"><span class="material-icons-round">timer</span>Focus History</div>
     <div class="ni" data-view="settings"><span class="material-icons-round">settings</span>Settings</div>
+    </div>
   </div>
   <div class="ns" id="sf-section" style="display:none"><div class="ns-label">Saved Filters</div><div id="sf-list"></div></div>
   <div style="padding:8px 12px"><button class="ab" id="dr-btn" style="width:100%;background:var(--brand);color:#fff;border-color:var(--brand)"><span class="material-icons-round">self_improvement</span>Daily Review</button></div>
@@ -930,6 +987,20 @@ document.querySelectorAll('.ni').forEach(el=>el.addEventListener('click',()=>{
   document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));
   el.classList.add('active');closeMobileSb();render();
 }));
+// Collapsible sidebar sections
+document.querySelectorAll('.sb-toggle').forEach(tgl=>{
+  const sec=tgl.dataset.sec;
+  const el=document.getElementById('sb-'+sec);
+  const arrow=tgl.querySelector('.sb-arrow');
+  const key='lf-sb-'+sec;
+  if(localStorage.getItem(key)==='0'){el.classList.add('collapsed');arrow.style.transform='rotate(-90deg)'}
+  tgl.addEventListener('click',()=>{
+    const isOpen=!el.classList.contains('collapsed');
+    el.classList.toggle('collapsed');
+    arrow.style.transform=isOpen?'rotate(-90deg)':'';
+    localStorage.setItem(key,isOpen?'0':'1');
+  });
+});
 
 async function loadAreas(){areas=await api.get('/api/areas');renderAreas()}
 async function loadTags(){allTags=await api.get('/api/tags')}
@@ -988,6 +1059,7 @@ async function render(){
   else if(currentView==='templates')await renderTemplates();
   else if(currentView==='settings')await renderSettings();
   else if(currentView==='habits')await renderHabits();
+  else if(currentView==='planner')await renderPlanner();
   else if(currentView==='filter')await renderSavedFilter();
   else if(currentView==='area')await renderArea();
   else if(currentView==='goal')await renderGoal();
@@ -1008,6 +1080,7 @@ function updateBC(){
   else if(currentView==='tags'){pt.textContent='Tag Manager';bc.innerHTML=''}
   else if(currentView==='focushistory'){pt.textContent='Focus History';bc.innerHTML=''}
   else if(currentView==='templates'){pt.textContent='Templates';bc.innerHTML=''}
+  else if(currentView==='planner'){pt.textContent='Day Planner';bc.innerHTML=''}
   else if(currentView==='settings'){pt.textContent='Settings';bc.innerHTML=''}
   else if(currentView==='habits'){pt.textContent='Habits';bc.innerHTML=''}
   else if(currentView==='filter'){pt.textContent=activeFilterName||'Saved Filter';bc.innerHTML=''}
@@ -1104,6 +1177,9 @@ async function renderArea(){
   let h=`<div class="qa"><input type="text" id="gi" placeholder="Add a new goal..."><button id="gab"><span class="material-icons-round" style="font-size:15px">add</span>Add Goal</button></div>`;
   if(!goals.length){h+=emptyS('flag','No goals yet','What do you want to achieve?');c.innerHTML=h;attachGA();return}
   const ac=goals.filter(g=>g.status==='active'),co=goals.filter(g=>g.status==='completed'),ar=goals.filter(g=>g.status==='archived');
+  // Load milestones for all goals
+  const msMap={};
+  for(const g of goals){try{msMap[g.id]=await api.get('/api/goals/'+g.id+'/milestones')}catch(e){msMap[g.id]=[]}}
   if(ac.length){h+=`<div class="sl">Active Goals <span class="c">${ac.length}</span></div><div class="gg">`;
     ac.forEach(g=>{const pct=g.total_tasks?Math.round(g.done_tasks/g.total_tasks*100):0;
       h+=`<div class="gc" data-id="${g.id}" style="border-left-color:${escA(g.color)}">
@@ -1111,6 +1187,7 @@ async function renderArea(){
         <div class="gt">${esc(g.title)}</div>${g.description?`<div class="gd">${esc(g.description)}</div>`:''}
         <div class="gp"><div class="gpb" style="width:${pct}%;background:${escA(g.color)}"></div></div>
         <div class="gm"><span>${g.done_tasks}/${g.total_tasks} tasks</span><span>${pct}%</span>${g.due_date?`<span>📅 ${fmtDue(g.due_date)}</span>`:''}</div>
+        ${(msMap[g.id]||[]).length?`<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--brd)">${msMap[g.id].map(m=>`<div class="ms-item ${m.done?'done':''}" data-mid="${m.id}"><div class="ms-check ${m.done?'done':''}" data-mid="${m.id}"><span class="material-icons-round">${m.done?'check':''}</span></div><span>${esc(m.title)}</span><span class="material-icons-round ms-del" data-mid="${m.id}">close</span></div>`).join('')}<div style="margin-top:4px"><input type="text" class="ms-add-input" data-gid="${g.id}" placeholder="+ Add milestone..." style="border:none;background:none;font-size:11px;color:var(--txd);outline:none;padding:0;width:100%"></div></div>`:''}
       </div>`});h+=`</div>`}
   if(co.length){h+=`<div class="sl">Completed <span class="c">${co.length}</span></div><div class="gg">`;
     co.forEach(g=>h+=`<div class="gc" data-id="${g.id}" style="border-left-color:var(--ok);opacity:.6"><div class="ga"><button class="material-icons-round ag" data-id="${g.id}" title="Archive">archive</button></div><div class="gt" style="text-decoration:line-through">${esc(g.title)}</div><div class="gm"><span>${g.total_tasks} done</span></div></div>`);h+=`</div>`}
@@ -1120,7 +1197,21 @@ async function renderArea(){
       <div class="gt">${esc(g.title)}</div><div class="gm"><span>${g.total_tasks||0} tasks</span></div>
     </div>`);h+=`</div>`}
   c.innerHTML=h;attachGA();
-  c.querySelectorAll('.gc').forEach(card=>card.addEventListener('click',e=>{if(e.target.closest('.ga'))return;activeGoalId=Number(card.dataset.id);currentView='goal';render()}));
+  // Milestone events
+  c.querySelectorAll('.ms-check').forEach(el=>el.addEventListener('click',async e=>{
+    e.stopPropagation();const mid=Number(el.dataset.mid);
+    const isDone=el.classList.contains('done');
+    await api.put('/api/milestones/'+mid,{done:isDone?0:1});render();
+  }));
+  c.querySelectorAll('.ms-del').forEach(el=>el.addEventListener('click',async e=>{
+    e.stopPropagation();await api.del('/api/milestones/'+Number(el.dataset.mid));render();
+  }));
+  c.querySelectorAll('.ms-add-input').forEach(inp=>inp.addEventListener('keydown',async e=>{
+    if(e.key!=='Enter')return;e.stopPropagation();
+    const title=inp.value.trim();if(!title)return;
+    await api.post('/api/goals/'+inp.dataset.gid+'/milestones',{title});inp.value='';render();
+  }));
+  c.querySelectorAll('.gc').forEach(card=>card.addEventListener('click',e=>{if(e.target.closest('.ga')||e.target.closest('.ms-check')||e.target.closest('.ms-del')||e.target.closest('.ms-add-input'))return;activeGoalId=Number(card.dataset.id);currentView='goal';render()}));
   c.querySelectorAll('.eg').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();openGM(Number(b.dataset.id))}));
   c.querySelectorAll('.dg').forEach(b=>b.addEventListener('click',async e=>{
     e.stopPropagation();const gid=Number(b.dataset.id);
@@ -1258,7 +1349,7 @@ function tcHtml(t,ctx){
     <div class="ms-chk" data-id="${t.id}"></div>
     <div class="tk" data-id="${t.id}"><span class="material-icons-round">check</span></div>
     <div class="tb2"><div class="tt">${esc(t.title)}</div>${meta?`<div class="tm">${meta}</div>`:''}${stBar}${stList}</div>
-    <div class="ta"><button class="material-icons-round ft-start" data-id="${t.id}" title="Focus timer">timer</button><button class="material-icons-round et" data-id="${t.id}">edit</button><button class="material-icons-round dt" data-id="${t.id}">delete_outline</button></div>
+    <div class="ta" style="position:relative">${currentView!=='myday'?`<span class="material-icons-round myday-toggle ${t.my_day?'active':''}" data-id="${t.id}" title="${t.my_day?'Remove from My Day':'Add to My Day'}">${t.my_day?'wb_sunny':'light_mode'}</span>`:''}<button class="material-icons-round snz-btn" data-id="${t.id}" title="Reschedule">schedule</button><button class="material-icons-round ft-start" data-id="${t.id}" title="Focus timer">timer</button><button class="material-icons-round et" data-id="${t.id}">edit</button><button class="material-icons-round dt" data-id="${t.id}">delete_outline</button></div>
   </div>`;
 }
 
@@ -1300,6 +1391,44 @@ function attachTE(){
       await loadAreas();render();loadOverdueBadge();showToast('Task restored');
     } : null);
     await loadAreas();render();loadOverdueBadge();
+  }));
+  // My Day quick toggle
+  document.querySelectorAll('.myday-toggle').forEach(el=>el.addEventListener('click',async e=>{
+    e.stopPropagation();const id=Number(el.dataset.id);
+    const isActive=el.classList.contains('active');
+    await api.put('/api/tasks/'+id,{my_day:isActive?0:1});
+    showToast(isActive?'Removed from My Day':'Added to My Day');
+    await loadAreas();render();loadOverdueBadge();
+  }));
+  // Quick Reschedule (snooze)
+  document.querySelectorAll('.snz-btn').forEach(el=>el.addEventListener('click',e=>{
+    e.stopPropagation();
+    // Close any open snooze dropdown
+    document.querySelectorAll('.snooze-dd').forEach(d=>d.remove());
+    const ta=el.closest('.ta');
+    const dd=document.createElement('div');dd.className='snooze-dd';
+    const today=new Date();
+    const fmt=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dy=String(d.getDate()).padStart(2,'0');return y+'-'+m+'-'+dy};
+    const tom=new Date(today);tom.setDate(tom.getDate()+1);
+    const nextMon=new Date(today);nextMon.setDate(nextMon.getDate()+((8-nextMon.getDay())%7||7));
+    const nextWk=new Date(today);nextWk.setDate(nextWk.getDate()+7);
+    const opts=[
+      {label:'Today',icon:'wb_sunny',date:fmt(today)},
+      {label:'Tomorrow',icon:'skip_next',date:fmt(tom)},
+      {label:'Next Monday',icon:'event',date:fmt(nextMon)},
+      {label:'Next Week',icon:'date_range',date:fmt(nextWk)},
+      {label:'No Date',icon:'block',date:null}
+    ];
+    dd.innerHTML=opts.map(o=>`<div class="snz-opt" data-date="${o.date||''}"><span class="material-icons-round" style="font-size:14px">${o.icon}</span>${o.label}</div>`).join('');
+    ta.appendChild(dd);
+    dd.querySelectorAll('.snz-opt').forEach(opt=>opt.addEventListener('click',async ev=>{
+      ev.stopPropagation();const id=Number(el.dataset.id);
+      const date=opt.dataset.date||null;
+      await api.put('/api/tasks/'+id,{due_date:date});
+      dd.remove();showToast('Rescheduled');await loadAreas();render();loadOverdueBadge();
+    }));
+    // Close on outside click
+    setTimeout(()=>document.addEventListener('click',function closer(){dd.remove();document.removeEventListener('click',closer)},{once:false}),10);
   }));
   // Inline subtask circle checks
   document.querySelectorAll('.stk').forEach(el=>el.addEventListener('click',async e=>{
@@ -1588,13 +1717,17 @@ function renderDPBody(){
     <div><label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:10px"><input type="checkbox" id="dp-md" ${t.my_day?'checked':''} style="width:auto;margin:0">Add to My Day</label></div>
     <label>Tags</label><div class="tg-wrap" id="tg-wrap"><div class="tgi" id="tgi"></div></div>
     <label>Subtasks</label><div class="sta"><input type="text" id="st-input" placeholder="Add subtask..."><button id="st-add">Add</button></div><div class="stl" id="stl"></div>
-    <label>Dependencies</label><div id="dp-deps"></div>`;
+    <label>Dependencies</label><div id="dp-deps"></div>
+    <label>Comments</label><div class="sta"><input type="text" id="cmt-input" placeholder="Add a comment..."><button id="cmt-add">Post</button></div><div id="dp-comments"></div>`;
   $('dp-body').innerHTML=h;
   renderTagInput();
   renderSubtasks();
   renderDeps();
+  renderComments();
   $('st-add').addEventListener('click',addSubtask);
   $('st-input').addEventListener('keydown',e=>{if(e.key==='Enter')addSubtask()});
+  $('cmt-add').addEventListener('click',addComment);
+  $('cmt-input').addEventListener('keydown',e=>{if(e.key==='Enter')addComment()});
   // Custom recurring toggle + preview
   $('dp-rec').addEventListener('change',()=>{
     const v=$('dp-rec').value;
@@ -1608,6 +1741,27 @@ function renderDPBody(){
   function updateNotePrev(){const v=noteEl.value.trim();if(v){prevEl.innerHTML=renderMd(v);prevEl.style.display='block'}else{prevEl.style.display='none'}}
   noteEl.addEventListener('blur',updateNotePrev);
   if(t.note)updateNotePrev();
+}
+async function renderComments(){
+  const el=$('dp-comments');if(!el||!dpTask)return;
+  try{
+    const comments=await api.get('/api/tasks/'+dpTask.id+'/comments');
+    if(!comments.length){el.innerHTML='<div style="font-size:11px;color:var(--txd);padding:4px 0">No comments yet</div>';return}
+    el.innerHTML=comments.map(c=>{
+      const d=new Date(c.created_at);
+      const when=d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+      return `<div class="dp-comment"><div style="flex:1">${esc(c.text)}</div><span class="dp-comment-time">${when}</span><span class="material-icons-round dp-comment-del" data-cid="${c.id}">close</span></div>`;
+    }).join('');
+    el.querySelectorAll('.dp-comment-del').forEach(b=>b.addEventListener('click',async()=>{
+      await api.del('/api/tasks/'+dpTask.id+'/comments/'+b.dataset.cid);renderComments();
+    }));
+  }catch(e){el.innerHTML=''}
+}
+async function addComment(){
+  const inp=$('cmt-input');if(!inp)return;
+  const text=inp.value.trim();if(!text||!dpTask)return;
+  await api.post('/api/tasks/'+dpTask.id+'/comments',{text});
+  inp.value='';renderComments();
 }
 function renderTagInput(){
   const wrap=$('tgi');
@@ -2132,7 +2286,7 @@ async function renderOverdue(){
 
 // ─── DASHBOARD ───
 async function renderDashboard(){
-  const [s,streakData]=await Promise.all([api.get('/api/stats'),api.get('/api/stats/streaks')]);
+  const [s,streakData,trends]=await Promise.all([api.get('/api/stats'),api.get('/api/stats/streaks'),api.get('/api/stats/trends')]);
   const c=$('ct');
   const pct=s.total?Math.round(s.done/s.total*100):0;
   let h=`<div class="streak-cards">
@@ -2148,6 +2302,19 @@ async function renderDashboard(){
     <div class="ds-card clickable" data-go="myday"><div class="ds-num" style="color:var(--warn)">${s.dueToday}</div><div class="ds-label">Due Today</div></div>
     <div class="ds-card"><div class="ds-num" style="color:var(--brand)">${pct}%</div><div class="ds-label">Completion Rate</div></div>
   </div>`;
+  // Productivity Trends chart
+  if(trends&&trends.length){
+    const maxT=Math.max(...trends.map(t=>t.completed),1);
+    h+=`<div class="sl" style="margin-top:18px">Productivity Trends<span class="c">Last 8 weeks</span></div>`;
+    h+=`<div class="trend-bar">`;
+    trends.forEach(t=>{
+      const pct=Math.round(t.completed/maxT*100);
+      const wk=new Date(t.week_start);
+      const label=(wk.getMonth()+1)+'/'+wk.getDate();
+      h+=`<div class="trend-col"><div class="trend-fill" style="height:${pct}%"></div><div class="trend-label">${label}</div><div class="trend-val">${t.completed}</div></div>`;
+    });
+    h+=`</div>`;
+  }
   h+=`<div class="hm-wrap"><div class="sl">Activity Heatmap<span class="c">365 days</span></div>`;
   h+=buildHeatmap(streakData.heatmap);
   h+=`</div>`;
@@ -2853,6 +3020,98 @@ async function renderSavedFilter(){
     p._icon=$('fb-icon').value||'🔍';
     return p;
   }
+}
+
+// ─── DAY PLANNER VIEW ───
+let plannerDate = new Date().toISOString().slice(0,10);
+async function renderPlanner(){
+  const mc=$('mc');
+  const d=new Date(plannerDate+'T00:00:00');
+  const dayLabel=d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  const isToday=plannerDate===new Date().toISOString().slice(0,10);
+  let data={scheduled:[],unscheduled:[]};
+  try{data=await api.get('/api/planner/'+plannerDate)}catch(e){}
+  // Also get my-day tasks without time blocks for the unscheduled pool
+  let myDayTasks=[];
+  try{myDayTasks=(await api.get('/api/tasks/my-day')).filter(t=>!t.time_block_start&&t.status!=='done')}catch(e){}
+  const allUnscheduled=[...data.unscheduled,...myDayTasks.filter(t=>!data.unscheduled.find(u=>u.id===t.id))];
+
+  let h=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="material-icons-round btn-c" id="pl-prev" style="padding:4px">chevron_left</button>
+      <h2 style="margin:0;font-size:16px">${dayLabel}</h2>
+      <button class="material-icons-round btn-c" id="pl-next" style="padding:4px">chevron_right</button>
+      ${!isToday?'<button class="btn-c" id="pl-today" style="font-size:11px;padding:4px 10px">Today</button>':''}
+    </div>
+  </div>`;
+  h+=`<div class="planner-wrap">`;
+  // Timeline
+  h+=`<div class="planner-timeline">`;
+  for(let hr=6;hr<=22;hr++){
+    const label=hr===0?'12 AM':hr<12?(hr+' AM'):hr===12?'12 PM':((hr-12)+' PM');
+    const hKey=String(hr).padStart(2,'0');
+    const slotTasks=data.scheduled.filter(t=>{
+      if(!t.time_block_start)return false;
+      const sh=parseInt(t.time_block_start.split(':')[0]);
+      return sh===hr;
+    });
+    h+=`<div class="planner-hour" data-hour="${hKey}">
+      <div class="planner-hour-label">${label}</div>
+      <div class="planner-hour-tasks" data-hour="${hKey}">`;
+    slotTasks.forEach(t=>{
+      h+=`<div class="planner-task ${t.status==='done'?'done':''}" draggable="true" data-id="${t.id}" style="border-left-color:${escA(t.goal_color||'var(--brand)')};background:${escA(t.goal_color||'var(--brand)')}15">
+        <span style="flex:1">${esc(t.title)}</span>
+        <span style="font-size:10px;color:var(--txd)">${t.time_block_start}${t.time_block_end?'–'+t.time_block_end:''}</span>
+        <span class="material-icons-round" style="font-size:12px;cursor:pointer;color:var(--txd)" data-unblock="${t.id}" title="Remove time block">close</span>
+      </div>`;
+    });
+    h+=`</div></div>`;
+  }
+  h+=`</div>`;
+  // Sidebar: unscheduled tasks
+  h+=`<div class="planner-sidebar"><div class="planner-unscheduled"><h4>Unscheduled (${allUnscheduled.length})</h4>`;
+  if(!allUnscheduled.length)h+=`<div style="text-align:center;padding:12px;color:var(--txd);font-size:12px">No tasks for this day</div>`;
+  allUnscheduled.forEach(t=>{
+    h+=`<div class="planner-task" draggable="true" data-id="${t.id}" style="border-left-color:${escA(t.goal_color||'var(--brand)')};background:${escA(t.goal_color||'var(--brand)')}15;margin-bottom:4px">
+      <span style="flex:1">${esc(t.title)}</span>
+    </div>`;
+  });
+  h+=`</div></div>`;
+  h+=`</div>`;
+  mc.innerHTML=h;
+
+  // Nav events
+  $('pl-prev')?.addEventListener('click',()=>{const nd=new Date(plannerDate+'T00:00:00');nd.setDate(nd.getDate()-1);plannerDate=nd.toISOString().slice(0,10);render()});
+  $('pl-next')?.addEventListener('click',()=>{const nd=new Date(plannerDate+'T00:00:00');nd.setDate(nd.getDate()+1);plannerDate=nd.toISOString().slice(0,10);render()});
+  $('pl-today')?.addEventListener('click',()=>{plannerDate=new Date().toISOString().slice(0,10);render()});
+
+  // Drag & drop: tasks to time slots
+  mc.querySelectorAll('.planner-task[draggable]').forEach(el=>{
+    el.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',el.dataset.id);el.classList.add('planner-task-drag')});
+    el.addEventListener('dragend',()=>el.classList.remove('planner-task-drag'));
+  });
+  mc.querySelectorAll('.planner-hour-tasks').forEach(slot=>{
+    slot.addEventListener('dragover',e=>{e.preventDefault();slot.classList.add('dragover')});
+    slot.addEventListener('dragleave',()=>slot.classList.remove('dragover'));
+    slot.addEventListener('drop',async e=>{
+      e.preventDefault();slot.classList.remove('dragover');
+      const taskId=Number(e.dataTransfer.getData('text/plain'));if(!taskId)return;
+      const hour=slot.dataset.hour;
+      const endHr=String(Number(hour)+1).padStart(2,'0');
+      await api.put('/api/tasks/'+taskId,{due_date:plannerDate,time_block_start:hour+':00',time_block_end:endHr+':00'});
+      renderPlanner();
+    });
+  });
+  // Click to open task detail
+  mc.querySelectorAll('.planner-task[data-id]').forEach(el=>{
+    el.addEventListener('click',e=>{if(e.target.closest('[data-unblock]'))return;openDP(Number(el.dataset.id))});
+  });
+  // Remove time block
+  mc.querySelectorAll('[data-unblock]').forEach(el=>el.addEventListener('click',async e=>{
+    e.stopPropagation();
+    await api.put('/api/tasks/'+Number(el.dataset.unblock),{time_block_start:null,time_block_end:null});
+    renderPlanner();
+  }));
 }
 
 // ─── DAILY REVIEW ───
