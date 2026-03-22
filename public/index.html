@@ -128,7 +128,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .inbox-actions button{background:none;border:none;cursor:pointer;padding:2px;border-radius:4px;color:var(--tx2)}
 .inbox-actions button:hover{background:var(--bg-h);color:var(--brand)}
 .triage-modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:999}
-.triage-box{background:var(--bg);border-radius:var(--rl);padding:20px;width:360px;max-width:90vw;box-shadow:var(--shadow2)}
+.triage-box{background:var(--bg);border-radius:var(--r);padding:20px;width:360px;max-width:90vw;box-shadow:var(--shd)}
 .triage-box select,.triage-box input{width:100%;padding:8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);margin-bottom:10px;font-size:13px}
 /* Notes */
 .note-card{padding:12px 14px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin-bottom:8px;cursor:pointer;transition:background .12s}
@@ -149,7 +149,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 /* Time Analytics */
 .ta-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
 @media(max-width:700px){.ta-grid{grid-template-columns:1fr}}
-.ta-card{background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rl);padding:14px}
+.ta-card{background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--r);padding:14px}
 .ta-card h4{margin:0 0 10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:4px}
 .ta-bar-h{display:flex;align-items:flex-end;gap:3px;height:100px}
 .ta-bar-v{width:100%;border-radius:3px 3px 0 0;min-height:2px;transition:height .3s}
@@ -164,7 +164,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .rule-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s}
 .rule-toggle.on::after{transform:translateX(16px)}
 /* Undo toast */
-.undo-toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 18px;border-radius:var(--rl);font-size:13px;display:flex;align-items:center;gap:10px;z-index:1001;box-shadow:0 4px 12px rgba(0,0,0,.3);animation:slideUp .3s}
+.undo-toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 18px;border-radius:var(--r);font-size:13px;display:flex;align-items:center;gap:10px;z-index:1001;box-shadow:0 4px 12px rgba(0,0,0,.3);animation:slideUp .3s}
 .undo-toast button{background:var(--brand);color:#fff;border:none;padding:4px 12px;border-radius:var(--rs);cursor:pointer;font-size:12px;font-weight:600}
 @keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .al{flex:1;overflow-y:auto;padding:0 10px}
@@ -428,7 +428,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .habit-week .hw-day.today{box-shadow:0 0 0 1px var(--brand)}
 
 /* Saved filters sidebar */
-.sf-item{display:flex;align-items:center;gap:8px;padding:6px 16px;cursor:pointer;font-size:12px;color:var(--txp);border-radius:var(--rs);margin:0 8px}
+.sf-item{display:flex;align-items:center;gap:8px;padding:6px 16px;cursor:pointer;font-size:12px;color:var(--tx2);border-radius:var(--rs);margin:0 8px}
 .sf-item:hover,.sf-item.active{background:var(--bg-h)}
 .sf-item .sf-icon{font-size:14px}
 .sf-item .sf-del{margin-left:auto;opacity:0;font-size:12px;color:var(--txd);cursor:pointer}
@@ -851,9 +851,9 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
   <div class="sr-box">
     <div style="position:relative"><span class="material-icons-round sr-icon">search</span><input class="sr-inp" id="sr-inp" placeholder="Search tasks, notes, subtasks..." autocomplete="off"></div>
     <div style="display:flex;gap:6px;margin:6px 0 2px;flex-wrap:wrap">
-      <select id="sr-area" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--txp);border-radius:var(--rs)"><option value="">All Areas</option></select>
-      <select id="sr-goal" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--txp);border-radius:var(--rs)"><option value="">All Goals</option></select>
-      <select id="sr-status" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--txp);border-radius:var(--rs)"><option value="">Any Status</option><option value="todo">To Do</option><option value="done">Done</option></select>
+      <select id="sr-area" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx2);border-radius:var(--rs)"><option value="">All Areas</option></select>
+      <select id="sr-goal" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx2);border-radius:var(--rs)"><option value="">All Goals</option></select>
+      <select id="sr-status" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx2);border-radius:var(--rs)"><option value="">Any Status</option><option value="todo">To Do</option><option value="done">Done</option></select>
     </div>
     <div class="sr-results" id="sr-results"></div>
     <div class="sr-hint"><span>↑↓ Navigate · Enter Select · Esc Close</span><span>Type &gt; for commands</span></div>
