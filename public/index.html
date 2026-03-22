@@ -2184,7 +2184,6 @@ $('dp-save').addEventListener('click',async()=>{
 $('add-area-btn').addEventListener('click',()=>{editingId=null;$('am-t').textContent='New Life Area';$('am-name').value='';$('am-icon').value='📋';$('am-color').value='#2563EB';buildSwatches('am-sw','am-color','#2563EB');$('am').classList.add('active');$('am-name').focus()});
 $('am-cancel').addEventListener('click',()=>$('am').classList.remove('active'));
 $('am-save').addEventListener('click',async()=>{const n=$('am-name').value.trim();if(!n)return;await api.post('/api/areas',{name:n,icon:$('am-icon').value||'📋',color:$('am-color').value});$('am').classList.remove('active');await loadAreas();render()});
-,actions){let h=`<div class="empty"><span class="material-icons-round">${i}</span><p>${t}</p><p style="font-size:11px">${s}</p>`;if(actions)h+=`<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${actions}</div>`;h+=`</div>`;return h
 
 function openGM(id){
   if(id){editingId=id;const g=goals.find(x=>x.id===id);if(!g)return;$('gm-t').textContent='Edit Goal';$('gm-title').value=g.title;$('gm-desc').value=g.description||'';$('gm-due').value=g.due_date||'';$('gm-color').value=g.color||'#6C63FF';buildSwatches('gm-sw','gm-color',g.color||'#6C63FF');}
@@ -2227,6 +2226,7 @@ function initThemes(){
   const saved=localStorage.getItem('lf-theme')||'midnight';
   document.documentElement.setAttribute('data-theme',saved);
   const tp=$('tp');
+  if(!tp)return;
   tp.innerHTML=THEMES.map(t=>`<div class="tp-dot ${t.id===saved?'active':''}" data-t="${t.id}" title="${t.label}" style="background:${t.dot}${t.id==='light'?';border:1px solid #CBD5E1':''}"></div>`).join('');
   tp.querySelectorAll('.tp-dot').forEach(d=>d.addEventListener('click',()=>{
     const tid=d.dataset.t;localStorage.setItem('lf-theme',tid);
