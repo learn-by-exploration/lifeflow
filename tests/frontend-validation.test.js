@@ -393,6 +393,11 @@ describe('Inline Handlers & Function References', () => {
     while ((match = constRegex.exec(scriptContent)) !== null) {
       definedFns.add(match[1]);
     }
+    // Also capture window.X = function assignments
+    const windowRegex = /window\.([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/g;
+    while ((match = windowRegex.exec(scriptContent)) !== null) {
+      definedFns.add(match[1]);
+    }
 
     // Built-in & DOM methods that are valid onclick targets
     const builtins = new Set([

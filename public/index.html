@@ -523,6 +523,57 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .onb-btn-skip:hover{background:var(--bg-c);color:var(--tx)}
 @keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 
+/* Help Page */
+.help-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:16px}
+.help-card{background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--r);padding:20px;transition:all .2s;cursor:default}
+.help-card:hover{border-color:var(--brand);transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.help-card .hc-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;font-size:22px}
+.help-card .hc-icon .material-icons-round{font-size:22px;color:inherit}
+.help-card h3{font-size:14px;font-weight:600;color:var(--tx);margin-bottom:6px}
+.help-card p{font-size:12px;color:var(--tx2);line-height:1.5}
+.help-card .hc-tip{margin-top:10px;padding:6px 10px;background:var(--bg-c);border-radius:var(--rs);font-size:11px;color:var(--txd);display:flex;align-items:center;gap:6px}
+.help-card .hc-tip .material-icons-round{font-size:14px;color:var(--brand)}
+.help-section{margin-top:28px}
+.help-section h2{font-size:16px;font-weight:600;color:var(--tx);margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.help-section h2 .material-icons-round{font-size:20px;color:var(--brand)}
+.help-section p.help-desc{font-size:12px;color:var(--tx2);margin-bottom:12px}
+.help-shortcuts{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.help-sc-row{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--bg-s);border-radius:var(--rs);font-size:12px;color:var(--tx)}
+.help-sc-row .help-key{background:var(--bg-c);border:1px solid var(--brd);border-radius:4px;padding:2px 8px;font-size:11px;font-family:'SF Mono',Consolas,monospace;color:var(--tx2)}
+.help-getting-started{display:flex;flex-direction:column;gap:12px}
+.help-step{display:flex;gap:14px;align-items:flex-start;padding:14px;background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--r);transition:border-color .2s}
+.help-step:hover{border-color:var(--brand)}
+.help-step-num{width:32px;height:32px;border-radius:50%;background:var(--brand);color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0}
+.help-step-body h4{font-size:13px;font-weight:600;color:var(--tx);margin-bottom:3px}
+.help-step-body p{font-size:12px;color:var(--tx2);line-height:1.5}
+.help-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.help-actions button{padding:8px 16px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:12px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s}
+.help-actions button:hover{border-color:var(--brand);color:var(--brand)}
+.help-actions button .material-icons-round{font-size:16px}
+.help-actions button.primary{background:var(--brand);color:white;border-color:var(--brand)}
+.help-actions button.primary:hover{background:var(--brand-h)}
+
+/* Interactive Tour */
+.tour-ov{position:fixed;inset:0;z-index:400;pointer-events:none;display:none}
+.tour-ov.active{display:block}
+.tour-backdrop{position:fixed;inset:0;pointer-events:auto}
+.tour-spotlight{position:absolute;border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,.7);z-index:401;pointer-events:none;transition:all .4s ease}
+.tour-tooltip{position:absolute;z-index:402;background:var(--bg-s);border:1px solid var(--brand);border-radius:var(--r);padding:20px;max-width:320px;width:90vw;box-shadow:0 8px 32px rgba(0,0,0,.3);pointer-events:auto;animation:slideUp .3s ease-out}
+.tour-tooltip h3{font-size:15px;font-weight:600;color:var(--tx);margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.tour-tooltip h3 .material-icons-round{font-size:18px;color:var(--brand)}
+.tour-tooltip p{font-size:12px;color:var(--tx2);line-height:1.6;margin-bottom:14px}
+.tour-tooltip .tour-dots{display:flex;gap:6px;margin-bottom:14px}
+.tour-tooltip .tour-dot{width:8px;height:8px;border-radius:50%;background:var(--brd)}
+.tour-tooltip .tour-dot.active{background:var(--brand)}
+.tour-tooltip .tour-btns{display:flex;gap:8px;justify-content:flex-end}
+.tour-tooltip .tour-btns button{padding:7px 16px;border-radius:var(--rs);border:none;font-size:12px;font-family:inherit;cursor:pointer;transition:all .15s}
+.tour-tooltip .tour-btns .tour-skip{background:transparent;border:1px solid var(--brd);color:var(--tx2)}
+.tour-tooltip .tour-btns .tour-skip:hover{background:var(--bg-c);color:var(--tx)}
+.tour-tooltip .tour-btns .tour-next{background:var(--brand);color:white}
+.tour-tooltip .tour-btns .tour-next:hover{background:var(--brand-h)}
+.tour-progress{height:3px;background:var(--brd);border-radius:2px;margin-bottom:14px;overflow:hidden}
+.tour-progress-bar{height:100%;background:var(--brand);border-radius:2px;transition:width .3s}
+
 /* Activity Log */
 .al-day{margin-bottom:18px}
 .al-dh{font-size:12px;font-weight:600;color:var(--txd);margin-bottom:6px;display:flex;align-items:center;gap:8px}
@@ -796,12 +847,13 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <div id="sf-list"></div>
     </div>
   </div>
-  <!-- Bottom bar: Settings + Reports icons -->
+  <!-- Bottom bar: Settings + Reports + Help icons -->
   <div class="sb-bot">
     <input type="file" id="import-file" accept=".json" style="display:none">
     <div class="sb-bot-icons">
       <button class="ab sb-bot-icon" id="sb-settings-btn" title="Settings"><span class="material-icons-round">settings</span>Settings</button>
       <button class="ab sb-bot-icon" id="sb-reports-btn" title="Reports"><span class="material-icons-round">assessment</span>Reports</button>
+      <button class="ab sb-bot-icon" id="sb-help-btn" title="Help & Guide"><span class="material-icons-round">help_outline</span>Help</button>
     </div>
   </div>
 </aside>
@@ -920,6 +972,22 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
       <button class="ft-btn" id="ft-mode">Short Break</button>
       <button class="ft-btn primary" id="ft-toggle">Start</button>
       <button class="ft-btn danger" id="ft-stop">End Session</button>
+    </div>
+  </div>
+</div>
+
+<!-- Interactive Tour overlay -->
+<div class="tour-ov" id="tour-ov">
+  <div class="tour-backdrop" id="tour-backdrop"></div>
+  <div class="tour-spotlight" id="tour-spotlight"></div>
+  <div class="tour-tooltip" id="tour-tooltip">
+    <div class="tour-progress"><div class="tour-progress-bar" id="tour-progress"></div></div>
+    <h3 id="tour-title"></h3>
+    <p id="tour-desc"></p>
+    <div class="tour-dots" id="tour-dots"></div>
+    <div class="tour-btns">
+      <button class="tour-skip" id="tour-skip">Skip Tour</button>
+      <button class="tour-next" id="tour-next">Next →</button>
     </div>
   </div>
 </div>
@@ -1185,7 +1253,7 @@ async function render(){
   $('vt').style.display=(currentView==='goal')?'flex':'none';
   hideMultiSelectBar();selectedIds.clear();msMode=false;document.body.classList.remove('ms-mode');
   // Persist last view
-  if(!['area','goal','filter','smartlist'].includes(currentView))localStorage.setItem('lf-lastView',currentView);
+  if(!['area','goal','filter','smartlist','help'].includes(currentView))localStorage.setItem('lf-lastView',currentView);
   if(currentView==='myday')await renderMyDay();
   else if(currentView==='all')await renderAll();
   else if(currentView==='board')await renderGlobalBoard();
@@ -1207,6 +1275,7 @@ async function render(){
   else if(currentView==='timeanalytics')await renderTimeAnalytics();
   else if(currentView==='rules')await renderRules();
   else if(currentView==='reports')await renderReports();
+  else if(currentView==='help')renderHelp();
   else if(currentView==='smartlist')await renderSmartList();
   else if(currentView==='filter')await renderSavedFilter();
   else if(currentView==='area')await renderArea();
@@ -1237,6 +1306,7 @@ function updateBC(){
   else if(currentView==='timeanalytics'){pt.textContent='Time Analytics';bc.innerHTML=''}
   else if(currentView==='rules'){pt.textContent='Automations';bc.innerHTML=''}
   else if(currentView==='reports'){pt.textContent='Reports';bc.innerHTML=''}
+  else if(currentView==='help'){pt.textContent='Help & Guide';bc.innerHTML=''}
   else if(currentView==='smartlist'){
     const names={stale:'Stale Tasks',quickwins:'Quick Wins',blocked:'Blocked'};
     pt.textContent=names[activeSmartFilter]||'Smart List';bc.innerHTML='';
@@ -2394,8 +2464,89 @@ if('Notification' in window&&Notification.permission==='granted'){
       ov.classList.remove('active');
       await loadAreas();render();
       showToast('🎉 Welcome to LifeFlow! Your first task is ready.');
+      // Start interactive tour after a brief pause
+      setTimeout(()=>{if(!localStorage.getItem('lf-tour-done'))startTour()},800);
     }catch(e){showToast('Failed to create task')}
   });
+})();
+
+// ─── INTERACTIVE TOUR ───
+(function initTour(){
+  const ov=$('tour-ov'),backdrop=$('tour-backdrop'),spotlight=$('tour-spotlight'),tooltip=$('tour-tooltip');
+  const titleEl=$('tour-title'),descEl=$('tour-desc'),dotsEl=$('tour-dots'),progressEl=$('tour-progress'),nextBtn=$('tour-next'),skipBtn=$('tour-skip');
+  let step=0,steps=[];
+
+  const tourSteps=[
+    {sel:'.sb-brand',title:'LifeFlow',icon:'home',desc:'This is your home base. The sidebar gives you quick access to every view and feature in the app.',pos:'right'},
+    {sel:'.ni[data-view="myday"]',title:'Today View',icon:'wb_sunny',desc:'Your daily command center. See tasks due today and ones you\'ve added to "My Day". Start every morning here.',pos:'right'},
+    {sel:'.ni[data-view="inbox"]',title:'Inbox',icon:'inbox',desc:'Quick-capture tasks without organizing. Triage them later into the right life areas and goals.',pos:'right'},
+    {sel:'#add-area-btn',title:'Life Areas',icon:'category',desc:'Organize your life into areas like Work, Health, and Personal. Click the + icon to create your first area.',pos:'right'},
+    {sel:'.ni[data-view="board"]',title:'Board View',icon:'view_kanban',desc:'A Kanban-style board for visual task management. Drag tasks between columns to update status.',pos:'right'},
+    {sel:'#sr-inp',title:'Search & Commands',icon:'search',desc:'Press Ctrl+K to search tasks instantly. Type > for the command palette — switch themes, export data, and more.',pos:'bottom'},
+    {sel:'#sb-settings-btn',title:'Settings',icon:'settings',desc:'Customize LifeFlow — choose from 8 themes, set your default view, configure task behavior, and manage backups.',pos:'right'},
+    {sel:'#sb-reports-btn',title:'Reports',icon:'assessment',desc:'Track your productivity with dashboards, activity logs, focus stats, and habit streaks.',pos:'right'}
+  ];
+
+  function endTour(){
+    ov.classList.remove('active');
+    localStorage.setItem('lf-tour-done','true');
+    showToast('🎓 Tour complete! Press ? any time for keyboard shortcuts, or visit Help & Guide for more.');
+  }
+
+  function positionTooltip(rect,pos){
+    const tt=tooltip;const pad=12;
+    tt.style.left='';tt.style.right='';tt.style.top='';tt.style.bottom='';
+    if(pos==='right'){
+      tt.style.left=Math.min(rect.right+pad,window.innerWidth-340)+'px';
+      tt.style.top=Math.max(rect.top,8)+'px';
+    }else if(pos==='bottom'){
+      tt.style.left=Math.max(rect.left,8)+'px';
+      tt.style.top=(rect.bottom+pad)+'px';
+    }else if(pos==='left'){
+      tt.style.left=Math.max(rect.left-340,8)+'px';
+      tt.style.top=Math.max(rect.top,8)+'px';
+    }else{
+      tt.style.left=Math.max(rect.left,8)+'px';
+      tt.style.top=Math.max(rect.top-180,8)+'px';
+    }
+  }
+
+  function showStep(idx){
+    step=idx;
+    const s=steps[step];
+    const el=document.querySelector(s.sel);
+    if(!el){step++;if(step<steps.length)showStep(step);else endTour();return}
+    const rect=el.getBoundingClientRect();
+    const sp=spotlight;
+    sp.style.left=(rect.left-6)+'px';sp.style.top=(rect.top-6)+'px';
+    sp.style.width=(rect.width+12)+'px';sp.style.height=(rect.height+12)+'px';
+    titleEl.innerHTML=`<span class="material-icons-round">${s.icon}</span>${s.title}`;
+    descEl.textContent=s.desc;
+    progressEl.style.width=((step+1)/steps.length*100)+'%';
+    // Dots
+    dotsEl.innerHTML=steps.map((_,i)=>`<div class="tour-dot${i===step?' active':''}"></div>`).join('');
+    // Button text
+    nextBtn.textContent=step===steps.length-1?'Finish ✓':'Next →';
+    positionTooltip(rect,s.pos);
+    tooltip.style.animation='none';tooltip.offsetHeight;tooltip.style.animation='slideUp .3s ease-out';
+  }
+
+  window.startTour=function(){
+    // Build the active steps list (only elements that exist)
+    steps=tourSteps.filter(s=>document.querySelector(s.sel));
+    if(!steps.length){showToast('Nothing to tour — try expanding the sidebar');return}
+    // Ensure sidebar is visible on mobile
+    const sb=$('sb');if(sb&&!sb.classList.contains('open')&&window.innerWidth<768)sb.classList.add('open');
+    step=0;
+    ov.classList.add('active');
+    showStep(0);
+  };
+
+  nextBtn.addEventListener('click',()=>{
+    if(step<steps.length-1){showStep(step+1)}else{endTour()}
+  });
+  skipBtn.addEventListener('click',endTour);
+  backdrop.addEventListener('click',endTour);
 })();
 
 // ─── NOTIFICATION BELL ───
@@ -3693,6 +3844,7 @@ $('dr-btn')?.addEventListener('click',openDailyReview);
 // Sidebar bottom buttons
 $('sb-settings-btn')?.addEventListener('click',()=>go('settings'));
 $('sb-reports-btn')?.addEventListener('click',()=>go('reports'));
+$('sb-help-btn')?.addEventListener('click',()=>go('help'));
 $('dr-ov').addEventListener('click',e=>{if(e.target===$('dr-ov'))closeDR()});
 $('dr-skip').addEventListener('click',closeDR);
 $('dr-next').addEventListener('click',async()=>{
@@ -4056,6 +4208,105 @@ function showUndoToast(label){
 
 // ─── REPORTS VIEW (Phase D — consolidates analytics/review views) ───
 let reportsTab='overview';
+// ─── HELP & GUIDE VIEW ───
+function renderHelp(){
+  const c=$('ct');
+  const features=[
+    {icon:'wb_sunny',color:'#f59e0b',title:'Today View',desc:'See tasks due today and tasks you\'ve added to "My Day". Plan your daily priorities at a glance.',tip:'Press 1 to jump here'},
+    {icon:'inbox',color:'#6366f1',title:'Inbox',desc:'Quick-capture tasks without organizing. Triage them later into life areas and goals.',tip:'A safe landing spot for new ideas'},
+    {icon:'view_kanban',color:'#10b981',title:'Board View',desc:'Drag-and-drop Kanban board. Move tasks between Todo, In Progress, and Done columns.',tip:'Press 3 to open Board'},
+    {icon:'calendar_month',color:'#3b82f6',title:'Calendar',desc:'Visualize tasks on a monthly calendar. Click any date to see what\'s due.',tip:'Press 4 to open Calendar'},
+    {icon:'grid_view',color:'#ef4444',title:'Eisenhower Matrix',desc:'Prioritize using the Urgent/Important matrix. Four quadrants help you focus on what matters.',tip:'Press 7 to open Matrix'},
+    {icon:'view_week',color:'#8b5cf6',title:'Weekly Plan',desc:'Plan your week ahead. Distribute tasks across days for balanced workloads.',tip:'Press 6 to open Weekly'},
+    {icon:'dashboard',color:'#ec4899',title:'Dashboard',desc:'Overview of your productivity: completion rates, streaks, activity charts, and more.',tip:'Press 5 for Dashboard'},
+    {icon:'repeat',color:'#14b8a6',title:'Habits',desc:'Track recurring habits with streaks and completion grids. Build consistency.',tip:'Find under Reports'},
+    {icon:'timer',color:'#f97316',title:'Focus Timer',desc:'Built-in Pomodoro timer. Start a focus session on any task to track deep work time.',tip:'Click the timer icon on any task'},
+    {icon:'description',color:'#06b6d4',title:'Notes',desc:'A personal notebook. Write thoughts, meeting notes, or ideas with Markdown support.',tip:'Accessible from sidebar'},
+    {icon:'science',color:'#a855f7',title:'Templates',desc:'Save task structures as templates. Apply them to quickly create recurring projects.',tip:'Great for repeating workflows'},
+    {icon:'auto_awesome',color:'#eab308',title:'Automations',desc:'Create rules that run automatically — like auto-assigning priorities or moving tasks.',tip:'Set it and forget it'}
+  ];
+  let h=`<div style="margin-bottom:20px;padding:20px;background:linear-gradient(135deg,var(--brand),var(--brand-h));border-radius:var(--r);color:white">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+      <span class="material-icons-round" style="font-size:32px">school</span>
+      <div><h2 style="font-size:18px;font-weight:700;margin:0;color:white">Welcome to LifeFlow</h2>
+      <p style="font-size:12px;opacity:.85;margin-top:2px">Your personal task manager — fast, local, and private</p></div>
+    </div>
+    <div class="help-actions" style="margin-top:12px">
+      <button class="primary" onclick="startTour()"><span class="material-icons-round">explore</span>Take the Tour</button>
+      <button style="background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);color:white" onclick="document.getElementById('kb-ov').classList.add('active')"><span class="material-icons-round">keyboard</span>Keyboard Shortcuts</button>
+    </div>
+  </div>`;
+
+  // Getting Started
+  h+=`<div class="help-section">
+    <h2><span class="material-icons-round">rocket_launch</span>Getting Started</h2>
+    <p class="help-desc">Follow these steps to organize your life in LifeFlow</p>
+    <div class="help-getting-started">
+      <div class="help-step"><div class="help-step-num">1</div><div class="help-step-body"><h4>Create Life Areas</h4><p>Organize by categories like Work, Health, or Personal. Click <strong>+</strong> next to "Life Areas" in the sidebar.</p></div></div>
+      <div class="help-step"><div class="help-step-num">2</div><div class="help-step-body"><h4>Set Goals</h4><p>Within each area, create goals you want to achieve. Goals give your tasks purpose and direction.</p></div></div>
+      <div class="help-step"><div class="help-step-num">3</div><div class="help-step-body"><h4>Add Tasks</h4><p>Press <strong>N</strong> from any view to quick-add a task, or use the + button. Set priorities, due dates, and tags.</p></div></div>
+      <div class="help-step"><div class="help-step-num">4</div><div class="help-step-body"><h4>Plan Your Day</h4><p>Open the <strong>Today</strong> view each morning. Add tasks to "My Day" and use the Focus Timer for deep work sessions.</p></div></div>
+      <div class="help-step"><div class="help-step-num">5</div><div class="help-step-body"><h4>Review & Reflect</h4><p>Use the <strong>Weekly Review</strong> and <strong>Dashboard</strong> to track your progress and adjust your approach.</p></div></div>
+    </div>
+  </div>`;
+
+  // Features
+  h+=`<div class="help-section">
+    <h2><span class="material-icons-round">apps</span>Features</h2>
+    <p class="help-desc">Everything LifeFlow offers to keep you productive</p>
+    <div class="help-grid">`;
+  features.forEach(f=>{
+    h+=`<div class="help-card">
+      <div class="hc-icon" style="background:${f.color}20;color:${f.color}"><span class="material-icons-round">${f.icon}</span></div>
+      <h3>${f.title}</h3>
+      <p>${f.desc}</p>
+      <div class="hc-tip"><span class="material-icons-round">lightbulb</span>${f.tip}</div>
+    </div>`;
+  });
+  h+=`</div></div>`;
+
+  // Keyboard Shortcuts
+  h+=`<div class="help-section">
+    <h2><span class="material-icons-round">keyboard</span>Keyboard Shortcuts</h2>
+    <p class="help-desc">Navigate like a pro — LifeFlow supports Vim-style keys too</p>
+    <div class="help-shortcuts">`;
+  const shortcuts=[
+    ['Search / Command Palette','Ctrl+K'],['Quick add task','N'],['Today view','1'],['All Tasks','2'],
+    ['Board','3'],['Calendar','4'],['Dashboard','5'],['Weekly Plan','6'],['Matrix','7'],['Activity Log','8'],
+    ['Multi-select','M'],['Daily Review','R'],['Vim: Move down/up','J / K'],['Vim: Complete task','X'],
+    ['Vim: Open task','Enter'],['Vim: First/Last','gg / G'],['Close overlay','Esc'],['This help','?']
+  ];
+  shortcuts.forEach(([label,key])=>{
+    h+=`<div class="help-sc-row"><span>${label}</span><span class="help-key">${key}</span></div>`;
+  });
+  h+=`</div></div>`;
+
+  // Tips & Tricks
+  h+=`<div class="help-section">
+    <h2><span class="material-icons-round">tips_and_updates</span>Tips & Tricks</h2>
+    <p class="help-desc">Get more out of LifeFlow with these power-user tips</p>
+    <div class="help-grid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">
+      <div class="help-card"><div class="hc-icon" style="background:#6366f120;color:#6366f1"><span class="material-icons-round">search</span></div><h3>Command Palette</h3><p>Press <strong>Ctrl+K</strong> then type <strong>&gt;</strong> to access commands like theme switching, export, and more.</p></div>
+      <div class="help-card"><div class="hc-icon" style="background:#10b98120;color:#10b981"><span class="material-icons-round">drag_indicator</span></div><h3>Drag & Drop</h3><p>On the Board view, drag tasks between columns to change their status instantly.</p></div>
+      <div class="help-card"><div class="hc-icon" style="background:#f59e0b20;color:#f59e0b"><span class="material-icons-round">checklist</span></div><h3>Multi-Select</h3><p>Press <strong>M</strong> to enter multi-select mode. Check multiple tasks, then bulk-complete or bulk-delete them.</p></div>
+      <div class="help-card"><div class="hc-icon" style="background:#ef444420;color:#ef4444"><span class="material-icons-round">backup</span></div><h3>Backup & Export</h3><p>Go to <strong>Settings</strong> to export your data as JSON or create a backup. Everything stays on your machine.</p></div>
+      <div class="help-card"><div class="hc-icon" style="background:#8b5cf620;color:#8b5cf6"><span class="material-icons-round">palette</span></div><h3>Themes</h3><p>Choose from 8 themes in Settings — from dark Midnight and Nord to the bright Light theme.</p></div>
+      <div class="help-card"><div class="hc-icon" style="background:#ec489920;color:#ec4899"><span class="material-icons-round">notification_important</span></div><h3>Notifications</h3><p>Enable browser notifications to get reminders for overdue tasks and upcoming deadlines.</p></div>
+    </div>
+  </div>`;
+
+  // Reset onboarding
+  h+=`<div class="help-section" style="margin-top:32px;padding-top:20px;border-top:1px solid var(--brd)">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><h2 style="margin-bottom:2px"><span class="material-icons-round">restart_alt</span>Reset Onboarding</h2>
+      <p class="help-desc" style="margin-bottom:0">Re-run the setup wizard and interactive tour as if you were a new user</p></div>
+      <button class="btn-c" style="font-size:12px;padding:8px 16px;display:flex;align-items:center;gap:6px" onclick="localStorage.removeItem('lf-onboarded');localStorage.removeItem('lf-tour-done');showToast('Onboarding reset — refresh to see it again')"><span class="material-icons-round" style="font-size:16px">refresh</span>Reset</button>
+    </div>
+  </div>`;
+
+  c.innerHTML=h;
+}
+
 async function renderReports(){
   const c=$('ct');
   const tabs=[
