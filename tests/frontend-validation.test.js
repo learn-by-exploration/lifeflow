@@ -589,3 +589,179 @@ describe('Security Basics', () => {
     assert.ok(hasEsc, 'HTML escaping function esc() must be defined for XSS prevention');
   });
 });
+
+// ─── HELP & GUIDE PAGE ───
+
+describe('Help & Guide Page', () => {
+
+  it('help view is handled in the render() dispatcher', () => {
+    // render() must have a case for currentView==='help'
+    const hasHelpCase = /currentView==='help'/.test(scriptContent);
+    assert.ok(hasHelpCase, "render() must handle currentView==='help'");
+  });
+
+  it('help view is handled in updateBC()', () => {
+    // updateBC must set page title for help
+    const hasHelpBC = /currentView==='help'.*Help/.test(scriptContent);
+    assert.ok(hasHelpBC, "updateBC() must handle 'help' view with a title");
+  });
+
+  it('renderHelp function is defined', () => {
+    const hasRenderHelp = /function\s+renderHelp\s*\(/.test(scriptContent);
+    assert.ok(hasRenderHelp, 'renderHelp() function must be defined');
+  });
+
+  it('renderHelp generates feature cards', () => {
+    // The help page should contain feature cards with icons and descriptions
+    const hasFeatureCards = /help-card/.test(scriptContent) || /help-grid/.test(scriptContent);
+    assert.ok(hasFeatureCards, 'renderHelp() must generate feature cards (help-card / help-grid)');
+  });
+
+  it('renderHelp generates getting started steps', () => {
+    const hasSteps = /help-step-num/.test(scriptContent) || /help-getting-started/.test(scriptContent);
+    assert.ok(hasSteps, 'renderHelp() must include getting started steps');
+  });
+
+  it('renderHelp generates keyboard shortcuts section', () => {
+    const hasShortcuts = /help-shortcuts/.test(scriptContent) || /help-sc-row/.test(scriptContent);
+    assert.ok(hasShortcuts, 'renderHelp() must include keyboard shortcuts section');
+  });
+
+  it('help view is excluded from lastView persistence', () => {
+    // The help view should not be saved as lf-lastView
+    const persistExclude = /!.*\[.*'help'.*\].*\.includes\(currentView\).*localStorage\.setItem\('lf-lastView'/.test(scriptContent) ||
+                           scriptContent.includes("'help'") && /lf-lastView/.test(scriptContent);
+    assert.ok(persistExclude, "help view must be excluded from lf-lastView persistence");
+  });
+
+  it('Help button exists in sidebar HTML', () => {
+    const hasHelpBtn = /id=["']sb-help-btn["']/.test(htmlWithoutScript);
+    assert.ok(hasHelpBtn, 'Sidebar must have a Help button with id="sb-help-btn"');
+  });
+
+  it('Help button has click handler wired to go(help)', () => {
+    const hasHandler = /sb-help-btn.*addEventListener.*click|sb-help-btn.*click.*go\('help'\)/s.test(scriptContent) ||
+                       scriptContent.includes("$('sb-help-btn')") && scriptContent.includes("go('help')");
+    assert.ok(hasHandler, "sb-help-btn must have a click handler that navigates to go('help')");
+  });
+});
+
+// ─── INTERACTIVE TOUR ───
+
+describe('Interactive Tour', () => {
+
+  it('tour overlay HTML elements exist', () => {
+    const requiredIds = ['tour-ov', 'tour-backdrop', 'tour-spotlight', 'tour-tooltip', 'tour-title', 'tour-desc', 'tour-dots', 'tour-progress', 'tour-next', 'tour-skip'];
+    const htmlIds = new Set();
+    const idRegex = /\bid=["']([^"']+)["']/g;
+    let match;
+    while ((match = idRegex.exec(htmlWithoutScript)) !== null) {
+      htmlIds.add(match[1]);
+    }
+    const missing = requiredIds.filter(id => !htmlIds.has(id));
+    if (missing.length > 0) {
+      assert.fail(`Tour overlay missing HTML elements:\n` + missing.map(id => `  - id="${id}"`).join('\n'));
+    }
+  });
+
+  it('startTour function is defined and accessible globally', () => {
+    const hasTour = /window\.startTour\s*=\s*function/.test(scriptContent);
+    assert.ok(hasTour, 'window.startTour must be defined as a global function');
+  });
+
+  it('tour defines step configurations with selectors', () => {
+    const hasSteps = /tourSteps\s*=\s*\[/.test(scriptContent);
+    assert.ok(hasSteps, 'Tour must define tourSteps array with step configurations');
+  });
+
+  it('tour steps have required properties (sel, title, icon, desc, pos)', () => {
+    // Extract the tourSteps array content
+    const stepsMatch = scriptContent.match(/tourSteps\s*=\s*\[([\s\S]*?)\];/);
+    if (!stepsMatch) { assert.fail('Could not find tourSteps array'); return; }
+    const stepsContent = stepsMatch[1];
+    // Each step should have sel, title, icon, desc, pos
+    const stepObjects = stepsContent.match(/\{[^}]+\}/g) || [];
+    assert.ok(stepObjects.length >= 5, `Tour must have at least 5 steps, found ${stepObjects.length}`);
+    const requiredProps = ['sel', 'title', 'icon', 'desc', 'pos'];
+    const incomplete = stepObjects.filter(step => {
+      return requiredProps.some(prop => !step.includes(prop + ':') && !step.includes(prop + ' :'));
+    });
+    if (incomplete.length > 0) {
+      assert.fail(`${incomplete.length} tour step(s) missing required properties (${requiredProps.join(', ')})`);
+    }
+  });
+
+  it('tour step selectors reference existing HTML elements', () => {
+    const stepsMatch = scriptContent.match(/tourSteps\s*=\s*\[([\s\S]*?)\];/);
+    if (!stepsMatch) { assert.fail('Could not find tourSteps array'); return; }
+    const selRegex = /sel:\s*'([^']+)'/g;
+    const selectors = [];
+    let match;
+    while ((match = selRegex.exec(stepsMatch[1])) !== null) {
+      selectors.push(match[1]);
+    }
+    // Check each selector's base element exists in the HTML
+    const missing = selectors.filter(sel => {
+      // For compound selectors like .ni[data-view="myday"], check parts separately
+      const idMatch = sel.match(/#([a-zA-Z0-9_-]+)/);
+      if (idMatch) return !htmlWithoutScript.includes(`id="${idMatch[1]}"`);
+      const classMatch = sel.match(/\.([a-zA-Z0-9_-]+)/);
+      const attrMatch = sel.match(/\[([a-zA-Z0-9_-]+)="([^"]+)"\]/);
+      // Both class and attribute must exist in the HTML (not necessarily on same element — just presence check)
+      let found = true;
+      if (classMatch) found = found && htmlWithoutScript.includes(classMatch[1]);
+      if (attrMatch) found = found && htmlWithoutScript.includes(`${attrMatch[1]}="${attrMatch[2]}"`);
+      return !found;
+    });
+    if (missing.length > 0) {
+      assert.fail(`Tour step selectors reference missing HTML elements:\n` + missing.map(s => `  - ${s}`).join('\n'));
+    }
+  });
+
+  it('tour completion sets localStorage flag', () => {
+    const hasFlag = /localStorage\.setItem\('lf-tour-done'/.test(scriptContent);
+    assert.ok(hasFlag, "Tour completion must set localStorage 'lf-tour-done' flag");
+  });
+
+  it('tour auto-triggers after onboarding for new users', () => {
+    // After onboarding completion, the tour should start
+    const hasAutoTrigger = /lf-onboarded.*startTour|startTour.*lf-onboarded/.test(scriptContent) ||
+                           (scriptContent.includes('lf-tour-done') && scriptContent.includes('startTour'));
+    assert.ok(hasAutoTrigger, 'Tour must auto-trigger after onboarding wizard completion');
+  });
+
+  it('tour CSS classes are defined in stylesheet', () => {
+    const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
+    if (!styleMatch) { assert.fail('No <style> block found'); return; }
+    const styleContent = styleMatch[1];
+    const requiredClasses = ['tour-ov', 'tour-backdrop', 'tour-spotlight', 'tour-tooltip', 'tour-progress', 'tour-dot'];
+    const missing = requiredClasses.filter(cls => !styleContent.includes('.' + cls));
+    if (missing.length > 0) {
+      assert.fail(`Tour CSS classes missing from stylesheet:\n` + missing.map(c => `  - .${c}`).join('\n'));
+    }
+  });
+});
+
+// ─── HELP PAGE CSS ───
+
+describe('Help Page CSS', () => {
+
+  it('Help page CSS classes are defined in stylesheet', () => {
+    const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
+    if (!styleMatch) { assert.fail('No <style> block found'); return; }
+    const styleContent = styleMatch[1];
+    const requiredClasses = ['help-grid', 'help-card', 'help-section', 'help-shortcuts', 'help-sc-row', 'help-step', 'help-step-num', 'help-getting-started'];
+    const missing = requiredClasses.filter(cls => !styleContent.includes('.' + cls));
+    if (missing.length > 0) {
+      assert.fail(`Help page CSS classes missing from stylesheet:\n` + missing.map(c => `  - .${c}`).join('\n'));
+    }
+  });
+
+  it('Help page uses responsive grid layout', () => {
+    const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
+    if (!styleMatch) return;
+    const hasGrid = /help-grid.*grid-template-columns.*auto-fill/s.test(styleMatch[1]) ||
+                    styleMatch[1].includes('.help-grid{') && styleMatch[1].includes('auto-fill');
+    assert.ok(hasGrid, 'Help grid must use responsive auto-fill grid layout');
+  });
+});
