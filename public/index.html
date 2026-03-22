@@ -2556,7 +2556,7 @@ $('sr-inp').addEventListener('input',runSearch);
 $('sr-area').addEventListener('change',runSearch);
 $('sr-goal').addEventListener('change',runSearch);
 $('sr-status').addEventListener('change',runSearch);
-$('sr-inp').addEventListener('keydown',e=>{
+$('sr-inp').addEventListener('keydown',async e=>{
   const items=$('sr-results').querySelectorAll('.sr-item');
   if(e.key==='ArrowDown'){e.preventDefault();srIdx=Math.min(srIdx+1,items.length-1);items.forEach((it,i)=>it.classList.toggle('sel',i===srIdx));items[srIdx]?.scrollIntoView({block:'nearest'})}
   else if(e.key==='ArrowUp'){e.preventDefault();srIdx=Math.max(srIdx-1,0);items.forEach((it,i)=>it.classList.toggle('sel',i===srIdx));items[srIdx]?.scrollIntoView({block:'nearest'})}
@@ -3965,9 +3965,9 @@ async function renderRules(){
   const c=$('ct');const rules=await api.get('/api/rules');
   let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
     <span style="font-size:13px;color:var(--txd)">${rules.length} rule${rules.length!==1?'s':''}</span>
-    <button id="new-rule-btn" style="padding:4px 12px;background:var(--brand);color:#fff;border:none;borde — e.g. auto-add overdue tasks to My Day',
-    `<button class="btn-s" onclick="document.getElementById('new-rule-btn')?.click()"><span class="material-icons-round" style="font-size:14px">add</span>Create Rule</button>`-radius:var(--rs);cursor:pointer;font-size:12px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:3px">add</span>New Rule</button></div>`;
-  if(!rules.length)h+=emptyS('auto_fix_high','No automation rules','Create rules to automate your workflow');
+    <button id="new-rule-btn" style="padding:4px 12px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:12px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:3px">add</span>New Rule</button></div>`;
+  if(!rules.length)h+=emptyS('auto_fix_high','No automation rules','Create rules to automate your workflow — e.g. auto-add overdue tasks to My Day',
+    `<button class="btn-s" onclick="document.getElementById('new-rule-btn')?.click()"><span class="material-icons-round" style="font-size:14px">add</span>Create Rule</button>`);
   const triggerLabels={task_completed:'When task completed',task_updated:'When task updated',overdue:'When task overdue'};
   const actionLabels={add_to_myday:'Add to My Day',set_priority:'Set priority',add_tag:'Add tag',create_followup:'Create follow-up task'};
   rules.forEach(r=>{
