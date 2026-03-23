@@ -940,14 +940,14 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 </main>
 
 <!-- Task detail panel -->
-<div class="dp" id="dp">
+<div class="dp" id="dp" role="dialog" aria-label="Task Details">
   <div class="dp-head"><h3 id="dp-title">Task</h3><button class="material-icons-round" id="dp-close">close</button></div>
   <div class="dp-body" id="dp-body"></div>
   <div class="dp-foot"><button class="btn-c" id="dp-cancel">Cancel</button><button class="btn-s" id="dp-save">Save</button></div>
 </div>
 
 <!-- Area modal -->
-<div class="mo" id="am"><div class="md">
+<div class="mo" id="am" role="dialog" aria-modal="true" aria-label="Life Area"><div class="md">
   <h3 id="am-t">New Life Area</h3>
   <label>Name</label><input type="text" id="am-name" placeholder="e.g. Health, Career...">
   <div class="md-row"><div><label>Icon</label><input type="text" id="am-icon" placeholder="💪" maxlength="4"></div><div><label>Color</label><div class="swatches" id="am-sw"></div></div></div>
@@ -956,7 +956,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 </div></div>
 
 <!-- Goal modal -->
-<div class="mo" id="gm"><div class="md">
+<div class="mo" id="gm" role="dialog" aria-modal="true" aria-label="Goal"><div class="md">
   <h3 id="gm-t">New Goal</h3>
   <label>What do you want to achieve?</label><input type="text" id="gm-title" placeholder="e.g. Get fit by June">
   <label>Description</label><textarea id="gm-desc" placeholder="Optional details..."></textarea>
@@ -966,7 +966,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 </div></div>
 
 <!-- List modal -->
-<div class="mo" id="lm"><div class="md">
+<div class="mo" id="lm" role="dialog" aria-modal="true" aria-label="List"><div class="md">
   <h3 id="lm-t">New List</h3>
   <label>Name</label><input type="text" id="lm-name" placeholder="e.g. Weekly Groceries" maxlength="100">
   <label>Type</label>
@@ -1002,7 +1002,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 </div>
 
 <!-- Quick capture overlay -->
-<div class="qc-ov" id="qc-ov">
+<div class="qc-ov" id="qc-ov" role="dialog" aria-modal="true" aria-label="Quick Capture">
   <div class="qc-box">
     <h3><span class="material-icons-round" style="font-size:18px;color:var(--brand)">bolt</span>Quick Capture</h3>
     <input type="text" id="qc-title" placeholder="Buy groceries tomorrow p2 #errands">
@@ -1021,7 +1021,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 </div>
 
 <!-- Keyboard shortcuts help -->
-<div class="kb-ov" id="kb-ov">
+<div class="kb-ov" id="kb-ov" role="dialog" aria-modal="true" aria-label="Keyboard Shortcuts">
   <div class="kb-box">
     <h3>Keyboard Shortcuts</h3>
     <div class="kb-row"><span>Search</span><span class="kb-key">Ctrl+K</span></div>
@@ -1048,7 +1048,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 </div>
 
 <!-- Focus Timer overlay -->
-<div class="ft-ov" id="ft-ov">
+<div class="ft-ov" id="ft-ov" role="dialog" aria-modal="true" aria-label="Focus Timer">
   <div class="ft-box">
     <div class="ft-task" id="ft-task"></div>
     <div class="ft-ring">
@@ -1068,7 +1068,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 </div>
 
 <!-- Interactive Tour overlay -->
-<div class="tour-ov" id="tour-ov">
+<div class="tour-ov" id="tour-ov" role="dialog" aria-modal="true" aria-label="Interactive Tour">
   <div class="tour-backdrop" id="tour-backdrop"></div>
   <div class="tour-spotlight" id="tour-spotlight"></div>
   <div class="tour-tooltip" id="tour-tooltip">
@@ -1084,7 +1084,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 </div>
 
 <!-- Onboarding Wizard overlay -->
-<div class="onb-ov" id="onb-ov">
+<div class="onb-ov" id="onb-ov" role="dialog" aria-modal="true" aria-label="Onboarding Wizard">
   <div class="onb-box">
     <div class="onb-step-1 onb-step">
       <div style="text-align:center">
@@ -1146,7 +1146,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 </div>
 
 <!-- Template Apply overlay -->
-<div class="tmpl-apply-ov" id="tmpl-apply-ov">
+<div class="tmpl-apply-ov" id="tmpl-apply-ov" role="dialog" aria-modal="true" aria-label="Apply Template">
   <div class="tmpl-apply-box" id="tmpl-apply-box">
     <h3 style="margin-bottom:12px">Apply Template</h3>
     <div id="tmpl-apply-content"></div>
@@ -1154,7 +1154,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 </div>
 
 <!-- Daily Review overlay -->
-<div class="dr-ov" id="dr-ov">
+<div class="dr-ov" id="dr-ov" role="dialog" aria-modal="true" aria-label="Daily Review">
   <div class="dr-box">
     <div class="dr-header">
       <h2 id="dr-greeting">Good morning</h2>
@@ -1183,11 +1183,11 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 const COLORS=['#D50000','#E67C73','#F4511E','#F6BF26','#33B679','#0B8043','#039BE5','#3F51B5','#7986CB','#8E24AA','#616161','#795548'];
 const $=id=>document.getElementById(id);
 const api={
-  async get(u){return(await fetch(u)).json()},
-  async post(u,d){return(await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)})).json()},
-  async put(u,d){return(await fetch(u,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)})).json()},
-  async del(u){return(await fetch(u,{method:'DELETE'})).json()},
-  async patch(u,d){return(await fetch(u,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)})).json()}
+  async get(u){try{const r=await fetch(u);if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
+  async post(u,d){try{const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
+  async put(u,d){try{const r=await fetch(u,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
+  async del(u){try{const r=await fetch(u,{method:'DELETE'});if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
+  async patch(u,d){try{const r=await fetch(u,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}}
 };
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function escA(s){return String(s).replace(/[&"'<>]/g,m=>({'&':'&amp;','"':'&quot;',"'":'&#39;','<':'&lt;','>':'&gt;'})[m])}
@@ -1598,8 +1598,8 @@ async function renderAll(){
   const t=await api.get('/api/tasks/all');
   const c=$('ct');
   if(!t.length){c.innerHTML=emptyS('checklist','No tasks yet','Create a life area, add a goal, then add tasks',
-    `<button class="btn-s" onclick="openQuickCapture()"><span class="material-icons-round" style="font-size:14px">add</span>Quick Add</button>
-     <button class="btn-c" onclick="go('inbox')">Open Inbox</button>`);return}
+    `<button class="btn-s" data-action="quick-capture"><span class="material-icons-round" style="font-size:14px">add</span>Quick Add</button>
+     <button class="btn-c" data-action="go-inbox">Open Inbox</button>`);wireActions(c);return}
   const p=t.filter(x=>x.status!=='done'),d=t.filter(x=>x.status==='done');
   let h=hintCard('multi-select','check_box','Tip: Click the checkbox on any task, then use the bulk toolbar to update many tasks at once');
   if(p.length){h+=`<div class="sl">Active <span class="c">${p.length}</span></div>`;p.forEach(tk=>h+=tcHtml(tk,true))}
@@ -1834,7 +1834,7 @@ function tcHtml(t,ctx){
     <div class="tk" data-id="${t.id}"><span class="material-icons-round">check</span></div>
     <div class="tb2"><div class="tt">${esc(t.title)}</div>${meta?`<div class="tm">${meta}</div>`:''}${stBar}${stList}</div>
     <div class="ta" style="position:relative">${currentView!=='myday'?`<span class="material-icons-round myday-toggle ${t.my_day?'active':''}" data-id="${t.id}" title="${t.my_day?'Remove from My Day':'Add to My Day'}">${t.my_day?'wb_sunny':'light_mode'}</span>`:''}<button class="material-icons-round snz-btn" data-id="${t.id}" title="Reschedule">schedule</button><button class="material-icons-round ft-start" data-id="${t.id}" title="Focus timer">timer</button><button class="material-icons-round et" data-id="${t.id}">edit</button><button class="material-icons-round dt" data-id="${t.id}">delete_outline</button></div>
-    <div class="qa-row"><button class="qa-btn qa-pri pri-${t.priority}" data-id="${t.id}" data-next="${nextPri}" title="Cycle priority (${PL[t.priority]||'None'}→${PL[nextPri]||'None'})"><span class="material-icons-round">flag</span></button><button class="qa-btn qa-date" data-id="${t.id}" title="Set due date"><span class="material-icons-round">event</span></button><button class="qa-btn qa-myday" data-id="${t.id}" title="${t.my_day?'Remove from':'Add to'} My Day"><span class="material-icons-round">${t.my_day?'wb_sunny':'light_mode'}</span></button>${t.recurring?`<button class="qa-btn qa-skip" data-id="${t.id}" title="Skip occurrence"><span class="material-icons-round">skip_next</span></button>`:''}<button class="qa-btn" data-id="${t.id}" onclick="openDP(${t.id})" title="Edit"><span class="material-icons-round">edit</span></button></div>
+    <div class="qa-row"><button class="qa-btn qa-pri pri-${t.priority}" data-id="${t.id}" data-next="${nextPri}" title="Cycle priority (${PL[t.priority]||'None'}→${PL[nextPri]||'None'})"><span class="material-icons-round">flag</span></button><button class="qa-btn qa-date" data-id="${t.id}" title="Set due date"><span class="material-icons-round">event</span></button><button class="qa-btn qa-myday" data-id="${t.id}" title="${t.my_day?'Remove from':'Add to'} My Day"><span class="material-icons-round">${t.my_day?'wb_sunny':'light_mode'}</span></button>${t.recurring?`<button class="qa-btn qa-skip" data-id="${t.id}" title="Skip occurrence"><span class="material-icons-round">skip_next</span></button>`:''}<button class="qa-btn qa-edit" data-id="${t.id}" title="Edit"><span class="material-icons-round">edit</span></button></div>
   </div>`;
 }
 
@@ -2012,6 +2012,9 @@ function attachTE(){
     e.stopPropagation();const id=Number(b.dataset.id);
     await api.post('/api/tasks/'+id+'/skip');
     showToast('Occurrence skipped');await loadAreas();render();loadOverdueBadge();
+  }));
+  document.querySelectorAll('.qa-edit').forEach(b=>b.addEventListener('click',e=>{
+    e.stopPropagation();openDP(Number(b.dataset.id));
   }));
 }
 
@@ -2471,6 +2474,20 @@ function showToast(msg, undoFn, duration=5000) {
 function removeToast(el) {
   el.classList.add('fading');
   setTimeout(() => el.remove(), 200);
+}
+
+// ─── WIRE DATA-ACTION BUTTONS ───
+function wireActions(container){
+  (container||document).querySelectorAll('[data-action]').forEach(b=>{
+    const a=b.dataset.action;
+    if(a==='quick-capture')b.addEventListener('click',()=>openQuickCapture());
+    else if(a==='go-inbox')b.addEventListener('click',()=>go('inbox'));
+    else if(a==='go-dashboard')b.addEventListener('click',()=>go('dashboard'));
+    else if(a==='click-new-rule')b.addEventListener('click',()=>document.getElementById('new-rule-btn')?.click());
+    else if(a==='start-tour')b.addEventListener('click',()=>startTour());
+    else if(a==='show-shortcuts')b.addEventListener('click',()=>$('kb-ov').classList.add('active'));
+    else if(a==='reset-onboarding')b.addEventListener('click',()=>{localStorage.removeItem('lf-onboarded');localStorage.removeItem('lf-tour-done');showToast('Onboarding reset — refresh to see it again')});
+  });
 }
 
 // ─── HAMBURGER (Mobile) ───
@@ -3323,8 +3340,7 @@ async function renderFocusHistory(){
       </div>`;
     });
   }
-  // Session list,
-    `<button class="btn-s" onclick="go('dashboard')"><span class="material-icons-round" style="font-size:14px">play_arrow</span>Start a Focus Session</button>`
+  // Session list
   h+=`<div class="sl" style="margin-top:12px">Recent Sessions</div>`;
   if(!hist.items||!hist.items.length){h+=emptyS('timer','No focus sessions','Use the Pomodoro timer to track focus')}
   else{hist.items.forEach(s=>{
@@ -4588,7 +4604,7 @@ async function renderRules(){
     <span style="font-size:13px;color:var(--txd)">${rules.length} rule${rules.length!==1?'s':''}</span>
     <button id="new-rule-btn" style="padding:4px 12px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:12px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:3px">add</span>New Rule</button></div>`;
   if(!rules.length)h+=emptyS('auto_fix_high','No automation rules','Create rules to automate your workflow — e.g. auto-add overdue tasks to My Day',
-    `<button class="btn-s" onclick="document.getElementById('new-rule-btn')?.click()"><span class="material-icons-round" style="font-size:14px">add</span>Create Rule</button>`);
+    `<button class="btn-s" data-action="click-new-rule"><span class="material-icons-round" style="font-size:14px">add</span>Create Rule</button>`);
   const triggerLabels={task_completed:'When task completed',task_updated:'When task updated',overdue:'When task overdue'};
   const actionLabels={add_to_myday:'Add to My Day',set_priority:'Set priority',add_tag:'Add tag',create_followup:'Create follow-up task'};
   rules.forEach(r=>{
@@ -4600,7 +4616,7 @@ async function renderRules(){
       <button class="material-icons-round rule-del" data-id="${r.id}" style="background:none;border:none;cursor:pointer;color:var(--txd);font-size:16px">delete</button>
     </div>`;
   });
-  c.innerHTML=h;
+  c.innerHTML=h;wireActions(c);
   c.querySelector('#new-rule-btn')?.addEventListener('click',showRuleModal);
   c.querySelectorAll('.rule-toggle').forEach(btn=>btn.addEventListener('click',async()=>{
     const id=Number(btn.dataset.id);const cur=btn.dataset.enabled==='1';
@@ -4701,8 +4717,8 @@ function renderHelp(){
       <p style="font-size:12px;opacity:.85;margin-top:2px">Your personal task manager — fast, local, and private</p></div>
     </div>
     <div class="help-actions" style="margin-top:12px">
-      <button class="primary" onclick="startTour()"><span class="material-icons-round">explore</span>Take the Tour</button>
-      <button style="background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);color:white" onclick="document.getElementById('kb-ov').classList.add('active')"><span class="material-icons-round">keyboard</span>Keyboard Shortcuts</button>
+      <button class="primary" data-action="start-tour"><span class="material-icons-round">explore</span>Take the Tour</button>
+      <button style="background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);color:white" data-action="show-shortcuts"><span class="material-icons-round">keyboard</span>Keyboard Shortcuts</button>
     </div>
   </div>`;
 
@@ -4769,11 +4785,11 @@ function renderHelp(){
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
       <div><h2 style="margin-bottom:2px"><span class="material-icons-round">restart_alt</span>Reset Onboarding</h2>
       <p class="help-desc" style="margin-bottom:0">Re-run the setup wizard and interactive tour as if you were a new user</p></div>
-      <button class="btn-c" style="font-size:12px;padding:8px 16px;display:flex;align-items:center;gap:6px" onclick="localStorage.removeItem('lf-onboarded');localStorage.removeItem('lf-tour-done');showToast('Onboarding reset — refresh to see it again')"><span class="material-icons-round" style="font-size:16px">refresh</span>Reset</button>
+      <button class="btn-c" style="font-size:12px;padding:8px 16px;display:flex;align-items:center;gap:6px" data-action="reset-onboarding"><span class="material-icons-round" style="font-size:16px">refresh</span>Reset</button>
     </div>
   </div>`;
 
-  c.innerHTML=h;
+  c.innerHTML=h;wireActions(c);
 }
 
 async function renderReports(){
@@ -4943,6 +4959,9 @@ document.addEventListener('keydown',e=>{
     if($('sr-ov').classList.contains('active')){closeSearch();return}
     if($('qc-ov').classList.contains('active')){closeQC();return}
     if($('kb-ov').classList.contains('active')){$('kb-ov').classList.remove('active');return}
+    if($('tmpl-apply-ov').classList.contains('active')){$('tmpl-apply-ov').classList.remove('active');return}
+    if($('tour-ov').classList.contains('active')){$('tour-ov').classList.remove('active');return}
+    if($('onb-ov').classList.contains('active')){$('onb-ov').classList.remove('active');return}
     if($('dp').classList.contains('open')){$('dp').classList.remove('open');return}
     return;
   }

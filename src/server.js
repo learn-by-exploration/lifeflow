@@ -334,7 +334,7 @@ if (tmplC.c === 0) {
   ]));
 }
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Helper: get tags for a task
@@ -347,17 +347,14 @@ function getSubtasks(taskId) {
 function getBlockedBy(taskId) {
   return db.prepare('SELECT t.id, t.title, t.status FROM tasks t JOIN task_deps d ON t.id=d.blocked_by_id WHERE d.task_id=?').all(taskId);
 }
+function getNextPosition(table, scopeCol, scopeVal) {
+  const sql = scopeCol
+    ? `SELECT COALESCE(MAX(position),-1)+1 as p FROM ${table} WHERE ${scopeCol}=?`
+    : `SELECT COALESCE(MAX(position),-1)+1 as p FROM ${table}`;
+  return scopeCol ? db.prepare(sql).get(scopeVal).p : db.prepare(sql).get().p;
+}
 function enrichTask(t) {
-  t.tags = getTaskTags(t.id);
-  t.subtasks = getSubtasks(t.id);
-  t.subtask_done = t.subtasks.filter(s => s.done).length;
-  t.subtask_total = t.subtasks.length;
-  t.blocked_by = getBlockedBy(t.id);
-  if (t.list_id) {
-    const list = db.prepare('SELECT id, name, icon, color FROM lists WHERE id=?').get(t.list_id);
-    if (list) { t.list_name = list.name; t.list_icon = list.icon; t.list_color = list.color; }
-  }
-  return t;
+  return enrichTasks([t])[0];
 }
 function enrichTasks(tasks) {
   if (!tasks.length) return tasks;
@@ -440,8 +437,8 @@ app.post('/api/tasks/:taskId/subtasks', (req, res) => {
   if (!Number.isInteger(taskId)) return res.status(400).json({ error: 'Invalid ID' });
   const { title } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
-  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM subtasks WHERE task_id=?').get(taskId);
-  const r = db.prepare('INSERT INTO subtasks (task_id,title,position) VALUES (?,?,?)').run(taskId, title.trim(), mp.p);
+  const pos = getNextPosition('subtasks', 'task_id', taskId);
+  const r = db.prepare('INSERT INTO subtasks (task_id,title,position) VALUES (?,?,?)').run(taskId, title.trim(), pos);
   res.status(201).json(db.prepare('SELECT * FROM subtasks WHERE id=?').get(r.lastInsertRowid));
 });
 // Subtask reorder (must be before :id route)
@@ -487,8 +484,8 @@ app.get('/api/areas', (req, res) => {
 app.post('/api/areas', (req, res) => {
   const { name, icon, color } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
-  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM life_areas').get();
-  const r = db.prepare('INSERT INTO life_areas (name,icon,color,position) VALUES (?,?,?,?)').run(name.trim(), icon||'📋', color||'#2563EB', mp.p);
+  const pos = getNextPosition('life_areas');
+  const r = db.prepare('INSERT INTO life_areas (name,icon,color,position) VALUES (?,?,?,?)').run(name.trim(), icon||'📋', color||'#2563EB', pos);
   res.status(201).json(db.prepare('SELECT * FROM life_areas WHERE id=?').get(r.lastInsertRowid));
 });
 app.put('/api/areas/:id', (req, res) => {
@@ -524,8 +521,8 @@ app.post('/api/areas/:areaId/goals', (req, res) => {
   if (!Number.isInteger(areaId)) return res.status(400).json({ error: 'Invalid ID' });
   const { title, description, color, due_date } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
-  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM goals WHERE area_id=?').get(areaId);
-  const r = db.prepare('INSERT INTO goals (area_id,title,description,color,due_date,position) VALUES (?,?,?,?,?,?)').run(areaId,title.trim(),description||'',color||'#6C63FF',due_date||null,mp.p);
+  const pos = getNextPosition('goals', 'area_id', areaId);
+  const r = db.prepare('INSERT INTO goals (area_id,title,description,color,due_date,position) VALUES (?,?,?,?,?,?)').run(areaId,title.trim(),description||'',color||'#6C63FF',due_date||null,pos);
   res.status(201).json(db.prepare('SELECT * FROM goals WHERE id=?').get(r.lastInsertRowid));
 });
 app.put('/api/goals/:id', (req, res) => {
@@ -598,16 +595,23 @@ app.post('/api/goals/:goalId/tasks', (req, res) => {
   if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'Invalid ID' });
   const { title, note, priority, due_date, due_time, recurring, assigned_to, my_day, tagIds, time_block_start, time_block_end, estimated_minutes, list_id } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
+  if (due_date !== undefined && due_date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(due_date)) return res.status(400).json({ error: 'Invalid due_date format (YYYY-MM-DD)' });
+  if (priority !== undefined && priority !== null && ![0,1,2,3].includes(Number(priority))) return res.status(400).json({ error: 'Priority must be 0-3' });
+  if (estimated_minutes !== undefined && estimated_minutes !== null && (typeof estimated_minutes !== 'number' || estimated_minutes < 0)) return res.status(400).json({ error: 'estimated_minutes must be a non-negative number' });
   if (list_id) { const lid = Number(list_id); if (!Number.isInteger(lid) || !db.prepare('SELECT id FROM lists WHERE id=?').get(lid)) return res.status(400).json({ error: 'Invalid list_id' }); }
-  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM tasks WHERE goal_id=?').get(goalId);
-  const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,time_block_start,time_block_end,estimated_minutes,list_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
-    goalId,title.trim(),note||'',priority||0,due_date||null,due_time||null,recurring||null,assigned_to||'',my_day?1:0,mp.p,time_block_start||null,time_block_end||null,estimated_minutes||null,list_id?Number(list_id):null
-  );
-  const taskId = r.lastInsertRowid;
-  if (Array.isArray(tagIds)) {
-    const ins = db.prepare('INSERT OR IGNORE INTO task_tags (task_id,tag_id) VALUES (?,?)');
-    tagIds.forEach(tid => { if (Number.isInteger(tid)) ins.run(taskId, tid); });
-  }
+  const createTaskTx = db.transaction(() => {
+    const pos = getNextPosition('tasks', 'goal_id', goalId);
+    const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,time_block_start,time_block_end,estimated_minutes,list_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
+      goalId,title.trim(),note||'',priority||0,due_date||null,due_time||null,recurring||null,assigned_to||'',my_day?1:0,pos,time_block_start||null,time_block_end||null,estimated_minutes||null,list_id?Number(list_id):null
+    );
+    const taskId = r.lastInsertRowid;
+    if (Array.isArray(tagIds)) {
+      const ins = db.prepare('INSERT OR IGNORE INTO task_tags (task_id,tag_id) VALUES (?,?)');
+      tagIds.forEach(tid => { if (Number.isInteger(tid)) ins.run(taskId, tid); });
+    }
+    return taskId;
+  });
+  const taskId = createTaskTx();
   res.status(201).json(enrichTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(taskId)));
 });
 // ─── Task Reorder (must be before :id routes) ───
@@ -709,36 +713,42 @@ app.put('/api/tasks/bulk', (req, res) => {
   const { ids, changes } = req.body;
   if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
   if (!changes || typeof changes !== 'object') return res.status(400).json({ error: 'changes object required' });
-  const results = [];
-  const selectTask = db.prepare('SELECT * FROM tasks WHERE id=?');
-  for (const rawId of ids) {
-    const id = Number(rawId);
-    if (!Number.isInteger(id)) continue;
-    const ex = selectTask.get(id);
-    if (!ex) continue;
-    const sets = [], vals = [];
-    if (changes.priority !== undefined) { sets.push('priority=?'); vals.push(changes.priority); }
-    if (changes.due_date !== undefined) { sets.push('due_date=?'); vals.push(changes.due_date); }
-    if (changes.my_day !== undefined) { sets.push('my_day=?'); vals.push(changes.my_day ? 1 : 0); }
-    if (changes.goal_id !== undefined) { sets.push('goal_id=?'); vals.push(changes.goal_id); }
-    if (changes.status !== undefined) {
-      sets.push('status=?'); vals.push(changes.status);
-      if (changes.status === 'done' && ex.status !== 'done') {
-        sets.push('completed_at=?'); vals.push(new Date().toISOString());
+  if (changes.status !== undefined && !['todo','doing','done'].includes(changes.status)) return res.status(400).json({ error: 'Invalid status' });
+  if (changes.priority !== undefined && ![0,1,2,3].includes(Number(changes.priority))) return res.status(400).json({ error: 'Priority must be 0-3' });
+  const bulkTx = db.transaction(() => {
+    const results = [];
+    const selectTask = db.prepare('SELECT * FROM tasks WHERE id=?');
+    for (const rawId of ids) {
+      const id = Number(rawId);
+      if (!Number.isInteger(id)) continue;
+      const ex = selectTask.get(id);
+      if (!ex) continue;
+      const sets = [], vals = [];
+      if (changes.priority !== undefined) { sets.push('priority=?'); vals.push(changes.priority); }
+      if (changes.due_date !== undefined) { sets.push('due_date=?'); vals.push(changes.due_date); }
+      if (changes.my_day !== undefined) { sets.push('my_day=?'); vals.push(changes.my_day ? 1 : 0); }
+      if (changes.goal_id !== undefined) { sets.push('goal_id=?'); vals.push(changes.goal_id); }
+      if (changes.status !== undefined) {
+        sets.push('status=?'); vals.push(changes.status);
+        if (changes.status === 'done' && ex.status !== 'done') {
+          sets.push('completed_at=?'); vals.push(new Date().toISOString());
+        }
       }
+      if (sets.length) {
+        vals.push(id);
+        db.prepare(`UPDATE tasks SET ${sets.join(',')} WHERE id=?`).run(...vals);
+      }
+      if (changes.add_tag_id) {
+        db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?,?)').run(id, Number(changes.add_tag_id));
+      }
+      if (changes.remove_tag_id) {
+        db.prepare('DELETE FROM task_tags WHERE task_id=? AND tag_id=?').run(id, Number(changes.remove_tag_id));
+      }
+      results.push(id);
     }
-    if (sets.length) {
-      vals.push(id);
-      db.prepare(`UPDATE tasks SET ${sets.join(',')} WHERE id=?`).run(...vals);
-    }
-    if (changes.add_tag_id) {
-      db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?,?)').run(id, Number(changes.add_tag_id));
-    }
-    if (changes.remove_tag_id) {
-      db.prepare('DELETE FROM task_tags WHERE task_id=? AND tag_id=?').run(id, Number(changes.remove_tag_id));
-    }
-    results.push(id);
-  }
+    return results;
+  });
+  const results = bulkTx();
   res.json({ updated: results.length, ids: results });
 });
 
@@ -748,6 +758,10 @@ app.put('/api/tasks/:id', (req, res) => {
   const ex = db.prepare('SELECT * FROM tasks WHERE id=?').get(id);
   if (!ex) return res.status(404).json({ error: 'Not found' });
   const { title, note, status, priority, due_date, due_time, recurring, assigned_to, my_day, position, goal_id, time_block_start, time_block_end, estimated_minutes, actual_minutes, list_id } = req.body;
+  if (status !== undefined && status !== null && !['todo','doing','done'].includes(status)) return res.status(400).json({ error: 'Invalid status (must be todo, doing, or done)' });
+  if (priority !== undefined && priority !== null && ![0,1,2,3].includes(Number(priority))) return res.status(400).json({ error: 'Priority must be 0-3' });
+  if (due_date !== undefined && due_date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(due_date)) return res.status(400).json({ error: 'Invalid due_date format (YYYY-MM-DD)' });
+  if (estimated_minutes !== undefined && estimated_minutes !== null && (typeof estimated_minutes !== 'number' || estimated_minutes < 0)) return res.status(400).json({ error: 'estimated_minutes must be a non-negative number' });
   if (list_id !== undefined && list_id !== null) { const lid = Number(list_id); if (!Number.isInteger(lid) || !db.prepare('SELECT id FROM lists WHERE id=?').get(lid)) return res.status(400).json({ error: 'Invalid list_id' }); }
   const completedAt = status==='done' && ex.status!=='done' ? new Date().toISOString() : (status && status!=='done' ? null : ex.completed_at);
   db.prepare(`UPDATE tasks SET title=COALESCE(?,title),note=COALESCE(?,note),status=COALESCE(?,status),
@@ -765,15 +779,18 @@ app.put('/api/tasks/:id', (req, res) => {
   );
   // Recurring: spawn next task when completed
   if (status === 'done' && ex.status !== 'done' && ex.recurring) {
-    const nd = nextDueDate(ex.due_date, ex.recurring);
-    const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM tasks WHERE goal_id=?').get(ex.goal_id);
-    const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position) VALUES (?,?,?,?,?,?,?,?,?,?)').run(
-      ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.due_time, ex.recurring, ex.assigned_to, 0, mp.p
-    );
-    // Copy tags to new task
-    const oldTags = db.prepare('SELECT tag_id FROM task_tags WHERE task_id=?').all(id);
-    const insTag = db.prepare('INSERT OR IGNORE INTO task_tags (task_id,tag_id) VALUES (?,?)');
-    oldTags.forEach(tt => insTag.run(r.lastInsertRowid, tt.tag_id));
+    const recurTx = db.transaction(() => {
+      const nd = nextDueDate(ex.due_date, ex.recurring);
+      const rpos = getNextPosition('tasks', 'goal_id', ex.goal_id);
+      const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position) VALUES (?,?,?,?,?,?,?,?,?,?)').run(
+        ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.due_time, ex.recurring, ex.assigned_to, 0, rpos
+      );
+      // Copy tags to new task
+      const oldTags = db.prepare('SELECT tag_id FROM task_tags WHERE task_id=?').all(id);
+      const insTag = db.prepare('INSERT OR IGNORE INTO task_tags (task_id,tag_id) VALUES (?,?)');
+      oldTags.forEach(tt => insTag.run(r.lastInsertRowid, tt.tag_id));
+    });
+    recurTx();
   }
   // Execute automation rules on completion
   if (status === 'done' && ex.status !== 'done') {
@@ -841,6 +858,25 @@ app.post('/api/focus', (req, res) => {
     Number(task_id), duration_sec || 0, type || 'pomodoro'
   );
   res.status(201).json(db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(r.lastInsertRowid));
+});
+app.put('/api/focus/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Focus session not found' });
+  const { duration_sec, type } = req.body;
+  db.prepare('UPDATE focus_sessions SET duration_sec=COALESCE(?,duration_sec), type=COALESCE(?,type) WHERE id=?').run(
+    duration_sec !== undefined ? duration_sec : null, type || null, id
+  );
+  res.json(db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(id));
+});
+app.delete('/api/focus/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Focus session not found' });
+  db.prepare('DELETE FROM focus_sessions WHERE id=?').run(id);
+  res.json({ ok: true });
 });
 
 app.get('/api/focus/stats', (req, res) => {
@@ -994,8 +1030,15 @@ app.get('/api/export', (req, res) => {
 
 // ─── Import ───
 app.post('/api/import', (req, res) => {
-  const { areas, goals, tasks, tags } = req.body;
-  if (!areas || !goals || !tasks) return res.status(400).json({ error: 'Invalid import data: areas, goals, and tasks required' });
+  const { areas, goals, tasks, tags, confirm } = req.body;
+  if (confirm !== 'DESTROY_ALL_DATA') return res.status(403).json({ error: 'Import requires confirm: "DESTROY_ALL_DATA" — this will erase all existing data' });
+  if (!Array.isArray(areas) || !areas.length) return res.status(400).json({ error: 'areas must be a non-empty array' });
+  if (!Array.isArray(goals) || !goals.length) return res.status(400).json({ error: 'goals must be a non-empty array' });
+  if (!Array.isArray(tasks) || !tasks.length) return res.status(400).json({ error: 'tasks must be a non-empty array' });
+  // Validate required fields in import data
+  for (const a of areas) { if (!a.name || !a.id) return res.status(400).json({ error: 'Each area must have id and name' }); }
+  for (const g of goals) { if (!g.title || !g.id || !g.area_id) return res.status(400).json({ error: 'Each goal must have id, title, and area_id' }); }
+  for (const t of tasks) { if (!t.title || !t.goal_id) return res.status(400).json({ error: 'Each task must have title and goal_id' }); }
   const importTx = db.transaction(() => {
     // Clear existing data in dependency order
     db.prepare('DELETE FROM focus_sessions').run();
@@ -1060,7 +1103,8 @@ app.post('/api/import', (req, res) => {
     importTx();
     res.json({ ok: true, message: 'Import successful' });
   } catch (e) {
-    res.status(500).json({ error: 'Import failed: ' + e.message });
+    console.error('Import failed:', e.message);
+    res.status(500).json({ error: 'Import failed' });
   }
 });
 
@@ -1156,6 +1200,19 @@ app.put('/api/tasks/:id/deps', (req, res) => {
   if (!Array.isArray(blockedByIds)) return res.status(400).json({ error: 'blockedByIds array required' });
   // Prevent self-dependency
   const valid = blockedByIds.filter(bid => Number.isInteger(bid) && bid !== id);
+  // Check for circular dependencies via DFS
+  for (const bid of valid) {
+    const visited = new Set();
+    const stack = [bid];
+    while (stack.length) {
+      const curr = stack.pop();
+      if (curr === id) return res.status(400).json({ error: 'Circular dependency detected' });
+      if (visited.has(curr)) continue;
+      visited.add(curr);
+      const deps = db.prepare('SELECT blocked_by_id FROM task_deps WHERE task_id=?').all(curr);
+      deps.forEach(d => stack.push(d.blocked_by_id));
+    }
+  }
   db.prepare('DELETE FROM task_deps WHERE task_id=?').run(id);
   const ins = db.prepare('INSERT OR IGNORE INTO task_deps (task_id, blocked_by_id) VALUES (?, ?)');
   valid.forEach(bid => ins.run(id, bid));
@@ -1175,6 +1232,21 @@ app.post('/api/templates', (req, res) => {
   const safeTasks = tasks.map(t => ({ title: String(t.title || '').slice(0, 500), priority: [0,1,2,3].includes(t.priority) ? t.priority : 0, subtasks: Array.isArray(t.subtasks) ? t.subtasks.map(s => String(s).slice(0, 500)) : [] }));
   const r = db.prepare('INSERT INTO task_templates (name, description, icon, tasks) VALUES (?, ?, ?, ?)').run(name.trim().slice(0, 200), (description || '').slice(0, 500), (icon || '📋').slice(0, 10), JSON.stringify(safeTasks));
   res.json({ id: r.lastInsertRowid, name: name.trim(), description, icon: icon || '📋', tasks: safeTasks });
+});
+
+app.put('/api/templates/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM task_templates WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Template not found' });
+  const { name, description, icon, tasks } = req.body;
+  const safeTasks = tasks ? (Array.isArray(tasks) ? tasks.map(t => ({ title: String(t.title || '').slice(0, 500), priority: [0,1,2,3].includes(t.priority) ? t.priority : 0, subtasks: Array.isArray(t.subtasks) ? t.subtasks.map(s => String(s).slice(0, 500)) : [] })) : null) : null;
+  db.prepare('UPDATE task_templates SET name=COALESCE(?,name), description=COALESCE(?,description), icon=COALESCE(?,icon), tasks=COALESCE(?,tasks) WHERE id=?').run(
+    name ? name.trim().slice(0, 200) : null, description !== undefined ? (description || '').slice(0, 500) : null, icon || null, safeTasks ? JSON.stringify(safeTasks) : null, id
+  );
+  const updated = db.prepare('SELECT * FROM task_templates WHERE id=?').get(id);
+  try { updated.tasks = JSON.parse(updated.tasks); } catch { updated.tasks = []; }
+  res.json(updated);
 });
 
 app.delete('/api/templates/:id', (req, res) => {
@@ -1266,9 +1338,9 @@ app.post('/api/filters', (req, res) => {
   const { name, icon, color, filters } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
   if (!filters || typeof filters !== 'object') return res.status(400).json({ error: 'Filters object required' });
-  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM saved_filters').get();
+  const pos = getNextPosition('saved_filters');
   const r = db.prepare('INSERT INTO saved_filters (name,icon,color,filters,position) VALUES (?,?,?,?,?)').run(
-    name.trim(), icon || '🔍', color || '#2563EB', JSON.stringify(filters), mp.p
+    name.trim(), icon || '🔍', color || '#2563EB', JSON.stringify(filters), pos
   );
   res.status(201).json(db.prepare('SELECT * FROM saved_filters WHERE id=?').get(r.lastInsertRowid));
 });
@@ -1322,22 +1394,33 @@ app.get('/api/filters/execute', (req, res) => {
 // ─── Habits API ───
 app.get('/api/habits', (req, res) => {
   const habits = db.prepare('SELECT * FROM habits WHERE archived=0 ORDER BY position').all();
-  // Attach today's log and streak info
+  if (!habits.length) return res.json(habits);
   const today = new Date().toISOString().slice(0, 10);
+  // Batch-load all logs for these habits (last 400 days for streak calc)
+  const hIds = habits.map(h => h.id);
+  const hph = hIds.map(() => '?').join(',');
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 400);
+  const allLogs = db.prepare(`SELECT habit_id, date, count FROM habit_logs WHERE habit_id IN (${hph}) AND date >= ? ORDER BY date DESC`).all(...hIds, cutoff.toISOString().slice(0, 10));
+  // Build per-habit log map: habit_id -> { date -> count }
+  const logMap = {};
+  allLogs.forEach(l => {
+    if (!logMap[l.habit_id]) logMap[l.habit_id] = {};
+    logMap[l.habit_id][l.date] = l.count;
+  });
   habits.forEach(h => {
-    h.todayCount = db.prepare('SELECT COALESCE(count,0) as c FROM habit_logs WHERE habit_id=? AND date=?').get(h.id, today)?.c || 0;
+    const logs = logMap[h.id] || {};
+    h.todayCount = logs[today] || 0;
     h.completed = h.todayCount >= h.target;
     // Calculate streak
     let streak = 0;
     const d = new Date();
-    // Check today first
-    const todayLog = db.prepare('SELECT count FROM habit_logs WHERE habit_id=? AND date=?').get(h.id, today);
-    if (!todayLog || todayLog.count < h.target) d.setDate(d.getDate() - 1); // start from yesterday if today not done
+    const todayCount = logs[today] || 0;
+    if (todayCount < h.target) d.setDate(d.getDate() - 1);
     else { streak = 1; d.setDate(d.getDate() - 1); }
     while (true) {
       const ds = d.toISOString().slice(0, 10);
-      const log = db.prepare('SELECT count FROM habit_logs WHERE habit_id=? AND date=?').get(h.id, ds);
-      if (log && log.count >= h.target) { streak++; d.setDate(d.getDate() - 1); }
+      const count = logs[ds];
+      if (count !== undefined && count >= h.target) { streak++; d.setDate(d.getDate() - 1); }
       else break;
     }
     h.streak = streak;
@@ -1347,9 +1430,12 @@ app.get('/api/habits', (req, res) => {
 app.post('/api/habits', (req, res) => {
   const { name, icon, color, frequency, target } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
-  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM habits').get();
+  const validFreqs = ['daily','weekly','monthly','yearly'];
+  if (frequency && !validFreqs.includes(frequency)) return res.status(400).json({ error: 'Invalid frequency (must be daily, weekly, monthly, or yearly)' });
+  if (target !== undefined && target !== null && (typeof target !== 'number' || target < 1 || !Number.isInteger(target))) return res.status(400).json({ error: 'Target must be a positive integer' });
+  const pos = getNextPosition('habits');
   const r = db.prepare('INSERT INTO habits (name,icon,color,frequency,target,position) VALUES (?,?,?,?,?,?)').run(
-    name.trim(), icon || '✅', color || '#22C55E', frequency || 'daily', target || 1, mp.p
+    name.trim(), icon || '✅', color || '#22C55E', frequency || 'daily', target || 1, pos
   );
   res.status(201).json(db.prepare('SELECT * FROM habits WHERE id=?').get(r.lastInsertRowid));
 });
@@ -1512,6 +1598,17 @@ app.delete('/api/tasks/:id/comments/:commentId', (req, res) => {
   db.prepare('DELETE FROM task_comments WHERE id=? AND task_id=?').run(commentId, id);
   res.json({ ok: true });
 });
+app.put('/api/tasks/:id/comments/:commentId', (req, res) => {
+  const id = Number(req.params.id);
+  const commentId = Number(req.params.commentId);
+  if (!Number.isInteger(id) || !Number.isInteger(commentId)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM task_comments WHERE id=? AND task_id=?').get(commentId, id);
+  if (!ex) return res.status(404).json({ error: 'Comment not found' });
+  const { text } = req.body;
+  if (!text || !text.trim()) return res.status(400).json({ error: 'Text required' });
+  db.prepare('UPDATE task_comments SET text=? WHERE id=?').run(text.trim(), commentId);
+  res.json(db.prepare('SELECT * FROM task_comments WHERE id=?').get(commentId));
+});
 
 // ─── GOAL MILESTONES API ───
 app.get('/api/goals/:id/milestones', (req, res) => {
@@ -1524,8 +1621,8 @@ app.post('/api/goals/:id/milestones', (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const { title } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
-  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM goal_milestones WHERE goal_id=?').get(id);
-  const r = db.prepare('INSERT INTO goal_milestones (goal_id, title, position) VALUES (?,?,?)').run(id, title.trim(), mp.p);
+  const pos = getNextPosition('goal_milestones', 'goal_id', id);
+  const r = db.prepare('INSERT INTO goal_milestones (goal_id, title, position) VALUES (?,?,?)').run(id, title.trim(), pos);
   res.status(201).json(db.prepare('SELECT * FROM goal_milestones WHERE id=?').get(r.lastInsertRowid));
 });
 app.put('/api/milestones/:id', (req, res) => {
@@ -1679,9 +1776,9 @@ function executeRules(event, task) {
     } else if (rule.action_type === 'add_tag' && ac.tag_id) {
       db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?,?)').run(task.id, ac.tag_id);
     } else if (rule.action_type === 'create_followup' && ac.title) {
-      const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM tasks WHERE goal_id=?').get(task.goal_id);
+      const fpos = getNextPosition('tasks', 'goal_id', task.goal_id);
       db.prepare('INSERT INTO tasks (goal_id, title, priority, position) VALUES (?,?,?,?)').run(
-        task.goal_id, ac.title, ac.priority || 0, mp.p
+        task.goal_id, ac.title, ac.priority || 0, fpos
       );
     }
   });
@@ -1721,9 +1818,9 @@ app.post('/api/inbox/:id/triage', (req, res) => {
   const { goal_id, due_date, priority } = req.body;
   if (!goal_id || !Number.isInteger(Number(goal_id))) return res.status(400).json({ error: 'goal_id required' });
   const gid = Number(goal_id);
-  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM tasks WHERE goal_id=?').get(gid);
+  const pos = getNextPosition('tasks', 'goal_id', gid);
   const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,position) VALUES (?,?,?,?,?,?)').run(
-    gid, item.title, item.note, priority !== undefined ? priority : item.priority, due_date || null, mp.p
+    gid, item.title, item.note, priority !== undefined ? priority : item.priority, due_date || null, pos
   );
   db.prepare('DELETE FROM inbox WHERE id=?').run(id);
   res.status(201).json(db.prepare('SELECT * FROM tasks WHERE id=?').get(r.lastInsertRowid));
@@ -1832,6 +1929,14 @@ app.post('/api/reviews', (req, res) => {
     res.status(201).json(db.prepare('SELECT * FROM weekly_reviews WHERE id=?').get(r.lastInsertRowid));
   }
 });
+app.delete('/api/reviews/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM weekly_reviews WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Review not found' });
+  db.prepare('DELETE FROM weekly_reviews WHERE id=?').run(id);
+  res.json({ ok: true });
+});
 
 // ─── SMART FILTERS: Extended execute + counts + smart lists ───
 app.get('/api/filters/counts', (req, res) => {
@@ -1922,9 +2027,9 @@ app.post('/api/tasks/:id/skip', (req, res) => {
   db.prepare("UPDATE tasks SET status='done', completed_at=? WHERE id=?").run(new Date().toISOString(), id);
   // Spawn next occurrence
   const nd = nextDueDate(ex.due_date, ex.recurring);
-  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM tasks WHERE goal_id=?').get(ex.goal_id);
+  const spos = getNextPosition('tasks', 'goal_id', ex.goal_id);
   const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position) VALUES (?,?,?,?,?,?,?,?,?,?)').run(
-    ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.due_time, ex.recurring, ex.assigned_to, 0, mp.p
+    ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.due_time, ex.recurring, ex.assigned_to, 0, spos
   );
   const oldTags = db.prepare('SELECT tag_id FROM task_tags WHERE task_id=?').all(id);
   oldTags.forEach(tt => db.prepare('INSERT OR IGNORE INTO task_tags (task_id,tag_id) VALUES (?,?)').run(r.lastInsertRowid, tt.tag_id));
@@ -2055,9 +2160,9 @@ app.post('/api/lists', (req, res) => {
     // Prevent nesting deeper than 1 level
     if (parent.parent_id) return res.status(400).json({ error: 'Cannot nest more than one level deep' });
   }
-  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM lists').get();
+  const pos = getNextPosition('lists');
   const r = db.prepare('INSERT INTO lists (name,type,icon,color,area_id,parent_id,position) VALUES (?,?,?,?,?,?,?)').run(
-    name.trim(), type || 'checklist', icon || '📋', color || '#2563EB', area_id ? Number(area_id) : null, parent_id ? Number(parent_id) : null, mp.p
+    name.trim(), type || 'checklist', icon || '📋', color || '#2563EB', area_id ? Number(area_id) : null, parent_id ? Number(parent_id) : null, pos
   );
   res.status(201).json(db.prepare('SELECT * FROM lists WHERE id=?').get(r.lastInsertRowid));
 });
@@ -2113,8 +2218,8 @@ app.post('/api/lists/from-template', (req, res) => {
   if (!tpl) return res.status(404).json({ error: 'Template not found' });
   const listCount = db.prepare('SELECT COUNT(*) as c FROM lists').get().c;
   if (listCount >= 100) return res.status(400).json({ error: 'Maximum 100 lists reached' });
-  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM lists').get();
-  const r = db.prepare('INSERT INTO lists (name,type,icon,position) VALUES (?,?,?,?)').run(tpl.name, tpl.type, tpl.icon, mp.p);
+  const pos = getNextPosition('lists');
+  const r = db.prepare('INSERT INTO lists (name,type,icon,position) VALUES (?,?,?,?)').run(tpl.name, tpl.type, tpl.icon, pos);
   const lid = r.lastInsertRowid;
   const insItem = db.prepare('INSERT INTO list_items (list_id,title,position) VALUES (?,?,?)');
   tpl.items.forEach((item, i) => insItem.run(lid, item, i));
@@ -2141,16 +2246,22 @@ app.post('/api/lists/:id/items', (req, res) => {
   const itemCount = db.prepare('SELECT COUNT(*) as c FROM list_items WHERE list_id=?').get(id).c;
   const items = Array.isArray(req.body) ? req.body : [req.body];
   if (itemCount + items.length > 500) return res.status(400).json({ error: 'Maximum 500 items per list' });
-  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM list_items WHERE list_id=?').get(id);
-  let pos = mp.p;
-  const ins = db.prepare('INSERT INTO list_items (list_id,title,checked,category,quantity,note,position) VALUES (?,?,?,?,?,?,?)');
-  const created = [];
+  // Validate all items first
   for (const item of items) {
     if (!item.title || typeof item.title !== 'string' || !item.title.trim()) return res.status(400).json({ error: 'Item title is required' });
     if (item.title.length > 200) return res.status(400).json({ error: 'Item title must be 200 chars or less' });
-    const r = ins.run(id, item.title.trim(), item.checked ? 1 : 0, item.category || null, item.quantity || null, item.note || '', pos++);
-    created.push(db.prepare('SELECT * FROM list_items WHERE id=?').get(r.lastInsertRowid));
   }
+  const batchTx = db.transaction(() => {
+    let pos = getNextPosition('list_items', 'list_id', id);
+    const ins = db.prepare('INSERT INTO list_items (list_id,title,checked,category,quantity,note,position) VALUES (?,?,?,?,?,?,?)');
+    const created = [];
+    for (const item of items) {
+      const r = ins.run(id, item.title.trim(), item.checked ? 1 : 0, item.category || null, item.quantity || null, item.note || '', pos++);
+      created.push(db.prepare('SELECT * FROM list_items WHERE id=?').get(r.lastInsertRowid));
+    }
+    return created;
+  });
+  const created = batchTx();
   rebuildSearchIndex();
   res.status(201).json(created.length === 1 ? created[0] : created);
 });
@@ -2261,9 +2372,9 @@ app.post('/api/shared/:token/items', (req, res) => {
   if (title.length > 200) return res.status(400).json({ error: 'title must be 200 chars or less' });
   const itemCount = db.prepare('SELECT COUNT(*) as c FROM list_items WHERE list_id=?').get(list.id).c;
   if (itemCount >= 500) return res.status(400).json({ error: 'Maximum 500 items per list' });
-  const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM list_items WHERE list_id=?').get(list.id);
+  const ipos = getNextPosition('list_items', 'list_id', list.id);
   const r = db.prepare('INSERT INTO list_items (list_id,title,category,quantity,position) VALUES (?,?,?,?,?)').run(
-    list.id, title.trim(), category || null, quantity || null, mp.p
+    list.id, title.trim(), category || null, quantity || null, ipos
   );
   rebuildSearchIndex();
   res.status(201).json(db.prepare('SELECT id, title, checked, category, quantity, note, position FROM list_items WHERE id=?').get(r.lastInsertRowid));
