@@ -97,10 +97,13 @@ ${scriptContent}
       'rule-action', 'rule-cancel', 'rule-save', 'rule-name', 'rule-trigger',
       // Briefing (created by showBriefing)
       'briefing-go',
+      // Lists view (created by renderLists/renderListDetail)
+      'lists-add-btn', 'lists-empty-add', 'ld-edit', 'ld-share', 'ld-del',
+      'ld-copy-link', 'ld-unshare', 'ld-clear-checked', 'ld-add-input', 'ld-add-btn', 'ld-add-cat',
     ]);
 
     // Dynamic prefixes (ids created in loops with numeric/key suffixes)
-    const dynamicIdPrefixes = ['gb-', 'pl-', 'set-', 'hab-', 'fb-', 'gm-', 'dp-'];
+    const dynamicIdPrefixes = ['gb-', 'pl-', 'set-', 'hab-', 'fb-', 'gm-', 'dp-', 'ld-', 'lm-'];
 
     const missing = [...hardRefs].filter(id => {
       if (htmlIds.has(id)) return false;

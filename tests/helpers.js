@@ -37,6 +37,8 @@ function cleanDb() {
   db.exec('DELETE FROM habit_logs');
   db.exec('DELETE FROM habits');
   db.exec('DELETE FROM saved_filters');
+  db.exec('DELETE FROM list_items');
+  db.exec('DELETE FROM lists');
 }
 
 function teardown() {
@@ -93,6 +95,20 @@ function makeFocus(taskId, overrides = {}) {
   return db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(r.lastInsertRowid);
 }
 
+function makeList(overrides = {}) {
+  const { db } = setup();
+  const o = { name: 'Test List', type: 'checklist', icon: '📋', color: '#2563EB', area_id: null, position: 0, ...overrides };
+  const r = db.prepare('INSERT INTO lists (name,type,icon,color,area_id,position) VALUES (?,?,?,?,?,?)').run(o.name, o.type, o.icon, o.color, o.area_id, o.position);
+  return db.prepare('SELECT * FROM lists WHERE id=?').get(r.lastInsertRowid);
+}
+
+function makeListItem(listId, overrides = {}) {
+  const { db } = setup();
+  const o = { title: 'Test Item', checked: 0, category: null, quantity: null, note: null, position: 0, ...overrides };
+  const r = db.prepare('INSERT INTO list_items (list_id,title,checked,category,quantity,note,position) VALUES (?,?,?,?,?,?,?)').run(listId, o.title, o.checked, o.category, o.quantity, o.note, o.position);
+  return db.prepare('SELECT * FROM list_items WHERE id=?').get(r.lastInsertRowid);
+}
+
 function agent() {
   const { app } = setup();
   return request(app);
@@ -117,4 +133,4 @@ function serverLocalDate(offsetDays = 0) {
   return d.toISOString().slice(0, 10);
 }
 
-module.exports = { setup, cleanDb, teardown, makeArea, makeGoal, makeTask, makeSubtask, makeTag, linkTag, makeFocus, agent, today, daysFromNow, serverLocalDate };
+module.exports = { setup, cleanDb, teardown, makeArea, makeGoal, makeTask, makeSubtask, makeTag, linkTag, makeFocus, makeList, makeListItem, agent, today, daysFromNow, serverLocalDate };
