@@ -62,9 +62,9 @@ function makeGoal(areaId, overrides = {}) {
 
 function makeTask(goalId, overrides = {}) {
   const { db } = setup();
-  const o = { title: 'Test Task', note: '', status: 'todo', priority: 0, due_date: null, recurring: null, assigned_to: '', my_day: 0, position: 0, ...overrides };
-  const r = db.prepare('INSERT INTO tasks (goal_id,title,note,status,priority,due_date,recurring,assigned_to,my_day,position) VALUES (?,?,?,?,?,?,?,?,?,?)').run(
-    goalId, o.title, o.note, o.status, o.priority, o.due_date, o.recurring, o.assigned_to, o.my_day, o.position
+  const o = { title: 'Test Task', note: '', status: 'todo', priority: 0, due_date: null, recurring: null, assigned_to: '', my_day: 0, position: 0, list_id: null, ...overrides };
+  const r = db.prepare('INSERT INTO tasks (goal_id,title,note,status,priority,due_date,recurring,assigned_to,my_day,position,list_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(
+    goalId, o.title, o.note, o.status, o.priority, o.due_date, o.recurring, o.assigned_to, o.my_day, o.position, o.list_id
   );
   return db.prepare('SELECT * FROM tasks WHERE id=?').get(r.lastInsertRowid);
 }
@@ -97,8 +97,8 @@ function makeFocus(taskId, overrides = {}) {
 
 function makeList(overrides = {}) {
   const { db } = setup();
-  const o = { name: 'Test List', type: 'checklist', icon: '📋', color: '#2563EB', area_id: null, position: 0, ...overrides };
-  const r = db.prepare('INSERT INTO lists (name,type,icon,color,area_id,position) VALUES (?,?,?,?,?,?)').run(o.name, o.type, o.icon, o.color, o.area_id, o.position);
+  const o = { name: 'Test List', type: 'checklist', icon: '📋', color: '#2563EB', area_id: null, position: 0, parent_id: null, ...overrides };
+  const r = db.prepare('INSERT INTO lists (name,type,icon,color,area_id,position,parent_id) VALUES (?,?,?,?,?,?,?)').run(o.name, o.type, o.icon, o.color, o.area_id, o.position, o.parent_id);
   return db.prepare('SELECT * FROM lists WHERE id=?').get(r.lastInsertRowid);
 }
 

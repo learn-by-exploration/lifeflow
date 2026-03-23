@@ -229,6 +229,12 @@ try { db.exec('CREATE INDEX idx_lists_parent ON lists(parent_id)'); } catch(e) {
 // ─── Add list_id to tasks ───
 try { db.exec('ALTER TABLE tasks ADD COLUMN list_id INTEGER REFERENCES lists(id) ON DELETE SET NULL'); } catch(e) {}
 
+// ─── Performance indexes on tasks ───
+try { db.exec('CREATE INDEX idx_tasks_goal ON tasks(goal_id)'); } catch(e) {}
+try { db.exec('CREATE INDEX idx_tasks_status ON tasks(status)'); } catch(e) {}
+try { db.exec('CREATE INDEX idx_tasks_my_day ON tasks(my_day) WHERE my_day=1'); } catch(e) {}
+try { db.exec('CREATE INDEX idx_tasks_due ON tasks(due_date) WHERE due_date IS NOT NULL'); } catch(e) {}
+
 // ─── FTS5 Virtual Table for Global Search ───
 db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
   type, source_id UNINDEXED, title, body, context,
@@ -353,7 +359,43 @@ function enrichTask(t) {
   }
   return t;
 }
-function enrichTasks(tasks) { return tasks.map(enrichTask); }
+function enrichTasks(tasks) {
+  if (!tasks.length) return tasks;
+  const ids = tasks.map(t => t.id);
+  const ph = ids.map(() => '?').join(',');
+  // Batch-load tags
+  const allTags = db.prepare(`SELECT tt.task_id, t.* FROM tags t JOIN task_tags tt ON t.id=tt.tag_id WHERE tt.task_id IN (${ph})`).all(...ids);
+  const tagMap = {};
+  allTags.forEach(r => { (tagMap[r.task_id] = tagMap[r.task_id] || []).push({ id: r.id, name: r.name, color: r.color }); });
+  // Batch-load subtasks
+  const allSubs = db.prepare(`SELECT * FROM subtasks WHERE task_id IN (${ph}) ORDER BY position`).all(...ids);
+  const subMap = {};
+  allSubs.forEach(r => { (subMap[r.task_id] = subMap[r.task_id] || []).push(r); });
+  // Batch-load deps
+  const allDeps = db.prepare(`SELECT d.task_id, t.id, t.title, t.status FROM tasks t JOIN task_deps d ON t.id=d.blocked_by_id WHERE d.task_id IN (${ph})`).all(...ids);
+  const depMap = {};
+  allDeps.forEach(r => { (depMap[r.task_id] = depMap[r.task_id] || []).push({ id: r.id, title: r.title, status: r.status }); });
+  // Batch-load lists
+  const listIds = [...new Set(tasks.filter(t => t.list_id).map(t => t.list_id))];
+  const listMap = {};
+  if (listIds.length) {
+    const lph = listIds.map(() => '?').join(',');
+    db.prepare(`SELECT id, name, icon, color FROM lists WHERE id IN (${lph})`).all(...listIds).forEach(l => { listMap[l.id] = l; });
+  }
+  return tasks.map(t => {
+    t.tags = tagMap[t.id] || [];
+    t.subtasks = subMap[t.id] || [];
+    t.subtask_done = t.subtasks.filter(s => s.done).length;
+    t.subtask_total = t.subtasks.length;
+    t.blocked_by = depMap[t.id] || [];
+    if (t.list_id && listMap[t.list_id]) {
+      t.list_name = listMap[t.list_id].name;
+      t.list_icon = listMap[t.list_id].icon;
+      t.list_color = listMap[t.list_id].color;
+    }
+    return t;
+  });
+}
 
 // ─── Tags ───
 app.get('/api/tags', (req, res) => {
@@ -1123,7 +1165,7 @@ app.put('/api/tasks/:id/deps', (req, res) => {
 // ─── Task Templates ───
 app.get('/api/templates', (req, res) => {
   const rows = db.prepare('SELECT * FROM task_templates ORDER BY created_at DESC').all();
-  res.json(rows.map(r => ({ ...r, tasks: JSON.parse(r.tasks) })));
+  res.json(rows.map(r => { try { return { ...r, tasks: JSON.parse(r.tasks) }; } catch { return { ...r, tasks: [] }; } }));
 });
 
 app.post('/api/templates', (req, res) => {
@@ -1149,7 +1191,8 @@ app.post('/api/templates/:id/apply', (req, res) => {
   if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'goalId required' });
   const tmpl = db.prepare('SELECT * FROM task_templates WHERE id=?').get(id);
   if (!tmpl) return res.status(404).json({ error: 'Template not found' });
-  const tasks = JSON.parse(tmpl.tasks);
+  let tasks;
+  try { tasks = JSON.parse(tmpl.tasks); } catch { return res.status(500).json({ error: 'Corrupted template data' }); }
   const created = [];
   const insTask = db.prepare('INSERT INTO tasks (goal_id, title, priority, status) VALUES (?, ?, ?, ?)');
   const insSub = db.prepare('INSERT INTO subtasks (task_id, title, position) VALUES (?, ?, ?)');
@@ -1621,8 +1664,9 @@ app.delete('/api/rules/:id', (req, res) => {
 function executeRules(event, task) {
   const rules = db.prepare('SELECT * FROM automation_rules WHERE enabled=1 AND trigger_type=?').all(event);
   rules.forEach(rule => {
-    const tc = JSON.parse(rule.trigger_config || '{}');
-    const ac = JSON.parse(rule.action_config || '{}');
+    let tc, ac;
+    try { tc = JSON.parse(rule.trigger_config || '{}'); } catch { tc = {}; }
+    try { ac = JSON.parse(rule.action_config || '{}'); } catch { ac = {}; }
     // Check trigger conditions
     if (tc.area_id && task.area_id !== tc.area_id) return;
     if (tc.goal_id && task.goal_id !== tc.goal_id) return;
@@ -1793,7 +1837,8 @@ app.post('/api/reviews', (req, res) => {
 app.get('/api/filters/counts', (req, res) => {
   const filters = db.prepare('SELECT * FROM saved_filters ORDER BY position').all();
   const counts = filters.map(f => {
-    const p = JSON.parse(f.filters || '{}');
+    let p;
+    try { p = JSON.parse(f.filters || '{}'); } catch { p = {}; }
     let w = [], pa = [];
     if (p.area_id) { w.push('a.id=?'); pa.push(Number(p.area_id)); }
     if (p.goal_id) { w.push('g.id=?'); pa.push(Number(p.goal_id)); }
@@ -2229,6 +2274,16 @@ app.get('/share/:token', (req, res) => {
   const token = req.params.token;
   if (!/^[a-f0-9]{24}$/.test(token)) return res.status(404).send('Not found');
   res.sendFile(path.join(__dirname, '..', 'public', 'share.html'));
+});
+
+// ─── Health check ───
+app.get('/health', (req, res) => {
+  try {
+    db.prepare('SELECT 1').get();
+    res.json({ status: 'ok', uptime: process.uptime() });
+  } catch {
+    res.status(503).json({ status: 'error' });
+  }
 });
 
 // SPA fallback
