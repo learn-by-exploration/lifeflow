@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shared List – LifeFlow</title>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f5f5;color:#1a1a2e;min-height:100vh;display:flex;flex-direction:column}
+.wrap{max-width:520px;margin:0 auto;width:100%;padding:16px}
+.head{text-align:center;padding:24px 0 16px}
+.head h1{font-size:20px;margin:4px 0 2px}
+.head .type{font-size:12px;color:#666;margin-bottom:4px}
+.head .icon{font-size:36px;display:block;margin-bottom:4px}
+.items{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden}
+.item{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #eee;transition:background .15s}
+.item:last-child{border-bottom:none}
+.item.checked{opacity:.5}
+.item.checked .title{text-decoration:line-through}
+.chk{background:none;border:none;cursor:pointer;color:#888;font-size:0;padding:0}
+.chk span{font-size:22px}
+.chk.done span{color:#33B679}
+.title{flex:1;font-size:14px}
+.qty{font-size:11px;background:#e8f0fe;color:#1967d2;padding:2px 8px;border-radius:10px}
+.cat-hdr{padding:8px 16px;font-size:11px;font-weight:600;color:#666;background:#f9f9f9;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #eee}
+.note-content{font-size:12px;color:#555;padding:4px 0 0;line-height:1.4}
+.add-bar{display:flex;gap:8px;margin-top:12px}
+.add-bar input{flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none}
+.add-bar input:focus{border-color:#2563EB}
+.add-bar button{padding:10px 18px;background:#2563EB;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px}
+.add-bar button:hover{background:#1d4ed8}
+.empty{text-align:center;padding:40px 20px;color:#999}
+.empty span{font-size:48px;opacity:.3;display:block;margin-bottom:8px}
+.footer{text-align:center;padding:24px 0;font-size:11px;color:#999;margin-top:auto}
+.footer a{color:#2563EB;text-decoration:none}
+.err{text-align:center;padding:60px 20px}
+.err h2{font-size:18px;margin-bottom:8px}
+.err p{color:#666;font-size:13px}
+.count{font-size:11px;color:#999;text-align:right;padding:8px 16px}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div style="text-align:center;padding:60px 0;color:#999">Loading...</div>
+</div>
+<div class="footer">Powered by <a href="/">LifeFlow</a></div>
+<script>
+const token = location.pathname.split('/').pop();
+const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+const escA = s => String(s).replace(/[&"'<>]/g, m => ({ '&': '&amp;', '"': '&quot;', "'": '&#39;', '<': '&lt;', '>': '&gt;' })[m]);
+
+async function load() {
+  const app = document.getElementById('app');
+  try {
+    const r = await fetch('/api/shared/' + encodeURIComponent(token));
+    if (!r.ok) throw new Error(r.status);
+    const data = await r.json();
+    renderList(data);
+  } catch (e) {
+    app.innerHTML = '<div class="err"><h2>List not found</h2><p>This shared link may have expired or been revoked.</p></div>';
+  }
+}
+
+function renderList(data) {
+  const app = document.getElementById('app');
+  const list = data.list;
+  const items = data.items || [];
+  const isGrocery = list.type === 'grocery';
+  const isNotes = list.type === 'notes';
+  const typeLabel = isGrocery ? 'Grocery List' : isNotes ? 'Notes' : 'Checklist';
+
+  let h = '<div class="head">';
+  h += '<span class="icon">' + esc(list.icon || '📋') + '</span>';
+  h += '<h1>' + esc(list.name) + '</h1>';
+  h += '<div class="type">' + typeLabel + ' · ' + items.length + ' item' + (items.length !== 1 ? 's' : '') + '</div>';
+  h += '</div>';
+
+  if (!items.length) {
+    h += '<div class="items"><div class="empty"><span class="material-icons-round">' + (isGrocery ? 'shopping_cart' : isNotes ? 'note' : 'checklist') + '</span><p>No items yet</p></div></div>';
+  } else if (isGrocery) {
+    const cats = {};
+    items.forEach(i => { const c = i.category || 'Other'; if (!cats[c]) cats[c] = []; cats[c].push(i); });
+    const order = ['Produce','Bakery','Dairy','Meat & Seafood','Frozen','Pantry','Beverages','Snacks','Household','Personal Care','Other'];
+    h += '<div class="items">';
+    order.forEach(cat => {
+      if (!cats[cat]) return;
+      h += '<div class="cat-hdr">' + esc(cat) + '</div>';
+      cats[cat].forEach(i => {
+        h += '<div class="item' + (i.checked ? ' checked' : '') + '" data-iid="' + i.id + '">';
+        h += '<button class="chk' + (i.checked ? ' done' : '') + '" data-iid="' + i.id + '"><span class="material-icons-round">' + (i.checked ? 'check_box' : 'check_box_outline_blank') + '</span></button>';
+        h += '<span class="title">' + esc(i.title) + '</span>';
+        if (i.quantity) h += '<span class="qty">' + esc(i.quantity) + '</span>';
+        h += '</div>';
+      });
+    });
+    h += '</div>';
+  } else if (isNotes) {
+    h += '<div class="items">';
+    items.forEach(i => {
+      h += '<div class="item" style="flex-direction:column;align-items:stretch">';
+      h += '<span class="title" style="font-weight:600">' + esc(i.title) + '</span>';
+      if (i.note) h += '<div class="note-content">' + esc(i.note) + '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+  } else {
+    h += '<div class="items">';
+    items.forEach(i => {
+      h += '<div class="item' + (i.checked ? ' checked' : '') + '" data-iid="' + i.id + '">';
+      h += '<button class="chk' + (i.checked ? ' done' : '') + '" data-iid="' + i.id + '"><span class="material-icons-round">' + (i.checked ? 'check_box' : 'check_box_outline_blank') + '</span></button>';
+      h += '<span class="title">' + esc(i.title) + '</span>';
+      h += '</div>';
+    });
+    h += '</div>';
+  }
+
+  const checked = items.filter(i => i.checked).length;
+  if (items.length && !isNotes) {
+    h += '<div class="count">' + checked + '/' + items.length + ' done</div>';
+  }
+
+  // Add bar (not for notes type on shared)
+  if (!isNotes) {
+    h += '<div class="add-bar"><input type="text" id="add-inp" placeholder="Add item..."><button id="add-btn">Add</button></div>';
+  }
+
+  app.innerHTML = h;
+
+  // Toggle checked
+  if (!isNotes) {
+    app.querySelectorAll('.chk').forEach(btn => btn.addEventListener('click', async () => {
+      const iid = btn.dataset.iid;
+      const item = items.find(x => x.id === Number(iid));
+      if (!item) return;
+      try {
+        await fetch('/api/shared/' + encodeURIComponent(token) + '/items/' + iid, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ checked: item.checked ? 0 : 1 })
+        });
+        load();
+      } catch (e) {}
+    }));
+  }
+
+  // Add item
+  const addBtn = document.getElementById('add-btn');
+  const addInp = document.getElementById('add-inp');
+  if (addBtn && addInp) {
+    async function addItem() {
+      const title = addInp.value.trim();
+      if (!title) return;
+      try {
+        await fetch('/api/shared/' + encodeURIComponent(token) + '/items', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title })
+        });
+        addInp.value = '';
+        load();
+      } catch (e) {}
+    }
+    addBtn.addEventListener('click', addItem);
+    addInp.addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); });
+  }
+}
+
+load();
+</script>
+</body>
+</html>

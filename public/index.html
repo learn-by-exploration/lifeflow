@@ -810,6 +810,49 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .hint-card .hint-dismiss{margin-left:auto;cursor:pointer;color:var(--txd);font-size:14px}
 .hint-card .hint-dismiss:hover{color:var(--tx)}
 .hint-card .material-icons-round{font-size:16px;color:var(--brand);flex-shrink:0}
+
+/* Custom Lists */
+.list-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:16px}
+.list-card{background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--r);padding:16px;cursor:pointer;transition:border-color .2s,box-shadow .2s;position:relative}
+.list-card:hover{border-color:var(--brand);box-shadow:0 2px 8px var(--shd)}
+.list-card-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.list-card-icon{font-size:24px;width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center}
+.list-card-name{font-weight:600;font-size:14px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-card-type{font-size:10px;padding:2px 8px;border-radius:10px;background:var(--bg-h);color:var(--tx2);text-transform:uppercase;letter-spacing:.5px}
+.list-card-progress{height:4px;background:var(--bg-h);border-radius:2px;margin-top:8px;overflow:hidden}
+.list-card-progress-fill{height:100%;border-radius:2px;transition:width .3s ease}
+.list-card-meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:11px;color:var(--tx2)}
+.list-card .list-share-badge{position:absolute;top:10px;right:10px;font-size:12px;color:var(--brand)}
+.list-detail-head{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.list-detail-head h2{margin:0;font-size:18px;font-weight:600;flex:1}
+.list-detail-actions{display:flex;gap:6px;align-items:center}
+.list-detail-actions button{font-size:12px;padding:6px 12px}
+.share-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;border:1px solid var(--brd);font-size:12px;cursor:pointer;background:var(--bg-c);transition:all .2s}
+.share-pill.shared{border-color:var(--ok);color:var(--ok)}
+.share-url-box{display:flex;align-items:center;gap:6px;background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--rs);padding:6px 10px;font-size:11px;margin-top:8px}
+.share-url-box input{flex:1;background:none;border:none;color:var(--tx);font-size:11px;font-family:monospace;outline:none}
+.li-item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--brd);transition:background .15s,opacity .3s}
+.li-item:hover{background:var(--bg-h)}
+.li-item.checked{opacity:.55}
+.li-item.checked .li-title{text-decoration:line-through}
+.li-check{width:22px;height:22px;border-radius:6px;border:2px solid var(--brd);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s}
+.li-check:hover{border-color:var(--brand)}
+.li-check.done{background:var(--ok);border-color:var(--ok);color:#fff}
+.li-title{flex:1;font-size:13px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li-qty{font-size:11px;color:var(--tx2);background:var(--bg-h);padding:2px 8px;border-radius:10px;flex-shrink:0}
+.li-del{opacity:0;cursor:pointer;color:var(--txd);font-size:16px;transition:opacity .2s}
+.li-item:hover .li-del{opacity:1}
+.li-del:hover{color:var(--err)}
+.li-cat-header{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--tx2);padding:10px 14px 4px;background:var(--bg-s);position:sticky;top:0;z-index:1}
+.li-add-bar{display:flex;gap:8px;padding:10px 14px;border-top:2px solid var(--brd);background:var(--bg-c);position:sticky;bottom:0}
+.li-add-bar input{flex:1;background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--rs);padding:10px 14px;color:var(--tx);font-size:13px;outline:none}
+.li-add-bar input:focus{border-color:var(--brand)}
+.li-add-bar select{background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--rs);padding:8px;color:var(--tx);font-size:12px}
+.li-add-bar button{background:var(--brand);color:#fff;border:none;border-radius:var(--rs);padding:10px 16px;cursor:pointer;font-size:13px;font-weight:600}
+.li-add-bar button:hover{background:var(--brand-h)}
+.li-empty{text-align:center;color:var(--txd);padding:40px 20px;font-size:13px}
+.li-note-content{font-size:12px;color:var(--tx2);margin-top:4px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+@media(max-width:768px){.list-grid{grid-template-columns:1fr}.li-item{padding:14px;min-height:48px}.li-check{width:28px;height:28px}.li-del{opacity:1}}
 </style>
 </head>
 <body>
@@ -848,6 +891,14 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
       <div class="sf-item" data-smart="blocked"><span class="sf-icon">🔒</span><span>Blocked</span><span class="sf-badge" id="smart-blocked-cnt"></span></div>
     </div>
     <div id="sf-list"></div>
+    </div>
+  </div>
+  <!-- Lists (collapsible) -->
+  <div class="ns sb-collapsible" id="lists-sec">
+    <div class="ns-label sb-toggle" data-sec="lists">Lists <span class="material-icons-round sb-arrow">expand_more</span></div>
+    <div class="sb-sec" id="sb-lists">
+    <div id="sb-list-items"></div>
+    <div class="sf-item" id="sb-new-list" style="color:var(--brand);cursor:pointer"><span class="sf-icon">+</span><span>New List</span></div>
     </div>
   </div>
   <!-- Bottom bar: Settings + Reports + Help icons -->
@@ -899,6 +950,27 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
   <div class="md-row"><div><label>Target Date</label><input type="date" id="gm-due"></div><div><label>Color</label><div class="swatches" id="gm-sw"></div></div></div>
   <input type="hidden" id="gm-color" value="#6C63FF">
   <div class="md-actions"><button class="btn-c" id="gm-cancel">Cancel</button><button class="btn-s" id="gm-save">Save</button></div>
+</div></div>
+
+<!-- List modal -->
+<div class="mo" id="lm"><div class="md">
+  <h3 id="lm-t">New List</h3>
+  <label>Name</label><input type="text" id="lm-name" placeholder="e.g. Weekly Groceries" maxlength="100">
+  <label>Type</label>
+  <div id="lm-types" style="display:flex;gap:8px;margin-bottom:12px">
+    <label class="lm-type sel" data-type="checklist" style="flex:1;text-align:center;padding:10px;border:2px solid var(--brand);border-radius:var(--rs);cursor:pointer"><span style="font-size:22px;display:block">✅</span><span style="font-size:11px">Checklist</span></label>
+    <label class="lm-type" data-type="grocery" style="flex:1;text-align:center;padding:10px;border:2px solid var(--brd);border-radius:var(--rs);cursor:pointer"><span style="font-size:22px;display:block">🛒</span><span style="font-size:11px">Grocery</span></label>
+    <label class="lm-type" data-type="notes" style="flex:1;text-align:center;padding:10px;border:2px solid var(--brd);border-radius:var(--rs);cursor:pointer"><span style="font-size:22px;display:block">📝</span><span style="font-size:11px">Notes</span></label>
+  </div>
+  <div class="md-row"><div><label>Icon</label><input type="text" id="lm-icon" value="📋" maxlength="4" style="width:50px"></div><div><label>Color</label><div class="swatches" id="lm-sw"></div></div></div>
+  <input type="hidden" id="lm-color" value="#2563EB">
+  <label>Area (optional)</label><select id="lm-area"><option value="">None</option></select>
+  <div id="lm-tpl" style="margin-top:8px">
+    <label style="font-size:11px;color:var(--txd)">Or start from a template:</label>
+    <div id="lm-tpl-list" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px"></div>
+  </div>
+  <input type="hidden" id="lm-edit-id" value="">
+  <div class="md-actions"><button class="btn-c" id="lm-cancel">Cancel</button><button class="btn-s" id="lm-save">Create</button></div>
 </div></div>
 
 <!-- Search overlay -->
@@ -1098,7 +1170,8 @@ const api={
   async get(u){return(await fetch(u)).json()},
   async post(u,d){return(await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)})).json()},
   async put(u,d){return(await fetch(u,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)})).json()},
-  async del(u){return(await fetch(u,{method:'DELETE'})).json()}
+  async del(u){return(await fetch(u,{method:'DELETE'})).json()},
+  async patch(u,d){return(await fetch(u,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)})).json()}
 };
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function escA(s){return String(s).replace(/[&"'<>]/g,m=>({'&':'&amp;','"':'&quot;',"'":'&#39;','<':'&lt;','>':'&gt;'})[m])}
@@ -1170,6 +1243,24 @@ function renderSFList(){
 
 // Smart list handlers
 let activeSmartFilter=null;
+let activeListId=null,activeListName='',userLists=[];
+async function loadUserLists(){
+  try{userLists=await api.get('/api/lists');renderSBLists()}catch(e){}
+}
+function renderSBLists(){
+  const el=$('sb-list-items');if(!el)return;
+  el.innerHTML=userLists.map(l=>{
+    const pct=l.item_count?Math.round((l.checked_count||0)/l.item_count*100):0;
+    return`<div class="sf-item${l.id===activeListId?' active':''}" data-lid="${l.id}"><span class="sf-icon">${esc(l.icon)}</span><span>${esc(l.name)}</span><span class="sf-badge">${l.item_count?((l.checked_count||0)+'/'+l.item_count):''}</span></div>`;
+  }).join('');
+  el.querySelectorAll('.sf-item').forEach(it=>it.addEventListener('click',()=>{
+    const lid=Number(it.dataset.lid);activeListId=lid;
+    const lst=userLists.find(x=>x.id===lid);activeListName=lst?lst.name:'List';
+    currentView='listdetail';
+    document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));
+    it.classList.add('active');closeMobileSb();render();
+  }));
+}
 document.querySelectorAll('#smart-list .sf-item').forEach(el=>el.addEventListener('click',()=>{
   activeSmartFilter=el.dataset.smart;
   currentView='smartlist';activeAreaId=null;activeGoalId=null;
@@ -1256,7 +1347,7 @@ async function render(){
   $('vt').style.display=(currentView==='goal')?'flex':'none';
   hideMultiSelectBar();selectedIds.clear();msMode=false;document.body.classList.remove('ms-mode');
   // Persist last view
-  if(!['area','goal','filter','smartlist','help'].includes(currentView))localStorage.setItem('lf-lastView',currentView);
+  if(!['area','goal','filter','smartlist','help','lists','listdetail'].includes(currentView))localStorage.setItem('lf-lastView',currentView);
   if(currentView==='myday')await renderMyDay();
   else if(currentView==='all')await renderAll();
   else if(currentView==='board')await renderGlobalBoard();
@@ -1279,6 +1370,8 @@ async function render(){
   else if(currentView==='rules')await renderRules();
   else if(currentView==='reports')await renderReports();
   else if(currentView==='help')renderHelp();
+  else if(currentView==='lists')await renderLists();
+  else if(currentView==='listdetail')await renderListDetail();
   else if(currentView==='smartlist')await renderSmartList();
   else if(currentView==='filter')await renderSavedFilter();
   else if(currentView==='area')await renderArea();
@@ -1310,6 +1403,11 @@ function updateBC(){
   else if(currentView==='rules'){pt.textContent='Automations';bc.innerHTML=''}
   else if(currentView==='reports'){pt.textContent='Reports';bc.innerHTML=''}
   else if(currentView==='help'){pt.textContent='Help & Guide';bc.innerHTML=''}
+  else if(currentView==='lists'){pt.textContent='Lists';bc.innerHTML=''}
+  else if(currentView==='listdetail'){
+    pt.textContent=activeListName||'List';
+    bc.innerHTML=`<span data-go="lists" style="cursor:pointer;color:var(--brand)">Lists</span><span class="sep">›</span><span>${esc(activeListName||'')}</span>`;
+  }
   else if(currentView==='smartlist'){
     const names={stale:'Stale Tasks',quickwins:'Quick Wins',blocked:'Blocked'};
     pt.textContent=names[activeSmartFilter]||'Smart List';bc.innerHTML='';
@@ -2337,7 +2435,7 @@ $('sb-ov').addEventListener('click', () => { $('sb').classList.remove('open'); $
 function closeMobileSb() { $('sb').classList.remove('open'); $('sb-ov').classList.remove('open'); }
 
 // Boot
-Promise.all([loadSettings(),loadAreas(),loadTags(),loadSavedFilters(),loadSmartCounts()]).then(()=>{
+Promise.all([loadSettings(),loadAreas(),loadTags(),loadSavedFilters(),loadSmartCounts(),loadUserLists()]).then(()=>{
   // Apply settings on load
   if(appSettings.theme){
     document.documentElement.setAttribute('data-theme',appSettings.theme);
@@ -3478,6 +3576,262 @@ function applySettingsToTimer(){
   FT_MODES.focus.dur=fd*60;FT_MODES.short.dur=sb*60;FT_MODES.long.dur=lb*60;
 }
 
+// ─── LISTS VIEW ───
+const LIST_TYPE_ICONS={checklist:'✅',grocery:'🛒',notes:'📝'};
+
+function openListModal(editList){
+  const isEdit=!!editList;
+  $('lm-t').textContent=isEdit?'Edit List':'New List';
+  $('lm-save').textContent=isEdit?'Save':'Create';
+  $('lm-name').value=isEdit?editList.name:'';
+  $('lm-icon').value=isEdit?(editList.icon||'📋'):'📋';
+  $('lm-color').value=isEdit?(editList.color||'#2563EB'):'#2563EB';
+  $('lm-edit-id').value=isEdit?editList.id:'';
+  buildSwatches('lm-sw','lm-color',isEdit?(editList.color||'#2563EB'):'#2563EB');
+  // Type selector
+  const selType=isEdit?editList.type:'checklist';
+  document.querySelectorAll('.lm-type').forEach(t=>{
+    t.classList.toggle('sel',t.dataset.type===selType);
+    t.style.borderColor=t.dataset.type===selType?'var(--brand)':'var(--brd)';
+  });
+  if(isEdit){document.querySelectorAll('.lm-type').forEach(t=>{t.style.pointerEvents='none';t.style.opacity='.6'})}
+  else{document.querySelectorAll('.lm-type').forEach(t=>{t.style.pointerEvents='';t.style.opacity=''})}
+  // Area dropdown
+  const asel=$('lm-area');
+  asel.innerHTML='<option value="">None</option>'+areas.map(a=>`<option value="${a.id}"${isEdit&&editList.area_id===a.id?' selected':''}>${esc(a.icon)} ${esc(a.name)}</option>`).join('');
+  // Templates
+  const tplDiv=$('lm-tpl');
+  if(isEdit){tplDiv.style.display='none'}else{
+    tplDiv.style.display='';
+    api.get('/api/lists/templates').then(tpls=>{
+      $('lm-tpl-list').innerHTML=tpls.map(t=>`<button class="btn-c lm-tpl-btn" data-tid="${escA(t.id)}" style="font-size:11px;padding:4px 10px">${esc(t.icon)} ${esc(t.name)}</button>`).join('');
+      $('lm-tpl-list').querySelectorAll('.lm-tpl-btn').forEach(b=>b.addEventListener('click',async()=>{
+        const r=await api.post('/api/lists/from-template',{template_id:b.dataset.tid});
+        $('lm').classList.remove('active');
+        await loadUserLists();activeListId=r.id;activeListName=r.name;currentView='listdetail';render();
+      }));
+    }).catch(()=>{});
+  }
+  $('lm').classList.add('active');$('lm-name').focus();
+}
+
+// Type selector clicks
+document.querySelectorAll('.lm-type').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.lm-type').forEach(x=>{x.classList.remove('sel');x.style.borderColor='var(--brd)'});
+  t.classList.add('sel');t.style.borderColor='var(--brand)';
+  // Set default icon based on type
+  const icons={checklist:'📋',grocery:'🛒',notes:'📝'};
+  $('lm-icon').value=icons[t.dataset.type]||'📋';
+}));
+$('lm-cancel').addEventListener('click',()=>$('lm').classList.remove('active'));
+$('lm-save').addEventListener('click',async()=>{
+  const name=$('lm-name').value.trim();
+  if(!name)return;
+  const type=document.querySelector('.lm-type.sel')?.dataset.type||'checklist';
+  const icon=$('lm-icon').value||'📋';
+  const color=$('lm-color').value;
+  const area_id=$('lm-area').value?Number($('lm-area').value):null;
+  const editId=$('lm-edit-id').value;
+  if(editId){
+    await api.put('/api/lists/'+editId,{name,icon,color,area_id});
+  }else{
+    const r=await api.post('/api/lists',{name,type,icon,color,area_id});
+    activeListId=r.id;activeListName=r.name;
+  }
+  $('lm').classList.remove('active');
+  await loadUserLists();
+  if(!editId){currentView='listdetail';}
+  render();
+});
+
+async function renderLists(){
+  const c=$('ct');
+  let lists=[];
+  try{lists=await api.get('/api/lists');userLists=lists;renderSBLists()}catch(e){}
+  let h=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><h2 style="margin:0">Lists</h2><button class="btn-s" id="lists-add-btn">+ New List</button></div>`;
+  if(!lists.length){
+    h+=emptyS('list','No lists yet','Create a checklist, grocery list, or notes list to get started',
+      `<button class="btn-s" id="lists-empty-add">+ New List</button>`);
+    c.innerHTML=h;
+    $('lists-add-btn').addEventListener('click',()=>openListModal());
+    $('lists-empty-add')?.addEventListener('click',()=>openListModal());
+    return;
+  }
+  h+=`<div class="list-grid">`;
+  lists.forEach(l=>{
+    const pct=l.item_count?Math.round((l.checked_count||0)/l.item_count*100):0;
+    const typeLabel=l.type==='grocery'?'Grocery':l.type==='notes'?'Notes':'Checklist';
+    h+=`<div class="list-card" data-lid="${l.id}">
+      <div class="list-card-head">
+        <span class="list-card-icon" style="background:${escA(l.color||'#2563EB')}20;color:${escA(l.color||'#2563EB')}">${esc(l.icon||'📋')}</span>
+        <div style="flex:1;min-width:0"><div class="list-card-name">${esc(l.name)}</div>
+        <div class="list-card-type">${typeLabel}</div></div>
+        ${l.share_token?'<span class="list-share-badge" title="Shared"><span class="material-icons-round" style="font-size:14px">link</span></span>':''}
+      </div>
+      ${l.item_count?`<div class="list-card-progress"><div style="flex:1;height:4px;background:var(--brd);border-radius:2px"><div style="height:100%;width:${pct}%;background:${escA(l.color||'#2563EB')};border-radius:2px"></div></div><span class="list-card-meta">${l.checked_count||0}/${l.item_count}</span></div>`:''}
+    </div>`;
+  });
+  h+=`</div>`;
+  c.innerHTML=h;
+  $('lists-add-btn').addEventListener('click',()=>openListModal());
+  c.querySelectorAll('.list-card').forEach(card=>card.addEventListener('click',()=>{
+    const lid=Number(card.dataset.lid);
+    const lst=lists.find(x=>x.id===lid);
+    activeListId=lid;activeListName=lst?lst.name:'List';currentView='listdetail';
+    document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));
+    render();
+  }));
+}
+
+async function renderListDetail(){
+  const c=$('ct');
+  if(!activeListId){currentView='lists';render();return}
+  let list,items=[];
+  try{[list,items]=await Promise.all([
+    api.get('/api/lists').then(ls=>ls.find(x=>x.id===activeListId)),
+    api.get('/api/lists/'+activeListId+'/items')
+  ])}catch(e){c.innerHTML='<p>Error loading list</p>';return}
+  if(!list){currentView='lists';render();return}
+  activeListName=list.name;
+  const isGrocery=list.type==='grocery',isNotes=list.type==='notes';
+  let h=`<div class="list-detail-head">
+    <span style="font-size:28px">${esc(list.icon||'📋')}</span>
+    <div style="flex:1"><h2 style="margin:0">${esc(list.name)}</h2><span style="font-size:11px;color:var(--txd)">${list.type==='grocery'?'Grocery List':list.type==='notes'?'Notes':'Checklist'} · ${items.length} item${items.length!==1?'s':''}</span></div>
+    <div class="list-detail-actions">
+      <button class="btn-c" id="ld-edit" title="Edit list"><span class="material-icons-round" style="font-size:16px">edit</span></button>
+      <button class="btn-c" id="ld-share" title="Share"><span class="material-icons-round" style="font-size:16px">${list.share_token?'link':'link_off'}</span></button>
+      <button class="btn-c" id="ld-del" title="Delete list" style="color:var(--dn)"><span class="material-icons-round" style="font-size:16px">delete</span></button>
+    </div>
+  </div>`;
+  // Share pill
+  if(list.share_token){
+    const shareUrl=location.origin+'/share/'+list.share_token;
+    h+=`<div class="share-pill shared"><span class="material-icons-round" style="font-size:14px">link</span> Shared · <span class="share-url-box" title="Click to copy">${escA(shareUrl)}</span> <button class="btn-c" id="ld-copy-link" style="font-size:10px;padding:2px 8px">Copy</button> <button class="btn-c" id="ld-unshare" style="font-size:10px;padding:2px 8px;color:var(--dn)">Stop sharing</button></div>`;
+  }
+  // Clear checked button for checklist/grocery
+  if(!isNotes){
+    const checkedCnt=items.filter(i=>i.checked).length;
+    if(checkedCnt>0){
+      h+=`<div style="margin:8px 0"><button class="btn-c" id="ld-clear-checked" style="font-size:11px"><span class="material-icons-round" style="font-size:14px;vertical-align:middle">cleaning_services</span> Clear ${checkedCnt} checked</button></div>`;
+    }
+  }
+  // Items
+  if(!items.length){
+    h+=`<div class="li-empty"><span class="material-icons-round" style="font-size:36px;opacity:.3">${isGrocery?'shopping_cart':isNotes?'note':'checklist'}</span><p>No items yet. Add your first one below.</p></div>`;
+  } else if(isGrocery){
+    // Group by category
+    const cats={};
+    items.forEach(i=>{const cat=i.category||'Other';if(!cats[cat])cats[cat]=[];cats[cat].push(i)});
+    const catOrder=['Produce','Bakery','Dairy','Meat & Seafood','Frozen','Pantry','Beverages','Snacks','Household','Personal Care','Other'];
+    catOrder.forEach(cat=>{
+      if(!cats[cat])return;
+      h+=`<div class="li-cat-header">${esc(cat)}<span style="font-size:10px;color:var(--txd);margin-left:6px">${cats[cat].length}</span></div>`;
+      cats[cat].forEach(i=>{
+        h+=`<div class="li-item${i.checked?' checked':''}" data-iid="${i.id}">
+          <button class="li-check${i.checked?' done':''}" data-iid="${i.id}"><span class="material-icons-round">${i.checked?'check_box':'check_box_outline_blank'}</span></button>
+          <span class="li-title">${esc(i.title)}</span>
+          ${i.quantity?`<span class="li-qty">${esc(i.quantity)}</span>`:''}
+          <button class="li-del" data-iid="${i.id}"><span class="material-icons-round">close</span></button>
+        </div>`;
+      });
+    });
+  } else if(isNotes){
+    items.forEach(i=>{
+      h+=`<div class="li-item" data-iid="${i.id}" style="flex-direction:column;align-items:stretch">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="li-title" style="font-weight:600">${esc(i.title)}</span>
+          <button class="li-del" data-iid="${i.id}" style="opacity:1"><span class="material-icons-round">close</span></button>
+        </div>
+        ${i.note?`<div class="li-note-content">${esc(i.note)}</div>`:''}
+      </div>`;
+    });
+  } else {
+    items.forEach(i=>{
+      h+=`<div class="li-item${i.checked?' checked':''}" data-iid="${i.id}">
+        <button class="li-check${i.checked?' done':''}" data-iid="${i.id}"><span class="material-icons-round">${i.checked?'check_box':'check_box_outline_blank'}</span></button>
+        <span class="li-title">${esc(i.title)}</span>
+        <button class="li-del" data-iid="${i.id}"><span class="material-icons-round">close</span></button>
+      </div>`;
+    });
+  }
+  // Add bar
+  h+=`<div class="li-add-bar">
+    <input type="text" id="ld-add-input" placeholder="${isGrocery?'Add item... (e.g. Milk x2)':isNotes?'Add note title...':'Add item...'}" style="flex:1">
+    ${isGrocery?`<select id="ld-add-cat" style="width:120px;font-size:11px"><option value="Other">Category</option>${['Produce','Bakery','Dairy','Meat & Seafood','Frozen','Pantry','Beverages','Snacks','Household','Personal Care'].map(c=>'<option value="'+escA(c)+'">'+esc(c)+'</option>').join('')}</select>`:''}
+    <button class="btn-s" id="ld-add-btn" style="white-space:nowrap">+ Add</button>
+  </div>`;
+  c.innerHTML=h;
+  // Event handlers
+  $('ld-edit')?.addEventListener('click',()=>openListModal(list));
+  $('ld-del')?.addEventListener('click',async()=>{
+    if(!confirm('Delete "'+list.name+'" and all its items?'))return;
+    await api.del('/api/lists/'+list.id);
+    activeListId=null;currentView='lists';await loadUserLists();render();
+  });
+  $('ld-share')?.addEventListener('click',async()=>{
+    if(list.share_token){
+      if(!confirm('Stop sharing this list?'))return;
+      await api.del('/api/lists/'+list.id+'/share');
+    }else{
+      await api.post('/api/lists/'+list.id+'/share');
+    }
+    await loadUserLists();render();
+  });
+  $('ld-copy-link')?.addEventListener('click',()=>{
+    const url=location.origin+'/share/'+list.share_token;
+    navigator.clipboard.writeText(url).then(()=>{
+      $('ld-copy-link').textContent='Copied!';setTimeout(()=>{$('ld-copy-link').textContent='Copy'},1500);
+    });
+  });
+  $('ld-unshare')?.addEventListener('click',async()=>{
+    await api.del('/api/lists/'+list.id+'/share');await loadUserLists();render();
+  });
+  $('ld-clear-checked')?.addEventListener('click',async()=>{
+    await api.post('/api/lists/'+list.id+'/clear-checked');await loadUserLists();render();
+  });
+  // Check/uncheck
+  c.querySelectorAll('.li-check').forEach(btn=>btn.addEventListener('click',async()=>{
+    const iid=Number(btn.dataset.iid);
+    const item=items.find(x=>x.id===iid);
+    if(!item)return;
+    await api.put('/api/lists/'+list.id+'/items/'+iid,{checked:item.checked?0:1});
+    await loadUserLists();render();
+  }));
+  // Delete item
+  c.querySelectorAll('.li-del').forEach(btn=>btn.addEventListener('click',async(e)=>{
+    e.stopPropagation();
+    const iid=Number(btn.dataset.iid);
+    await api.del('/api/lists/'+list.id+'/items/'+iid);
+    await loadUserLists();render();
+  }));
+  // Add item
+  async function addItem(){
+    const inp=$('ld-add-input');
+    let title=inp.value.trim();
+    if(!title)return;
+    const payload={title};
+    if(isGrocery){
+      // Parse quantity: "Milk x2" or "2x Milk" or "Milk (2)"
+      const qm=title.match(/^(.+?)\s+x(\d+)$/i)||title.match(/^(\d+)x\s+(.+)$/i);
+      if(qm){
+        payload.title=qm[2]&&/^\d+$/.test(qm[1])?qm[2].trim():qm[1].trim();
+        payload.quantity=qm[2]&&/^\d+$/.test(qm[1])?qm[1]:qm[2];
+      }
+      const catSel=$('ld-add-cat');
+      if(catSel&&catSel.value!=='Other')payload.category=catSel.value;
+    }
+    if(isNotes)payload.note='';
+    await api.post('/api/lists/'+list.id+'/items',payload);
+    inp.value='';
+    await loadUserLists();render();
+  }
+  $('ld-add-btn')?.addEventListener('click',addItem);
+  $('ld-add-input')?.addEventListener('keydown',e=>{if(e.key==='Enter')addItem()});
+  $('ld-add-input')?.focus();
+  // Update breadcrumb
+  updateBC();
+}
+
 // ─── HABITS VIEW ───
 async function renderHabits(){
   const mc=$('ct');
@@ -3848,6 +4202,7 @@ $('dr-btn')?.addEventListener('click',openDailyReview);
 $('sb-settings-btn')?.addEventListener('click',()=>go('settings'));
 $('sb-reports-btn')?.addEventListener('click',()=>go('reports'));
 $('sb-help-btn')?.addEventListener('click',()=>go('help'));
+$('sb-new-list')?.addEventListener('click',()=>openListModal());
 $('dr-ov').addEventListener('click',e=>{if(e.target===$('dr-ov'))closeDR()});
 $('dr-skip').addEventListener('click',closeDR);
 $('dr-next').addEventListener('click',async()=>{
