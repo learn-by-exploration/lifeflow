@@ -205,10 +205,12 @@ db.exec(`CREATE TABLE IF NOT EXISTS lists (
   icon TEXT DEFAULT '📋',
   color TEXT DEFAULT '#2563EB',
   area_id INTEGER REFERENCES life_areas(id) ON DELETE SET NULL,
+  parent_id INTEGER REFERENCES lists(id) ON DELETE CASCADE,
   share_token TEXT UNIQUE,
   position INTEGER DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`);
+try { db.exec('ALTER TABLE lists ADD COLUMN parent_id INTEGER REFERENCES lists(id) ON DELETE CASCADE'); } catch(e) {}
 db.exec(`CREATE TABLE IF NOT EXISTS list_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   list_id INTEGER NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
@@ -222,6 +224,10 @@ db.exec(`CREATE TABLE IF NOT EXISTS list_items (
 )`);
 try { db.exec('CREATE INDEX idx_list_items_list ON list_items(list_id, position)'); } catch(e) {}
 try { db.exec('CREATE UNIQUE INDEX idx_lists_share ON lists(share_token) WHERE share_token IS NOT NULL'); } catch(e) {}
+try { db.exec('CREATE INDEX idx_lists_parent ON lists(parent_id)'); } catch(e) {}
+
+// ─── Add list_id to tasks ───
+try { db.exec('ALTER TABLE tasks ADD COLUMN list_id INTEGER REFERENCES lists(id) ON DELETE SET NULL'); } catch(e) {}
 
 // ─── FTS5 Virtual Table for Global Search ───
 db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
@@ -341,6 +347,10 @@ function enrichTask(t) {
   t.subtask_done = t.subtasks.filter(s => s.done).length;
   t.subtask_total = t.subtasks.length;
   t.blocked_by = getBlockedBy(t.id);
+  if (t.list_id) {
+    const list = db.prepare('SELECT id, name, icon, color FROM lists WHERE id=?').get(t.list_id);
+    if (list) { t.list_name = list.name; t.list_icon = list.icon; t.list_color = list.color; }
+  }
   return t;
 }
 function enrichTasks(tasks) { return tasks.map(enrichTask); }
@@ -544,11 +554,12 @@ app.get('/api/tasks/calendar', (req, res) => {
 app.post('/api/goals/:goalId/tasks', (req, res) => {
   const goalId = Number(req.params.goalId);
   if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'Invalid ID' });
-  const { title, note, priority, due_date, due_time, recurring, assigned_to, my_day, tagIds, time_block_start, time_block_end, estimated_minutes } = req.body;
+  const { title, note, priority, due_date, due_time, recurring, assigned_to, my_day, tagIds, time_block_start, time_block_end, estimated_minutes, list_id } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
+  if (list_id) { const lid = Number(list_id); if (!Number.isInteger(lid) || !db.prepare('SELECT id FROM lists WHERE id=?').get(lid)) return res.status(400).json({ error: 'Invalid list_id' }); }
   const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM tasks WHERE goal_id=?').get(goalId);
-  const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,time_block_start,time_block_end,estimated_minutes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
-    goalId,title.trim(),note||'',priority||0,due_date||null,due_time||null,recurring||null,assigned_to||'',my_day?1:0,mp.p,time_block_start||null,time_block_end||null,estimated_minutes||null
+  const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,time_block_start,time_block_end,estimated_minutes,list_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
+    goalId,title.trim(),note||'',priority||0,due_date||null,due_time||null,recurring||null,assigned_to||'',my_day?1:0,mp.p,time_block_start||null,time_block_end||null,estimated_minutes||null,list_id?Number(list_id):null
   );
   const taskId = r.lastInsertRowid;
   if (Array.isArray(tagIds)) {
@@ -694,19 +705,21 @@ app.put('/api/tasks/:id', (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const ex = db.prepare('SELECT * FROM tasks WHERE id=?').get(id);
   if (!ex) return res.status(404).json({ error: 'Not found' });
-  const { title, note, status, priority, due_date, due_time, recurring, assigned_to, my_day, position, goal_id, time_block_start, time_block_end, estimated_minutes, actual_minutes } = req.body;
+  const { title, note, status, priority, due_date, due_time, recurring, assigned_to, my_day, position, goal_id, time_block_start, time_block_end, estimated_minutes, actual_minutes, list_id } = req.body;
+  if (list_id !== undefined && list_id !== null) { const lid = Number(list_id); if (!Number.isInteger(lid) || !db.prepare('SELECT id FROM lists WHERE id=?').get(lid)) return res.status(400).json({ error: 'Invalid list_id' }); }
   const completedAt = status==='done' && ex.status!=='done' ? new Date().toISOString() : (status && status!=='done' ? null : ex.completed_at);
   db.prepare(`UPDATE tasks SET title=COALESCE(?,title),note=COALESCE(?,note),status=COALESCE(?,status),
     priority=COALESCE(?,priority),due_date=?,due_time=?,recurring=?,assigned_to=COALESCE(?,assigned_to),
     my_day=COALESCE(?,my_day),position=COALESCE(?,position),goal_id=COALESCE(?,goal_id),completed_at=?,
-    time_block_start=?,time_block_end=?,estimated_minutes=?,actual_minutes=? WHERE id=?`).run(
+    time_block_start=?,time_block_end=?,estimated_minutes=?,actual_minutes=?,list_id=? WHERE id=?`).run(
     title||null, note!==undefined?note:null, status||null, priority!==undefined?priority:null,
     due_date!==undefined?due_date:ex.due_date, due_time!==undefined?due_time:ex.due_time,
     recurring!==undefined?recurring:ex.recurring,
     assigned_to!==undefined?assigned_to:null, my_day!==undefined?(my_day?1:0):null,
     position!==undefined?position:null, goal_id||null, completedAt,
     time_block_start!==undefined?time_block_start:ex.time_block_start, time_block_end!==undefined?time_block_end:ex.time_block_end,
-    estimated_minutes!==undefined?estimated_minutes:ex.estimated_minutes, actual_minutes!==undefined?actual_minutes:ex.actual_minutes, id
+    estimated_minutes!==undefined?estimated_minutes:ex.estimated_minutes, actual_minutes!==undefined?actual_minutes:ex.actual_minutes,
+    list_id!==undefined?(list_id?Number(list_id):null):ex.list_id, id
   );
   // Recurring: spawn next task when completed
   if (status === 'done' && ex.status !== 'done' && ex.recurring) {
@@ -1971,17 +1984,35 @@ app.get('/api/lists', (req, res) => {
   res.json(lists);
 });
 
+app.get('/api/lists/:id/sublists', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM lists WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'List not found' });
+  const sublists = db.prepare(`SELECT l.*, COUNT(li.id) as item_count, SUM(CASE WHEN li.checked=1 THEN 1 ELSE 0 END) as checked_count
+    FROM lists l LEFT JOIN list_items li ON li.list_id=l.id WHERE l.parent_id=? GROUP BY l.id ORDER BY l.position, l.created_at DESC`).all(id);
+  res.json(sublists);
+});
+
 app.post('/api/lists', (req, res) => {
-  const { name, type, icon, color, area_id } = req.body;
+  const { name, type, icon, color, area_id, parent_id } = req.body;
   if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'name is required' });
   if (name.length > 100) return res.status(400).json({ error: 'name must be 100 chars or less' });
   const validTypes = ['checklist', 'grocery', 'notes'];
   if (type && !validTypes.includes(type)) return res.status(400).json({ error: 'type must be checklist, grocery, or notes' });
   const listCount = db.prepare('SELECT COUNT(*) as c FROM lists').get().c;
   if (listCount >= 100) return res.status(400).json({ error: 'Maximum 100 lists reached' });
+  if (parent_id) {
+    const pid = Number(parent_id);
+    if (!Number.isInteger(pid)) return res.status(400).json({ error: 'Invalid parent_id' });
+    const parent = db.prepare('SELECT * FROM lists WHERE id=?').get(pid);
+    if (!parent) return res.status(400).json({ error: 'Parent list not found' });
+    // Prevent nesting deeper than 1 level
+    if (parent.parent_id) return res.status(400).json({ error: 'Cannot nest more than one level deep' });
+  }
   const mp = db.prepare('SELECT COALESCE(MAX(position),-1)+1 as p FROM lists').get();
-  const r = db.prepare('INSERT INTO lists (name,type,icon,color,area_id,position) VALUES (?,?,?,?,?,?)').run(
-    name.trim(), type || 'checklist', icon || '📋', color || '#2563EB', area_id ? Number(area_id) : null, mp.p
+  const r = db.prepare('INSERT INTO lists (name,type,icon,color,area_id,parent_id,position) VALUES (?,?,?,?,?,?,?)').run(
+    name.trim(), type || 'checklist', icon || '📋', color || '#2563EB', area_id ? Number(area_id) : null, parent_id ? Number(parent_id) : null, mp.p
   );
   res.status(201).json(db.prepare('SELECT * FROM lists WHERE id=?').get(r.lastInsertRowid));
 });
@@ -1993,9 +2024,19 @@ app.put('/api/lists/:id', (req, res) => {
   if (!ex) return res.status(404).json({ error: 'List not found' });
   const { name, icon, color, area_id, position } = req.body;
   if (name !== undefined && (!name || name.length > 100)) return res.status(400).json({ error: 'Invalid name' });
-  db.prepare('UPDATE lists SET name=?,icon=?,color=?,area_id=?,position=? WHERE id=?').run(
+  const { parent_id: newParentId } = req.body;
+  if (newParentId !== undefined && newParentId !== null) {
+    const pid = Number(newParentId);
+    if (!Number.isInteger(pid)) return res.status(400).json({ error: 'Invalid parent_id' });
+    if (pid === id) return res.status(400).json({ error: 'Cannot be own parent' });
+    const parent = db.prepare('SELECT * FROM lists WHERE id=?').get(pid);
+    if (!parent) return res.status(400).json({ error: 'Parent list not found' });
+    if (parent.parent_id) return res.status(400).json({ error: 'Cannot nest more than one level deep' });
+  }
+  db.prepare('UPDATE lists SET name=?,icon=?,color=?,area_id=?,parent_id=?,position=? WHERE id=?').run(
     name || ex.name, icon !== undefined ? icon : ex.icon, color || ex.color,
     area_id !== undefined ? (area_id ? Number(area_id) : null) : ex.area_id,
+    newParentId !== undefined ? (newParentId ? Number(newParentId) : null) : ex.parent_id,
     position !== undefined ? position : ex.position, id
   );
   res.json(db.prepare('SELECT * FROM lists WHERE id=?').get(id));
@@ -2006,6 +2047,8 @@ app.delete('/api/lists/:id', (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const ex = db.prepare('SELECT * FROM lists WHERE id=?').get(id);
   if (!ex) return res.status(404).json({ error: 'List not found' });
+  // Also delete child lists
+  db.prepare('DELETE FROM lists WHERE parent_id=?').run(id);
   db.prepare('DELETE FROM lists WHERE id=?').run(id);
   rebuildSearchIndex();
   res.json({ deleted: true });

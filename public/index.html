@@ -860,6 +860,11 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .li-add-bar button:hover{background:var(--brand-h)}
 .li-empty{text-align:center;color:var(--txd);padding:40px 20px;font-size:13px}
 .li-note-content{font-size:12px;color:var(--tx2);margin-top:4px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.sub-list-section{margin-top:16px;padding-top:12px;border-top:1px solid var(--brd)}
+.sub-list-section h4{font-size:13px;font-weight:600;margin:0 0 8px;display:flex;align-items:center;gap:6px}
+.sub-list-chip{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:var(--rs);background:var(--bg-c);border:1px solid var(--brd);cursor:pointer;font-size:12px;transition:all .15s}
+.sub-list-chip:hover{border-color:var(--brand);transform:translateY(-1px)}
+.task-list-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:500}
 @media(max-width:768px){.list-grid{grid-template-columns:1fr}.li-item{padding:14px;min-height:48px}.li-check{width:28px;height:28px}.li-del{opacity:1}}
 </style>
 </head>
@@ -978,6 +983,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
     <div id="lm-tpl-list" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px"></div>
   </div>
   <input type="hidden" id="lm-edit-id" value="">
+  <input type="hidden" id="lm-parent" value="">
   <div class="md-actions"><button class="btn-c" id="lm-cancel">Cancel</button><button class="btn-s" id="lm-save">Create</button></div>
 </div></div>
 
@@ -1008,6 +1014,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
       <div><label style="display:block;font-size:11px;color:var(--txd);margin-bottom:3px;font-weight:500">Due Date</label><input type="date" id="qc-due"></div>
     </div>
     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;margin-top:4px"><input type="checkbox" id="qc-myday" style="width:auto;margin:0">Add to My Day</label>
+    <label style="display:block;font-size:11px;color:var(--txd);margin-bottom:3px;margin-top:8px;font-weight:500">Link to List <span style="font-weight:400;color:var(--tx2)">(optional)</span></label>
+    <select id="qc-list"><option value="">None</option></select>
     <div class="qc-actions"><button class="btn-c" id="qc-cancel">Cancel</button><button class="btn-s" id="qc-save">Add Task</button></div>
   </div>
 </div>
@@ -1257,9 +1265,14 @@ async function loadUserLists(){
 }
 function renderSBLists(){
   const el=$('sb-list-items');if(!el)return;
-  el.innerHTML=userLists.map(l=>{
-    const pct=l.item_count?Math.round((l.checked_count||0)/l.item_count*100):0;
-    return`<div class="sf-item${l.id===activeListId?' active':''}" data-lid="${l.id}"><span class="sf-icon">${esc(l.icon)}</span><span>${esc(l.name)}</span><span class="sf-badge">${l.item_count?((l.checked_count||0)+'/'+l.item_count):''}</span></div>`;
+  const parents=userLists.filter(l=>!l.parent_id);
+  el.innerHTML=parents.map(l=>{
+    const subs=userLists.filter(s=>s.parent_id===l.id);
+    let html=`<div class="sf-item${l.id===activeListId?' active':''}" data-lid="${l.id}"><span class="sf-icon">${esc(l.icon)}</span><span>${esc(l.name)}</span><span class="sf-badge">${l.item_count?((l.checked_count||0)+'/'+l.item_count):''}</span></div>`;
+    subs.forEach(s=>{
+      html+=`<div class="sf-item${s.id===activeListId?' active':''}" data-lid="${s.id}" style="padding-left:28px;font-size:12px"><span class="sf-icon" style="font-size:12px">${esc(s.icon)}</span><span>${esc(s.name)}</span><span class="sf-badge">${s.item_count?((s.checked_count||0)+'/'+s.item_count):''}</span></div>`;
+    });
+    return html;
   }).join('');
   el.querySelectorAll('.sf-item').forEach(it=>it.addEventListener('click',()=>{
     const lid=Number(it.dataset.lid);activeListId=lid;
@@ -1414,7 +1427,13 @@ function updateBC(){
   else if(currentView==='lists'){pt.textContent='Lists';bc.innerHTML=''}
   else if(currentView==='listdetail'){
     pt.textContent=activeListName||'List';
-    bc.innerHTML=`<span data-go="lists" style="cursor:pointer;color:var(--brand)">Lists</span><span class="sep">›</span><span>${esc(activeListName||'')}</span>`;
+    const activeList=userLists.find(x=>x.id===activeListId);
+    const parent=activeList&&activeList.parent_id?userLists.find(x=>x.id===activeList.parent_id):null;
+    if(parent){
+      bc.innerHTML=`<span data-go="lists" style="cursor:pointer;color:var(--brand)">Lists</span><span class="sep">›</span><span data-go-list="${parent.id}" style="cursor:pointer;color:var(--brand)">${esc(parent.icon)} ${esc(parent.name)}</span><span class="sep">›</span><span>${esc(activeListName||'')}</span>`;
+    } else {
+      bc.innerHTML=`<span data-go="lists" style="cursor:pointer;color:var(--brand)">Lists</span><span class="sep">›</span><span>${esc(activeListName||'')}</span>`;
+    }
   }
   else if(currentView==='smartlist'){
     const names={stale:'Stale Tasks',quickwins:'Quick Wins',blocked:'Blocked'};
@@ -1433,7 +1452,14 @@ function updateBC(){
   bc.querySelectorAll('span[data-go]').forEach(s=>{s.style.cursor='pointer';s.addEventListener('click',()=>{
     if(s.dataset.go==='myday'){currentView='myday';activeAreaId=null;activeGoalId=null}
     else if(s.dataset.go==='area'){currentView='area';activeGoalId=null}
+    else if(s.dataset.go==='lists'){currentView='lists';activeListId=null}
     document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));render();
+  })});
+  bc.querySelectorAll('span[data-go-list]').forEach(s=>{s.style.cursor='pointer';s.addEventListener('click',()=>{
+    const lid=Number(s.dataset.goList);
+    const lst=userLists.find(x=>x.id===lid);
+    activeListId=lid;activeListName=lst?lst.name:'List';currentView='listdetail';
+    document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));render();
   })});
 }
 
@@ -1788,6 +1814,7 @@ function tcHtml(t,ctx){
   if(t.my_day&&currentView!=='myday')meta+=`<span>☀️</span>`;
   if(t.estimated_minutes)meta+=`<span class="time-est"><span class="material-icons-round" style="font-size:10px">schedule</span>${t.estimated_minutes}m${t.actual_minutes?` / ${t.actual_minutes}m`:''}</span>`;
   if(t.tags&&t.tags.length)t.tags.forEach(tg=>meta+=`<span class="tag" style="background:${escA(tg.color)}">${esc(tg.name)}</span>`);
+  if(t.list_id&&t.list_name)meta+=`<span class="task-list-badge" style="background:${escA(t.list_color||'#2563EB')}20;color:${escA(t.list_color||'#2563EB')}">${esc(t.list_icon||'📋')} ${esc(t.list_name)}</span>`;
   if(ctx){meta+=`<span class="tag" style="background:${escA(t.goal_color||'var(--brand)')}">${esc(t.goal_title||'')}</span>`;
     if(t.area_icon)meta+=`<span>${esc(t.area_icon)} ${esc(t.area_name||'')}</span>`}
   let stBar='';
@@ -2186,11 +2213,20 @@ function renderDPBody(){
     <div><label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:10px"><input type="checkbox" id="dp-md" ${t.my_day?'checked':''} style="width:auto;margin:0">Add to My Day</label></div>
     <div class="dp-row"><div><label>Estimated (min)</label><input type="number" id="dp-est" min="0" value="${t.estimated_minutes||''}" placeholder="e.g. 30"></div>
     <div><label>Actual (min)</label><input type="number" id="dp-act" min="0" value="${t.actual_minutes||''}" placeholder="0"></div></div>
+    <label>Linked List</label><select id="dp-list"><option value="">None</option></select>
     <label>Tags</label><div class="tg-wrap" id="tg-wrap"><div class="tgi" id="tgi"></div></div>
     <label>Subtasks</label><div class="sta"><input type="text" id="st-input" placeholder="Add subtask..."><button id="st-add">Add</button></div><div class="stl" id="stl"></div>
     <label>Dependencies</label><div id="dp-deps"></div>
     <label>Comments</label><div class="sta"><input type="text" id="cmt-input" placeholder="Add a comment..."><button id="cmt-add">Post</button></div><div id="dp-comments"></div>`;
   $('dp-body').innerHTML=h;
+  // Populate list picker
+  const dpListSel=$('dp-list');
+  dpListSel.innerHTML='<option value="">None</option>'+userLists.filter(l=>!l.parent_id).map(l=>{
+    const subs=userLists.filter(s=>s.parent_id===l.id);
+    let opts=`<option value="${l.id}"${t.list_id===l.id?' selected':''}>${esc(l.icon)} ${esc(l.name)}</option>`;
+    subs.forEach(s=>{opts+=`<option value="${s.id}"${t.list_id===s.id?' selected':''}>&nbsp;&nbsp;↳ ${esc(s.icon)} ${esc(s.name)}</option>`});
+    return opts;
+  }).join('');
   renderTagInput();
   renderSubtasks();
   renderDeps();
@@ -2353,7 +2389,8 @@ $('dp-save').addEventListener('click',async()=>{
     due_time:$('dp-time').value||null,
     priority:Number($('dp-pri').value), assigned_to:$('dp-asg').value,
     recurring:rec, my_day:$('dp-md').checked,
-    estimated_minutes:Number($('dp-est').value)||null, actual_minutes:Number($('dp-act').value)||0
+    estimated_minutes:Number($('dp-est').value)||null, actual_minutes:Number($('dp-act').value)||0,
+    list_id:$('dp-list').value?Number($('dp-list').value):null
   });
   await api.put('/api/tasks/'+dpTask.id+'/tags',{tagIds:dpTags});
   $('dp').classList.remove('open');showToast('Task saved');await loadAreas();render();loadBellReminders();
@@ -2863,7 +2900,15 @@ async function openQuickCapture(){
   const sel=$('qc-goal');
   sel.innerHTML=allGoals.map(g=>`<option value="${g.id}">${esc(g.area_icon)} ${esc(g.area_name)} › ${esc(g.title)}</option>`).join('');
   if(!allGoals.length)sel.innerHTML='<option value="">No goals yet — create one first</option>';
-  $('qc-title').value='';$('qc-pri').value='0';$('qc-due').value='';$('qc-myday').checked=false;
+  // Populate list picker
+  const listSel=$('qc-list');
+  listSel.innerHTML='<option value="">None</option>'+userLists.filter(l=>!l.parent_id).map(l=>{
+    const subs=userLists.filter(s=>s.parent_id===l.id);
+    let opts=`<option value="${l.id}">${esc(l.icon)} ${esc(l.name)}</option>`;
+    subs.forEach(s=>{opts+=`<option value="${s.id}">&nbsp;&nbsp;↳ ${esc(s.icon)} ${esc(s.name)}</option>`});
+    return opts;
+  }).join('');
+  $('qc-title').value='';$('qc-pri').value='0';$('qc-due').value='';$('qc-myday').checked=false;$('qc-list').value='';
   $('qc-ov').classList.add('active');$('qc-title').focus();
 }
 function closeQC(){$('qc-ov').classList.remove('active')}
@@ -2912,7 +2957,7 @@ async function saveQC(){
       }
     }
   }
-  const task=await api.post('/api/goals/'+goalId+'/tasks',{title,priority:pri,due_date:due,my_day:myday});
+  const task=await api.post('/api/goals/'+goalId+'/tasks',{title,priority:pri,due_date:due,my_day:myday,list_id:$('qc-list').value?Number($('qc-list').value):null});
   if(tagIds.length)await api.put('/api/tasks/'+task.id+'/tags',{tagIds});
   nlpParsed=null;$('qc-nlp-preview').innerHTML='';
   closeQC();showToast('Task added');await loadAreas();render();loadOverdueBadge();
@@ -3595,6 +3640,7 @@ function openListModal(editList){
   $('lm-icon').value=isEdit?(editList.icon||'📋'):'📋';
   $('lm-color').value=isEdit?(editList.color||'#2563EB'):'#2563EB';
   $('lm-edit-id').value=isEdit?editList.id:'';
+  $('lm-parent').value='';
   buildSwatches('lm-sw','lm-color',isEdit?(editList.color||'#2563EB'):'#2563EB');
   // Type selector
   const selType=isEdit?editList.type:'checklist';
@@ -3640,10 +3686,11 @@ $('lm-save').addEventListener('click',async()=>{
   const color=$('lm-color').value;
   const area_id=$('lm-area').value?Number($('lm-area').value):null;
   const editId=$('lm-edit-id').value;
+  const parent_id=$('lm-parent').value?Number($('lm-parent').value):null;
   if(editId){
     await api.put('/api/lists/'+editId,{name,icon,color,area_id});
   }else{
-    const r=await api.post('/api/lists',{name,type,icon,color,area_id});
+    const r=await api.post('/api/lists',{name,type,icon,color,area_id,parent_id});
     activeListId=r.id;activeListName=r.name;
   }
   $('lm').classList.remove('active');
@@ -3656,6 +3703,7 @@ async function renderLists(){
   const c=$('ct');
   let lists=[];
   try{lists=await api.get('/api/lists');userLists=lists;renderSBLists()}catch(e){}
+  const parents=lists.filter(l=>!l.parent_id);
   let h=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><h2 style="margin:0">Lists</h2><button class="btn-s" id="lists-add-btn">+ New List</button></div>`;
   if(!lists.length){
     h+=emptyS('list','No lists yet','Create a checklist, grocery list, or notes list to get started',
@@ -3666,23 +3714,36 @@ async function renderLists(){
     return;
   }
   h+=`<div class="list-grid">`;
-  lists.forEach(l=>{
+  parents.forEach(l=>{
     const pct=l.item_count?Math.round((l.checked_count||0)/l.item_count*100):0;
     const typeLabel=l.type==='grocery'?'Grocery':l.type==='notes'?'Notes':'Checklist';
+    const subs=lists.filter(s=>s.parent_id===l.id);
     h+=`<div class="list-card" data-lid="${l.id}">
       <div class="list-card-head">
         <span class="list-card-icon" style="background:${escA(l.color||'#2563EB')}20;color:${escA(l.color||'#2563EB')}">${esc(l.icon||'📋')}</span>
         <div style="flex:1;min-width:0"><div class="list-card-name">${esc(l.name)}</div>
-        <div class="list-card-type">${typeLabel}</div></div>
+        <div class="list-card-type">${typeLabel}${subs.length?' · '+subs.length+' sub-list'+(subs.length>1?'s':''):''}</div></div>
         ${l.share_token?'<span class="list-share-badge" title="Shared"><span class="material-icons-round" style="font-size:14px">link</span></span>':''}
       </div>
       ${l.item_count?`<div class="list-card-progress"><div style="flex:1;height:4px;background:var(--brd);border-radius:2px"><div style="height:100%;width:${pct}%;background:${escA(l.color||'#2563EB')};border-radius:2px"></div></div><span class="list-card-meta">${l.checked_count||0}/${l.item_count}</span></div>`:''}
+      ${subs.length?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${subs.map(s=>`<span class="sub-list-chip" data-lid="${s.id}" title="${esc(s.name)}">${esc(s.icon)} ${esc(s.name)}</span>`).join('')}</div>`:''}
     </div>`;
   });
   h+=`</div>`;
   c.innerHTML=h;
   $('lists-add-btn').addEventListener('click',()=>openListModal());
-  c.querySelectorAll('.list-card').forEach(card=>card.addEventListener('click',()=>{
+  c.querySelectorAll('.list-card').forEach(card=>card.addEventListener('click',e=>{
+    // If clicked on a sub-list chip, navigate to that sub-list instead
+    const chip=e.target.closest('.sub-list-chip');
+    if(chip){
+      e.stopPropagation();
+      const lid=Number(chip.dataset.lid);
+      const lst=lists.find(x=>x.id===lid);
+      activeListId=lid;activeListName=lst?lst.name:'List';currentView='listdetail';
+      document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));
+      render();
+      return;
+    }
     const lid=Number(card.dataset.lid);
     const lst=lists.find(x=>x.id===lid);
     activeListId=lid;activeListName=lst?lst.name:'List';currentView='listdetail';
@@ -3768,6 +3829,25 @@ async function renderListDetail(){
     ${isGrocery?`<select id="ld-add-cat" style="width:120px;font-size:11px"><option value="Other">Category</option>${['Produce','Bakery','Dairy','Meat & Seafood','Frozen','Pantry','Beverages','Snacks','Household','Personal Care'].map(c=>'<option value="'+escA(c)+'">'+esc(c)+'</option>').join('')}</select>`:''}
     <button class="btn-s" id="ld-add-btn" style="white-space:nowrap">+ Add</button>
   </div>`;
+  // Sub-lists section (only for top-level lists)
+  if(!list.parent_id){
+    const subs=userLists.filter(s=>s.parent_id===list.id);
+    h+=`<div class="sub-list-section"><h4><span class="material-icons-round" style="font-size:16px;color:var(--brand)">folder</span> Sub-lists <span style="font-size:11px;font-weight:400;color:var(--txd)">(${subs.length})</span></h4>`;
+    if(subs.length){
+      h+=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">`;
+      subs.forEach(s=>{
+        h+=`<div class="sub-list-chip" data-slid="${s.id}" style="padding:8px 14px"><span style="font-size:16px">${esc(s.icon)}</span><span>${esc(s.name)}</span><span style="font-size:10px;color:var(--txd)">${s.item_count||0} items</span></div>`;
+      });
+      h+=`</div>`;
+    }
+    h+=`<button class="btn-c" id="ld-add-sublist" style="font-size:12px"><span class="material-icons-round" style="font-size:14px;vertical-align:middle">add</span> Add Sub-list</button></div>`;
+  } else {
+    // Show parent breadcrumb for sub-lists
+    const parent=userLists.find(p=>p.id===list.parent_id);
+    if(parent){
+      h+=`<div style="margin-top:10px;font-size:11px;color:var(--txd)">Sub-list of <span class="ld-parent-link" data-pid="${parent.id}" style="color:var(--brand);cursor:pointer;text-decoration:underline">${esc(parent.icon)} ${esc(parent.name)}</span></div>`;
+    }
+  }
   c.innerHTML=h;
   // Event handlers
   $('ld-edit')?.addEventListener('click',()=>openListModal(list));
@@ -3836,6 +3916,29 @@ async function renderListDetail(){
   $('ld-add-btn')?.addEventListener('click',addItem);
   $('ld-add-input')?.addEventListener('keydown',e=>{if(e.key==='Enter')addItem()});
   $('ld-add-input')?.focus();
+  // Sub-list event handlers
+  $('ld-add-sublist')?.addEventListener('click',()=>{
+    openListModal();
+    // Pre-fill parent_id in the modal (set after modal opens)
+    setTimeout(()=>{
+      if(!$('lm-parent'))return;
+      $('lm-parent').value=String(list.id);
+    },50);
+  });
+  c.querySelectorAll('.sub-list-chip[data-slid]').forEach(chip=>chip.addEventListener('click',()=>{
+    const slid=Number(chip.dataset.slid);
+    const sl=userLists.find(x=>x.id===slid);
+    activeListId=slid;activeListName=sl?sl.name:'Sub-list';currentView='listdetail';
+    document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));
+    render();
+  }));
+  c.querySelectorAll('.ld-parent-link').forEach(el=>el.addEventListener('click',()=>{
+    const pid=Number(el.dataset.pid);
+    const pl=userLists.find(x=>x.id===pid);
+    activeListId=pid;activeListName=pl?pl.name:'List';currentView='listdetail';
+    document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));
+    render();
+  }));
   // Update breadcrumb
   updateBC();
 }

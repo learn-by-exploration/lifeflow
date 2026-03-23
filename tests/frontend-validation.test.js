@@ -100,6 +100,7 @@ ${scriptContent}
       // Lists view (created by renderLists/renderListDetail)
       'lists-add-btn', 'lists-empty-add', 'ld-edit', 'ld-share', 'ld-del',
       'ld-copy-link', 'ld-unshare', 'ld-clear-checked', 'ld-add-input', 'ld-add-btn', 'ld-add-cat',
+      'ld-add-sublist',
     ]);
 
     // Dynamic prefixes (ids created in loops with numeric/key suffixes)
