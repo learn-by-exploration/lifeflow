@@ -9,6 +9,13 @@ const api={
 };
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 
+// ─── OVERLAY LIFECYCLE (scroll-lock, focus save/restore) ───
+let _overlayStack=[];
+function _lockBody(){document.body.style.overflow='hidden'}
+function _unlockBody(){if(!document.querySelector('.mo.active,.triage-modal,.sr-ov.active,.qc-ov.active,.dr-ov.active,.ft-ov.active,.kb-ov.active,.onb-ov.active,.tour-ov.active,.tmpl-apply-ov.active,.dp.open'))document.body.style.overflow=''}
+function _pushFocus(){_overlayStack.push(document.activeElement)}
+function _popFocus(){const el=_overlayStack.pop();if(el&&el.focus)try{el.focus()}catch(e){}}
+
 // ─── AUTH STATE ───
 let currentUser=null;
 async function loadCurrentUser(){
@@ -57,7 +64,7 @@ const PL=['','Normal','High','Critical'],PC=['','var(--brand)','var(--warn)','va
 // Swatch builder
 function buildSwatches(containerId, hiddenId, active){
   const c=$(containerId);if(!c)return;
-  c.innerHTML=COLORS.map(cl=>`<div class="sw ${cl===active?'sel':''}" data-c="${cl}" style="background:${cl}"></div>`).join('');
+  c.innerHTML=COLORS.map(cl=>`<div class="sw ${cl===active?'sel':''}" data-c="${cl}" style="background:${cl}" title="${cl}" aria-label="Color ${cl}"></div>`).join('');
   c.querySelectorAll('.sw').forEach(s=>s.addEventListener('click',()=>{
     c.querySelectorAll('.sw').forEach(x=>x.classList.remove('sel'));
     s.classList.add('sel');
@@ -150,15 +157,17 @@ function renderSBLists(){
     e.stopPropagation();
     const lid=Number(btn.dataset.lid);const lst=userLists.find(x=>x.id===lid);if(!lst)return;
     document.querySelectorAll('.ctx-menu').forEach(m=>m.remove());
-    const menu=document.createElement('div');menu.className='ctx-menu';
+    const menu=document.createElement('div');menu.className='ctx-menu';menu.setAttribute('role','menu');
     menu.innerHTML=`
-      <div class="ctx-item" data-act="edit"><span class="material-icons-round">edit</span>Edit</div>
-      <div class="ctx-item" data-act="duplicate"><span class="material-icons-round">content_copy</span>Duplicate</div>
-      <div class="ctx-item" data-act="uncheck"><span class="material-icons-round">restart_alt</span>Uncheck All</div>
-      <div class="ctx-item ctx-danger" data-act="delete"><span class="material-icons-round">delete</span>Delete</div>`;
+      <div class="ctx-item" role="menuitem" tabindex="0" data-act="edit"><span class="material-icons-round">edit</span>Edit</div>
+      <div class="ctx-item" role="menuitem" tabindex="0" data-act="duplicate"><span class="material-icons-round">content_copy</span>Duplicate</div>
+      <div class="ctx-item" role="menuitem" tabindex="0" data-act="uncheck"><span class="material-icons-round">restart_alt</span>Uncheck All</div>
+      <div class="ctx-item ctx-danger" role="menuitem" tabindex="0" data-act="delete"><span class="material-icons-round">delete</span>Delete</div>`;
     const rect=btn.getBoundingClientRect();
-    menu.style.left=rect.right+'px';menu.style.top=rect.bottom+'px';
     document.body.appendChild(menu);
+    const mw=menu.offsetWidth,mh=menu.offsetHeight;
+    menu.style.left=Math.min(rect.right,window.innerWidth-mw-8)+'px';
+    menu.style.top=Math.min(rect.bottom,window.innerHeight-mh-8)+'px';
     const closeMenu=ev=>{if(!menu.contains(ev.target)){menu.remove();document.removeEventListener('click',closeMenu)}};
     setTimeout(()=>document.addEventListener('click',closeMenu),0);
     menu.querySelector('[data-act="edit"]').addEventListener('click',()=>{menu.remove();openListModal(lst)});
@@ -242,14 +251,16 @@ function renderAreas(){
     const aid=Number(btn.dataset.id);const area=areas.find(a=>a.id===aid);if(!area)return;
     // Remove any existing context menu
     document.querySelectorAll('.ctx-menu').forEach(m=>m.remove());
-    const menu=document.createElement('div');menu.className='ctx-menu';
+    const menu=document.createElement('div');menu.className='ctx-menu';menu.setAttribute('role','menu');
     menu.innerHTML=`
-      <div class="ctx-item" data-act="edit"><span class="material-icons-round">edit</span>Edit Area</div>
-      <div class="ctx-item" data-act="archive"><span class="material-icons-round">archive</span>Archive</div>
-      <div class="ctx-item ctx-danger" data-act="delete"><span class="material-icons-round">delete</span>Delete</div>`;
+      <div class="ctx-item" role="menuitem" tabindex="0" data-act="edit"><span class="material-icons-round">edit</span>Edit Area</div>
+      <div class="ctx-item" role="menuitem" tabindex="0" data-act="archive"><span class="material-icons-round">archive</span>Archive</div>
+      <div class="ctx-item ctx-danger" role="menuitem" tabindex="0" data-act="delete"><span class="material-icons-round">delete</span>Delete</div>`;
     const rect=btn.getBoundingClientRect();
-    menu.style.left=rect.right+'px';menu.style.top=rect.bottom+'px';
     document.body.appendChild(menu);
+    const mw=menu.offsetWidth,mh=menu.offsetHeight;
+    menu.style.left=Math.min(rect.right,window.innerWidth-mw-8)+'px';
+    menu.style.top=Math.min(rect.bottom,window.innerHeight-mh-8)+'px';
     // Close on outside click
     const closeMenu=ev=>{if(!menu.contains(ev.target)){menu.remove();document.removeEventListener('click',closeMenu)}};
     setTimeout(()=>document.addEventListener('click',closeMenu),0);
@@ -955,7 +966,7 @@ function attachTE(){
     // Close any open snooze dropdown
     document.querySelectorAll('.snooze-dd').forEach(d=>d.remove());
     const ta=el.closest('.ta');
-    const dd=document.createElement('div');dd.className='snooze-dd';
+    const dd=document.createElement('div');dd.className='snooze-dd';dd.setAttribute('role','menu');
     const today=new Date();
     const fmt=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dy=String(d.getDate()).padStart(2,'0');return y+'-'+m+'-'+dy};
     const tom=new Date(today);tom.setDate(tom.getDate()+1);
@@ -968,8 +979,17 @@ function attachTE(){
       {label:'Next Week',icon:'date_range',date:fmt(nextWk)},
       {label:'No Date',icon:'block',date:null}
     ];
-    dd.innerHTML=opts.map(o=>`<div class="snz-opt" data-date="${o.date||''}"><span class="material-icons-round" style="font-size:14px">${o.icon}</span>${o.label}</div>`).join('');
+    dd.innerHTML=opts.map(o=>`<div class="snz-opt" role="menuitem" tabindex="0" data-date="${o.date||''}"><span class="material-icons-round" style="font-size:14px">${o.icon}</span>${o.label}</div>`).join('');
     ta.appendChild(dd);
+    // Keyboard navigation for snooze dropdown
+    const snzItems=[...dd.querySelectorAll('.snz-opt')];let snzIdx=-1;
+    dd.addEventListener('keydown',ev=>{
+      if(ev.key==='ArrowDown'){ev.preventDefault();snzIdx=Math.min(snzIdx+1,snzItems.length-1);snzItems[snzIdx]?.focus()}
+      else if(ev.key==='ArrowUp'){ev.preventDefault();snzIdx=Math.max(snzIdx-1,0);snzItems[snzIdx]?.focus()}
+      else if(ev.key==='Enter'&&snzIdx>=0){ev.preventDefault();snzItems[snzIdx]?.click()}
+      else if(ev.key==='Escape'){dd.remove()}
+    });
+    snzItems[0]?.focus();
     dd.querySelectorAll('.snz-opt').forEach(opt=>opt.addEventListener('click',async ev=>{
       ev.stopPropagation();const id=Number(el.dataset.id);
       const date=opt.dataset.date||null;
@@ -1046,7 +1066,7 @@ function attachTE(){
     e.stopPropagation();
     document.querySelectorAll('.qa-dd').forEach(d=>d.remove());
     const card=b.closest('.tc');
-    const dd=document.createElement('div');dd.className='qa-dd';
+    const dd=document.createElement('div');dd.className='qa-dd';dd.setAttribute('role','menu');
     const today=new Date();
     const fmt=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dy=String(d.getDate()).padStart(2,'0');return y+'-'+m+'-'+dy};
     const tom=new Date(today);tom.setDate(tom.getDate()+1);
@@ -1054,8 +1074,17 @@ function attachTE(){
     const nextWk=new Date(today);nextWk.setDate(nextWk.getDate()+7);
     dd.innerHTML=[
       {l:'Today',d:fmt(today)},{l:'Tomorrow',d:fmt(tom)},{l:'Next Monday',d:fmt(nextMon)},{l:'+1 Week',d:fmt(nextWk)},{l:'No Date',d:''}
-    ].map(o=>`<div class="qa-opt" data-date="${o.d}">${o.l}</div>`).join('');
+    ].map(o=>`<div class="qa-opt" role="menuitem" tabindex="0" data-date="${o.d}">${o.l}</div>`).join('');
     b.parentElement.appendChild(dd);
+    // Keyboard navigation for date picker dropdown
+    const qaItems=[...dd.querySelectorAll('.qa-opt')];let qaIdx=-1;
+    dd.addEventListener('keydown',ev=>{
+      if(ev.key==='ArrowDown'){ev.preventDefault();qaIdx=Math.min(qaIdx+1,qaItems.length-1);qaItems[qaIdx]?.focus()}
+      else if(ev.key==='ArrowUp'){ev.preventDefault();qaIdx=Math.max(qaIdx-1,0);qaItems[qaIdx]?.focus()}
+      else if(ev.key==='Enter'&&qaIdx>=0){ev.preventDefault();qaItems[qaIdx]?.click()}
+      else if(ev.key==='Escape'){dd.remove()}
+    });
+    qaItems[0]?.focus();
     dd.querySelectorAll('.qa-opt').forEach(opt=>opt.addEventListener('click',async ev=>{
       ev.stopPropagation();const id=Number(b.dataset.id);
       await api.put('/api/tasks/'+id,{due_date:opt.dataset.date||null});
@@ -1482,7 +1511,7 @@ function openAreaModal(area){
 $('add-area-btn').addEventListener('click',(e)=>{e.stopPropagation();openAreaModal()});
 $('am-cancel').addEventListener('click',()=>$('am').classList.remove('active'));
 $('am-save').addEventListener('click',async()=>{
-  const n=$('am-name').value.trim();if(!n)return;
+  const n=$('am-name').value.trim();if(!n){showToast('Please enter an area name');return;}
   const data={name:n,icon:$('am-icon').value||'📋',color:$('am-color').value};
   if(_editAreaId){await api.put('/api/areas/'+_editAreaId,data)}
   else{await api.post('/api/areas',data)}
@@ -1495,7 +1524,7 @@ function openGM(id){
   $('gm').classList.add('active');$('gm-title').focus();
 }
 $('gm-cancel').addEventListener('click',()=>$('gm').classList.remove('active'));
-$('gm-save').addEventListener('click',async()=>{const t=$('gm-title').value.trim();if(!t)return;
+$('gm-save').addEventListener('click',async()=>{const t=$('gm-title').value.trim();if(!t){showToast('Please enter a goal title');return;}
   const d={title:t,description:$('gm-desc').value,due_date:$('gm-due').value||null,color:$('gm-color').value};
   if(editingId)await api.put('/api/goals/'+editingId,d);else await api.post('/api/areas/'+activeAreaId+'/goals',d);
   $('gm').classList.remove('active');await loadAreas();render()});
@@ -3394,7 +3423,7 @@ document.querySelectorAll('.lm-type').forEach(t=>t.addEventListener('click',()=>
 $('lm-cancel').addEventListener('click',()=>$('lm').classList.remove('active'));
 $('lm-save').addEventListener('click',async()=>{
   const name=$('lm-name').value.trim();
-  if(!name)return;
+  if(!name){showToast('Please enter a list name');return;}
   const type=document.querySelector('.lm-type.sel')?.dataset.type||'checklist';
   const icon=$('lm-icon').value||'📋';
   const color=$('lm-color').value;
@@ -4100,6 +4129,8 @@ async function inboxQuickAdd(){
 }
 async function showLinkToTaskModal(inboxId,item){
   const m=document.createElement('div');m.className='triage-modal';
+  m.setAttribute('role','dialog');m.setAttribute('aria-modal','true');m.setAttribute('aria-label','Link to Existing Task');
+  const _close=()=>{if(m._removeTrap)m._removeTrap();m.remove();_popFocus();_unlockBody()};
   m.innerHTML=`<div class="triage-box"><h3 style="margin:0 0 12px;font-size:14px">Link to Existing Task</h3>
     <input type="text" id="link-task-search" placeholder="Search tasks..." style="width:100%;padding:8px 10px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px;box-sizing:border-box">
     <div id="link-task-results" style="max-height:200px;overflow-y:auto;margin-top:8px"></div>
@@ -4107,8 +4138,8 @@ async function showLinkToTaskModal(inboxId,item){
       <button id="link-cancel" style="padding:6px 14px;background:none;border:1px solid var(--brd);border-radius:var(--rs);cursor:pointer;color:var(--tx)">Cancel</button>
     </div></div>`;
   document.body.appendChild(m);
-  m.querySelector('#link-cancel').addEventListener('click',()=>m.remove());
-  m.addEventListener('click',e=>{if(e.target===m)m.remove()});
+  m.querySelector('#link-cancel').addEventListener('click',_close);
+  m.addEventListener('click',e=>{if(e.target===m)_close()});
   let searchTimer;
   m.querySelector('#link-task-search').addEventListener('input',e=>{
     clearTimeout(searchTimer);
@@ -4126,7 +4157,7 @@ async function showLinkToTaskModal(inboxId,item){
         const tid=Number(row.dataset.tid);
         await api.post('/api/tasks/'+tid+'/subtasks',{title:item.title});
         await api.del('/api/inbox/'+inboxId);
-        m.remove();showToast('Linked as subtask');renderInbox();loadOverdueBadge();
+        m.remove();_popFocus();_unlockBody();showToast('Linked as subtask');renderInbox();loadOverdueBadge();
       }));
     },300);
   });
@@ -4134,12 +4165,15 @@ async function showLinkToTaskModal(inboxId,item){
 }
 async function showTriageModal(inboxId){
   const m=document.createElement('div');m.className='triage-modal';
+  m.setAttribute('role','dialog');m.setAttribute('aria-modal','true');m.setAttribute('aria-label','Triage to Goal');
+  const _close=()=>{if(m._removeTrap)m._removeTrap();m.remove();_popFocus();_unlockBody()};
   let goalOpts='<option value="">Select a goal...</option>';
   areas.forEach(a=>{
     const goals=allGoals.filter(g=>g.area_id===a.id&&g.status==='active');
     if(goals.length){goalOpts+=`<optgroup label="${esc(a.icon+' '+a.name)}">${goals.map(g=>`<option value="${g.id}">${esc(g.title)}</option>`).join('')}</optgroup>`}
   });
   m.innerHTML=`<div class="triage-box"><h3 style="margin:0 0 12px;font-size:14px">Triage to Goal</h3>
+    <p style="font-size:11px;color:var(--txd);margin:0 0 10px">Move this inbox item to a goal to turn it into a task</p>
     <select id="triage-goal">${goalOpts}</select>
     <input type="date" id="triage-date" placeholder="Due date (optional)">
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
@@ -4147,14 +4181,14 @@ async function showTriageModal(inboxId){
       <button id="triage-ok" style="padding:6px 14px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer">Move</button>
     </div></div>`;
   document.body.appendChild(m);
-  m.querySelector('#triage-cancel').addEventListener('click',()=>m.remove());
-  m.addEventListener('click',e=>{if(e.target===m)m.remove()});
+  m.querySelector('#triage-cancel').addEventListener('click',_close);
+  m.addEventListener('click',e=>{if(e.target===m)_close()});
   m.querySelector('#triage-ok').addEventListener('click',async()=>{
     const gid=Number(m.querySelector('#triage-goal').value);
     if(!gid){showToast('Select a goal');return}
     const dd=m.querySelector('#triage-date').value||null;
     await api.post('/api/inbox/'+inboxId+'/triage',{goal_id:gid,due_date:dd});
-    m.remove();showToast('Moved to goal');await loadAreas();renderInbox();loadOverdueBadge();
+    _close();showToast('Moved to goal');await loadAreas();renderInbox();loadOverdueBadge();
   });
 }
 
@@ -4461,6 +4495,8 @@ async function renderRules(){
 }
 function showRuleModal(){
   const m=document.createElement('div');m.className='triage-modal';
+  m.setAttribute('role','dialog');m.setAttribute('aria-modal','true');m.setAttribute('aria-label','New Automation Rule');
+  const _close=()=>{if(m._removeTrap)m._removeTrap();m.remove();_popFocus();_unlockBody()};
   m.innerHTML=`<div class="triage-box" style="width:400px"><h3 style="margin:0 0 12px;font-size:14px">New Automation Rule</h3>
     <input type="text" id="rule-name" placeholder="Rule name" style="margin-bottom:8px">
     <label style="font-size:11px;color:var(--txd)">When...</label>
@@ -4488,8 +4524,8 @@ function showRuleModal(){
     else cfg.innerHTML='';
   };
   $('rule-action').addEventListener('change',updateConfig);updateConfig();
-  $('rule-cancel').addEventListener('click',()=>m.remove());
-  m.addEventListener('click',e=>{if(e.target===m)m.remove()});
+  $('rule-cancel').addEventListener('click',_close);
+  m.addEventListener('click',e=>{if(e.target===m)_close()});
   $('rule-save').addEventListener('click',async()=>{
     const name=$('rule-name').value.trim();if(!name){showToast('Name required');return}
     const trigger_type=$('rule-trigger').value;
@@ -4498,7 +4534,7 @@ function showRuleModal(){
     if(action_type==='set_priority')action_config={priority:Number(document.getElementById('rule-pri')?.value||1)};
     if(action_type==='create_followup')action_config={title:document.getElementById('rule-followup')?.value||'Follow-up'};
     await api.post('/api/rules',{name,trigger_type,trigger_config:{},action_type,action_config});
-    m.remove();showToast('Rule created');renderRules();
+    _close();showToast('Rule created');renderRules();
   });
 }
 
@@ -4824,6 +4860,13 @@ document.addEventListener('keydown',e=>{
     if($('tmpl-apply-ov').classList.contains('active')){$('tmpl-apply-ov').classList.remove('active');return}
     if($('tour-ov').classList.contains('active')){$('tour-ov').classList.remove('active');return}
     if($('onb-ov').classList.contains('active')){$('onb-ov').classList.remove('active');return}
+    // Close dynamic triage/rule modals
+    const tm=document.querySelector('.triage-modal');
+    if(tm){if(tm._removeTrap)tm._removeTrap();tm.remove();_popFocus();_unlockBody();return}
+    // Close area/goal/list modals
+    if($('am').classList.contains('active')){$('am').classList.remove('active');return}
+    if($('gm').classList.contains('active')){$('gm').classList.remove('active');return}
+    if($('lm').classList.contains('active')){$('lm').classList.remove('active');return}
     if($('dp').classList.contains('open')){$('dp').classList.remove('open');return}
     return;
   }
@@ -4839,6 +4882,7 @@ document.addEventListener('keydown',e=>{
   if(_matchShortcut('weekly',e)){go('weekly');return}
   if(_matchShortcut('matrix',e)){go('matrix');return}
   if(_matchShortcut('logbook',e)){go('logbook');return}
+  if(e.key==='b'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){$('bell-dd').classList.toggle('open');loadBellReminders();return}
   if(_matchShortcut('tags-view',e)){go('tags');return}
   if(_matchShortcut('focus-history',e)){go('focushistory');return}
   if(_matchShortcut('multi-select',e)){toggleMultiSelect();return}
@@ -4900,16 +4944,26 @@ function trapFocus(container){
   return ()=>container.removeEventListener('keydown',handler);
 }
 
-// Auto-trap focus in open modals
+// Auto-trap focus in open modals + scroll-lock + focus save/restore
 const modalObserver=new MutationObserver(()=>{
   ['am','gm','lm','sr-ov','qc-ov','kb-ov','ft-ov','tour-ov','onb-ov','tmpl-apply-ov','dr-ov'].forEach(id=>{
     const el=document.getElementById(id);
     if(el&&el.classList.contains('active')&&!el._focusTrapped){
+      _pushFocus();_lockBody();
       el._focusTrapped=true;
       el._removeTrap=trapFocus(el);
     }else if(el&&!el.classList.contains('active')&&el._focusTrapped){
       if(el._removeTrap)el._removeTrap();
       el._focusTrapped=false;
+      _popFocus();_unlockBody();
+    }
+  });
+  // Also trap focus on dynamic triage modals
+  document.querySelectorAll('.triage-modal').forEach(tm=>{
+    if(!tm._focusTrapped){
+      _pushFocus();_lockBody();
+      tm._focusTrapped=true;
+      tm._removeTrap=trapFocus(tm);
     }
   });
 });

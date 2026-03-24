@@ -107,7 +107,7 @@
 </main>
 
 <!-- Task detail panel -->
-<div class="dp" id="dp" role="dialog" aria-label="Task Details">
+<div class="dp" id="dp" role="dialog" aria-modal="true" aria-label="Task Details">
   <div class="dp-head"><h3 id="dp-title">Task</h3><button class="material-icons-round" id="dp-close" aria-label="Close task details">close</button></div>
   <div class="dp-body" id="dp-body"></div>
   <div class="dp-foot"><button class="btn-c" id="dp-cancel">Cancel</button><button class="btn-s" id="dp-save">Save</button></div>
@@ -155,7 +155,7 @@
 </div></div>
 
 <!-- Search overlay -->
-<div class="sr-ov" id="sr-ov" role="dialog" aria-label="Search and command palette">
+<div class="sr-ov" id="sr-ov" role="dialog" aria-modal="true" aria-label="Search and command palette">
   <div class="sr-box">
     <div style="position:relative"><span class="material-icons-round sr-icon">search</span><input class="sr-inp" id="sr-inp" placeholder="Search tasks, notes, subtasks..." autocomplete="off"></div>
     <div style="display:flex;gap:6px;margin:6px 0 2px;flex-wrap:wrap">
@@ -173,7 +173,8 @@
   <div class="qc-box">
     <h3><span class="material-icons-round" style="font-size:18px;color:var(--brand)">bolt</span>Quick Capture</h3>
     <input type="text" id="qc-title" placeholder="Buy groceries tomorrow p2 #errands">
-    <div id="qc-nlp-preview" style="font-size:11px;color:var(--tx2);margin:-6px 0 8px;padding:0 2px;min-height:16px"></div>
+    <div style="font-size:10px;color:var(--txd);margin:-6px 0 4px;padding:0 2px">Tip: use dates (<b>tomorrow</b>, <b>monday</b>), priority (<b>p1</b>-<b>p3</b>), and tags (<b>#tag</b>) inline</div>
+    <div id="qc-nlp-preview" style="font-size:11px;color:var(--tx2);margin:0 0 8px;padding:0 2px;min-height:16px"></div>
     <label style="display:block;font-size:11px;color:var(--txd);margin-bottom:3px;font-weight:500">Goal</label>
     <select id="qc-goal"></select>
     <div class="qc-row">
@@ -203,6 +204,7 @@
     <div class="kb-row"><span>Activity Log</span><span class="kb-key">8</span></div>
     <div class="kb-row"><span>Multi-select mode</span><span class="kb-key">M</span></div>
     <div class="kb-row"><span>Daily Review</span><span class="kb-key">R</span></div>
+    <div class="kb-row"><span>Notifications</span><span class="kb-key">B</span></div>
     <div class="kb-row"><span>Command Palette</span><span class="kb-key">Ctrl+K → &gt;</span></div>
     <div class="kb-row" style="margin-top:10px;font-size:10px;font-weight:600;color:var(--txd)"><span>Vim Navigation (task lists)</span><span></span></div>
     <div class="kb-row"><span>Move down / up</span><span class="kb-key">J</span> <span class="kb-key">K</span></div>
