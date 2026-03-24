@@ -8,6 +8,20 @@ const api={
   async patch(u,d){try{const r=await fetch(u,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}}
 };
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+
+// ─── KEYBOARD SHORTCUT MAP (rebindable) ───
+const DEFAULT_SHORTCUTS={
+  'search':'ctrl+k','quick-add':'n','help':'?','today':'1','all-tasks':'2',
+  'board':'3','calendar':'4','dashboard':'5','weekly':'6','matrix':'7',
+  'logbook':'8','tags-view':'9','focus-history':'0','multi-select':'m',
+  'daily-review':'r','vim-down':'j','vim-up':'k','vim-complete':'x','vim-open':'Enter'
+};
+let _shortcutMap={...DEFAULT_SHORTCUTS};
+function _loadShortcuts(){try{const s=localStorage.getItem('lf-shortcuts');if(s)_shortcutMap={...DEFAULT_SHORTCUTS,...JSON.parse(s)}}catch(e){}}
+function _saveShortcuts(){localStorage.setItem('lf-shortcuts',JSON.stringify(_shortcutMap));try{api.put('/api/settings',{keyboardShortcuts:JSON.stringify(_shortcutMap)})}catch(e){}}
+_loadShortcuts();
+function _keyStr(e){const parts=[];if(e.ctrlKey||e.metaKey)parts.push('ctrl');if(e.altKey)parts.push('alt');if(e.shiftKey)parts.push('shift');const k=e.key.length===1?e.key.toLowerCase():e.key;if(!['Control','Meta','Alt','Shift'].includes(e.key))parts.push(k);return parts.join('+')}
+function _matchShortcut(action,e){const bound=_shortcutMap[action]||DEFAULT_SHORTCUTS[action];if(!bound)return false;return _keyStr(e)===bound.toLowerCase()}
 function escA(s){return String(s).replace(/[&"'<>]/g,m=>({'&':'&amp;','"':'&quot;',"'":'&#39;','<':'&lt;','>':'&gt;'})[m])}
 function fmtDue(d){if(!d)return'';const dt=new Date(d+'T00:00:00'),td=new Date();td.setHours(0,0,0,0);const df=Math.round((dt-td)/864e5);const fmt=appSettings.dateFormat||'relative';if(fmt==='relative'){if(df===0)return'Today';if(df===1)return'Tomorrow';if(df===-1)return'Yesterday';if(df===-2)return'2 days ago';if(df>1&&df<=6)return'in '+df+' days';if(df<-1&&df>=-7)return Math.abs(df)+'d overdue';if(df===7)return'Next week';const wd=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];if(df>1&&df<=13)return'Next '+wd[dt.getDay()];return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})}if(fmt==='iso')return d;if(fmt==='us')return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});if(fmt==='eu'){const dd=String(dt.getDate()).padStart(2,'0'),mm=String(dt.getMonth()+1).padStart(2,'0');return dd+'/'+mm+'/'+dt.getFullYear()}return d}
 function isOD(d){return d&&new Date(d+'T00:00:00')<new Date(new Date().toDateString())}
@@ -2671,6 +2685,7 @@ async function renderSettings(){
     {id:'tags',label:'Tags',icon:'label'},
     {id:'templates',label:'Templates',icon:'content_copy'},
     {id:'automations',label:'Automations',icon:'auto_fix_high'},
+    {id:'badges',label:'Badges',icon:'emoji_events'},
     {id:'data',label:'Data',icon:'storage'},
     {id:'shortcuts',label:'Shortcuts',icon:'keyboard'}
   ];
@@ -2872,19 +2887,47 @@ async function renderSettings(){
       </div>`;
     });
     content+=`</div></section></div>`;
-  } else if(window._settingsTab==='data'){
+  } else if(window._settingsTab==='badges'){
+    const badgeDefs=[
+      {type:'first-10-tasks',icon:'🏆',name:'First 10 Tasks',desc:'Complete 10 tasks'},
+      {type:'first-focus',icon:'🎯',name:'Focus Starter',desc:'Complete your first focus session'},
+      {type:'streak-7',icon:'🔥',name:'7-Day Streak',desc:'Complete tasks 7 days in a row'},
+      {type:'streak-30',icon:'⚡',name:'30-Day Streak',desc:'Complete tasks 30 days in a row'},
+      {type:'century',icon:'💯',name:'Century',desc:'Complete 100 tasks'},
+      {type:'all-areas-active',icon:'🌟',name:'All Areas Active',desc:'Activity in every life area within 7 days'}
+    ];
+    let earned=[];
+    try{const badges=await api.get('/api/badges');earned=badges.map(b=>b.type)}catch{}
+    try{const check=await api.post('/api/badges/check',{});if(check.earned&&check.earned.length){earned.push(...check.earned);check.earned.forEach(b=>{const def=badgeDefs.find(d=>d.type===b);if(def)showToast('🏆 Badge earned: '+def.name+'!')})}}catch{}
     content=`<div class="settings-grid"><section class="settings-section">
-    <h3>Import / Export</h3>
-    <div class="set-row"><button class="set-btn" id="set-export">Export Data (JSON)</button></div>
-    <div class="set-row"><button class="set-btn" id="set-import">Import Data</button></div>
+    <h3>Achievement Badges</h3>
+    <p style="font-size:12px;color:var(--txd);margin-bottom:16px">${earned.length} of ${badgeDefs.length} badges earned</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">`;
+    badgeDefs.forEach(b=>{
+      const has=earned.includes(b.type);
+      content+=`<div style="padding:16px;background:${has?'var(--bg-s)':'var(--bg-c)'};border:2px solid ${has?'var(--brand)':'var(--brd)'};border-radius:var(--r);text-align:center;opacity:${has?1:.5}">
+        <div style="font-size:32px;margin-bottom:6px">${b.icon}</div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:2px">${b.name}</div>
+        <div style="font-size:11px;color:var(--txd)">${b.desc}</div>
+        ${has?'<div style="font-size:10px;color:var(--ok);margin-top:4px">✓ Earned</div>':''}
+      </div>`;
+    });
+    content+=`</div></section></div>`;
+  } else if(window._settingsTab==='data'){
+    content+=`<div class="settings-grid"><section class="settings-section"><h3>Data</h3>
+    <div class="set-row"><label class="set-label">Export</label><button class="set-btn" id="set-export">Export All Data (JSON)</button></div>
+    <div class="set-row"><label class="set-label">Import</label><button class="set-btn" id="set-import">Import Data</button><input type="file" id="import-file" accept=".json" style="display:none"></div>
     <div class="set-row"><button class="set-btn danger" id="set-reset">Reset All Settings</button></div>
     </section></div>`;
   } else if(window._settingsTab==='shortcuts'){
-    content=`<div class="settings-grid"><section class="settings-section"><h3>Keyboard Shortcuts</h3>`;
-    const shortcuts=[['Ctrl+K','Search / Command Palette'],['N','Quick add task'],['1','Today'],['2','All Tasks'],['3','Board'],['4','Calendar'],['5','Dashboard'],['6','Weekly Plan'],['7','Matrix'],['8','Activity Log'],['M','Multi-select mode'],['R','Daily Review'],['J / K','Move down / up'],['X','Complete selected task'],['Enter','Open selected task'],['Esc','Close panel / overlay'],['?','Show shortcuts help']];
-    shortcuts.forEach(([key,desc])=>{
-      content+=`<div class="kb-row" style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--brd)"><span style="font-size:13px">${desc}</span><span class="kb-key" style="font-size:11px;padding:2px 8px;background:var(--bg-c);border:1px solid var(--brd);border-radius:4px;font-family:monospace">${key}</span></div>`;
+    content=`<div class="settings-grid"><section class="settings-section"><h3>Keyboard Shortcuts</h3><p style="font-size:12px;color:var(--tx-s);margin-bottom:12px">Click a key binding to reassign. Press Escape to cancel.</p>`;
+    const labels={'search':'Search / Command Palette','quick-add':'Quick Add Task','help':'Show Shortcuts Help','today':'Today','all-tasks':'All Tasks','board':'Board','calendar':'Calendar','dashboard':'Dashboard','weekly':'Weekly Plan','matrix':'Matrix','logbook':'Activity Log','tags-view':'Tags','focus-history':'Focus History','multi-select':'Multi-select Mode','daily-review':'Daily Review','vim-down':'Move Down (Vim)','vim-up':'Move Up (Vim)','vim-complete':'Complete Task (Vim)','vim-open':'Open Task (Vim)'};
+    Object.keys(labels).forEach(action=>{
+      const bound=_shortcutMap[action]||DEFAULT_SHORTCUTS[action];
+      const isCustom=_shortcutMap[action]&&_shortcutMap[action]!==DEFAULT_SHORTCUTS[action];
+      content+=`<div class="kb-row" style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--brd)"><span style="font-size:13px">${labels[action]}</span><span class="kb-rebind" data-action="${action}" style="cursor:pointer;font-size:11px;padding:2px 8px;background:var(--bg-c);border:1px solid ${isCustom?'var(--brand)':'var(--brd)'};border-radius:4px;font-family:monospace;min-width:50px;text-align:center">${esc(bound)}</span></div>`;
     });
+    content+=`<div style="margin-top:12px"><button class="set-btn" id="set-reset-shortcuts" style="font-size:12px">Reset to Defaults</button></div>`;
     content+=`</section></div>`;
   }
 
@@ -2966,6 +3009,28 @@ async function renderSettings(){
   });
   // Import
   $('set-import')?.addEventListener('click',()=>$('import-file').click());
+  // Shortcut rebinding
+  c.querySelectorAll('.kb-rebind').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const action=btn.dataset.action;
+      btn.textContent='Press key...';btn.style.borderColor='var(--brand)';
+      const handler=ev=>{
+        ev.preventDefault();ev.stopPropagation();
+        if(ev.key==='Escape'){btn.textContent=_shortcutMap[action]||DEFAULT_SHORTCUTS[action];btn.style.borderColor='var(--brd)';document.removeEventListener('keydown',handler,true);return}
+        const combo=_keyStr(ev);
+        // Conflict detection
+        const conflict=Object.entries(_shortcutMap).find(([a,k])=>a!==action&&k===combo);
+        if(conflict){showToast(`"${combo}" already used by ${conflict[0]}`);return}
+        _shortcutMap[action]=combo;_saveShortcuts();
+        document.removeEventListener('keydown',handler,true);
+        renderSettings();showToast(`Shortcut updated: ${combo}`);
+      };
+      document.addEventListener('keydown',handler,true);
+    });
+  });
+  $('set-reset-shortcuts')?.addEventListener('click',()=>{
+    _shortcutMap={...DEFAULT_SHORTCUTS};_saveShortcuts();renderSettings();showToast('Shortcuts reset to defaults');
+  });
   // Reset
   $('set-reset')?.addEventListener('click',async()=>{
     if(!confirm('Reset all settings to defaults?'))return;
@@ -4384,7 +4449,7 @@ document.addEventListener('keydown',e=>{
   // Skip if typing in input/textarea/select or contenteditable
   const tag=e.target.tagName;const ce=e.target.isContentEditable;
   if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||ce)return;
-  if(e.key==='k'&&(e.ctrlKey||e.metaKey)){e.preventDefault();openSearch();return}
+  if(_matchShortcut('search',e)){e.preventDefault();openSearch();return}
   if(e.key==='Escape'){
     if($('ft-ov').classList.contains('active')){
       if($('ft-reflect').style.display!=='none'){$('ft-reflect-done').click();return}
@@ -4403,32 +4468,29 @@ document.addEventListener('keydown',e=>{
   }
   // Don't trigger shortcuts when overlays are open
   if($('sr-ov').classList.contains('active')||$('qc-ov').classList.contains('active')||$('kb-ov').classList.contains('active')||$('dr-ov').classList.contains('active'))return;
-  if(e.key==='n'||e.key==='N'){openQuickCapture();return}
-  if(e.key==='?'){$('kb-ov').classList.add('active');return}
-  if(e.key==='1'){go('myday');return}
-  if(e.key==='2'){go('all');return}
-  if(e.key==='3'){go('board');return}
-  if(e.key==='4'){go('calendar');return}
-  if(e.key==='5'){go('dashboard');return}
-  if(e.key==='6'){go('weekly');return}
-  if(e.key==='7'){go('matrix');return}
-  if(e.key==='8'){go('logbook');return}
-  if(e.key==='9'){go('tags');return}
-  if(e.key==='0'){go('focushistory');return}
-  if(e.key==='m'||e.key==='M'){toggleMultiSelect();return}
-  if(e.key==='r'||e.key==='R'){openDailyReview();return}
-  // Vim navigation: j/k/x/Enter/gg/G
-  if(e.key==='j'){e.preventDefault();vimMove(1);return}
-  if(e.key==='k'&&!e.ctrlKey&&!e.metaKey){e.preventDefault();vimMove(-1);return}
-  if(e.key==='G'&&!e.shiftKey){/* handled by gg below */}
+  if(_matchShortcut('quick-add',e)){openQuickCapture();return}
+  if(_matchShortcut('help',e)){$('kb-ov').classList.add('active');return}
+  if(_matchShortcut('today',e)){go('myday');return}
+  if(_matchShortcut('all-tasks',e)){go('all');return}
+  if(_matchShortcut('board',e)){go('board');return}
+  if(_matchShortcut('calendar',e)){go('calendar');return}
+  if(_matchShortcut('dashboard',e)){go('dashboard');return}
+  if(_matchShortcut('weekly',e)){go('weekly');return}
+  if(_matchShortcut('matrix',e)){go('matrix');return}
+  if(_matchShortcut('logbook',e)){go('logbook');return}
+  if(_matchShortcut('tags-view',e)){go('tags');return}
+  if(_matchShortcut('focus-history',e)){go('focushistory');return}
+  if(_matchShortcut('multi-select',e)){toggleMultiSelect();return}
+  if(_matchShortcut('daily-review',e)){openDailyReview();return}
+  // Vim navigation
+  if(_matchShortcut('vim-down',e)){e.preventDefault();vimMove(1);return}
+  if(_matchShortcut('vim-up',e)&&!e.ctrlKey&&!e.metaKey){e.preventDefault();vimMove(-1);return}
   if(e.key==='G'&&e.shiftKey){const cards=getVisibleCards();if(cards.length){vimIdx=cards.length-1;vimHighlight(vimIdx)}return}
   if(e.key==='g'){
-    // Wait for second 'g' (gg = go to first)
     if(!window._vimG){window._vimG=true;setTimeout(()=>{window._vimG=false},400);return}
     window._vimG=false;vimIdx=0;vimHighlight(0);return;
   }
-  if(e.key==='x'){
-    // Complete focused task
+  if(_matchShortcut('vim-complete',e)){
     const cards=getVisibleCards();
     if(vimIdx>=0&&vimIdx<cards.length){
       const tk=cards[vimIdx].querySelector('.tk');
@@ -4436,8 +4498,7 @@ document.addEventListener('keydown',e=>{
     }
     return;
   }
-  if(e.key==='Enter'){
-    // Open focused task in detail panel
+  if(_matchShortcut('vim-open',e)){
     const cards=getVisibleCards();
     if(vimIdx>=0&&vimIdx<cards.length){
       const id=Number(cards[vimIdx].dataset.id);
@@ -4492,3 +4553,60 @@ const modalObserver=new MutationObserver(()=>{
   });
 });
 modalObserver.observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});
+
+// ─── SHAREABLE SUMMARY CARD (canvas → PNG) ───
+function generateShareCard(title, lines, accentColor){
+  const canvas=document.createElement('canvas');
+  canvas.width=600;canvas.height=400;
+  const ctx=canvas.getContext('2d');
+  // Background
+  ctx.fillStyle='#1E293B';ctx.fillRect(0,0,600,400);
+  // Accent bar
+  ctx.fillStyle=accentColor||'#2563EB';ctx.fillRect(0,0,600,6);
+  // Title
+  ctx.fillStyle='#F1F5F9';ctx.font='bold 22px Inter,sans-serif';ctx.fillText(title,32,50);
+  // Lines
+  ctx.font='14px Inter,sans-serif';ctx.fillStyle='#94A3B8';
+  lines.forEach((line,i)=>{ctx.fillText(line,32,90+i*28)});
+  // Branding
+  ctx.fillStyle='#64748B';ctx.font='11px Inter,sans-serif';ctx.fillText('Generated by LifeFlow',32,380);
+  return canvas;
+}
+
+async function shareWeeklySummary(){
+  try{
+    const stats=await api.get('/api/stats');
+    const lines=[
+      `Tasks completed this week: ${stats.completed_this_week||0}`,
+      `Tasks created: ${stats.created_this_week||0}`,
+      `Streak: ${stats.streak_days||0} days`,
+      `Focus sessions: ${stats.focus_sessions_week||0}`,
+      `Total focus time: ${Math.round((stats.focus_minutes_week||0))}min`
+    ];
+    const canvas=generateShareCard('Weekly Summary — '+new Date().toLocaleDateString(),lines,'#22C55E');
+    canvas.toBlob(blob=>{
+      if(navigator.share&&navigator.canShare){
+        const file=new File([blob],'lifeflow-weekly.png',{type:'image/png'});
+        navigator.share({title:'LifeFlow Weekly Summary',files:[file]}).catch(()=>{});
+      }else{
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');a.href=url;a.download='lifeflow-weekly-'+new Date().toISOString().slice(0,10)+'.png';a.click();
+        URL.revokeObjectURL(url);showToast('Summary card downloaded!');
+      }
+    },'image/png');
+  }catch(e){showToast('Failed to generate summary')}
+}
+
+function shareFocusCard(taskTitle, minutes){
+  const lines=[
+    `Focused for ${minutes} minutes`,
+    `on: ${taskTitle}`,
+    new Date().toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'})
+  ];
+  const canvas=generateShareCard('Focus Session Complete',lines,'#F59E0B');
+  canvas.toBlob(blob=>{
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download='lifeflow-focus.png';a.click();
+    URL.revokeObjectURL(url);showToast('Focus card downloaded!');
+  },'image/png');
+}
