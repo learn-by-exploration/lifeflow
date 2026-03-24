@@ -57,8 +57,12 @@ _loadShortcuts();
 function _keyStr(e){const parts=[];if(e.ctrlKey||e.metaKey)parts.push('ctrl');if(e.altKey)parts.push('alt');if(e.shiftKey)parts.push('shift');const k=e.key.length===1?e.key.toLowerCase():e.key;if(!['Control','Meta','Alt','Shift'].includes(e.key))parts.push(k);return parts.join('+')}
 function _matchShortcut(action,e){const bound=_shortcutMap[action]||DEFAULT_SHORTCUTS[action];if(!bound)return false;return _keyStr(e)===bound.toLowerCase()}
 function escA(s){return String(s).replace(/[&"'<>]/g,m=>({'&':'&amp;','"':'&quot;',"'":'&#39;','<':'&lt;','>':'&gt;'})[m])}
-function fmtDue(d){if(!d)return'';const dt=new Date(d+'T00:00:00'),td=new Date();td.setHours(0,0,0,0);const df=Math.round((dt-td)/864e5);const fmt=appSettings.dateFormat||'relative';if(fmt==='relative'){if(df===0)return'Today';if(df===1)return'Tomorrow';if(df===-1)return'Yesterday';if(df===-2)return'2 days ago';if(df>1&&df<=6)return'in '+df+' days';if(df<-1&&df>=-7)return Math.abs(df)+'d overdue';if(df===7)return'Next week';const wd=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];if(df>1&&df<=13)return'Next '+wd[dt.getDay()];return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})}if(fmt==='iso')return d;if(fmt==='us')return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});if(fmt==='eu'){const dd=String(dt.getDate()).padStart(2,'0'),mm=String(dt.getMonth()+1).padStart(2,'0');return dd+'/'+mm+'/'+dt.getFullYear()}return d}
-function isOD(d){return d&&new Date(d+'T00:00:00')<new Date(new Date().toDateString())}
+// Parse "YYYY-MM-DD" as local midnight (avoids timezone shift)
+function _parseDate(d){const [y,m,day]=d.split('-');return new Date(Number(y),Number(m)-1,Number(day))}
+// Format a Date to "YYYY-MM-DD" in local timezone (replaces toISOString().slice(0,10))
+function _toDateStr(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function fmtDue(d){if(!d)return'';const dt=_parseDate(d),td=new Date();td.setHours(0,0,0,0);const df=Math.round((dt-td)/864e5);const fmt=appSettings.dateFormat||'relative';if(fmt==='relative'){if(df===0)return'Today';if(df===1)return'Tomorrow';if(df===-1)return'Yesterday';if(df===-2)return'2 days ago';if(df>1&&df<=6)return'in '+df+' days';if(df<-1&&df>=-7)return Math.abs(df)+'d overdue';if(df===7)return'Next week';const wd=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];if(df>1&&df<=13)return'Next '+wd[dt.getDay()];return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})}if(fmt==='iso')return d;if(fmt==='us')return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});if(fmt==='eu'){const dd=String(dt.getDate()).padStart(2,'0'),mm=String(dt.getMonth()+1).padStart(2,'0');return dd+'/'+mm+'/'+dt.getFullYear()}return d}
+function isOD(d){if(!d)return false;const dt=_parseDate(d),td=new Date();td.setHours(0,0,0,0);return dt<td}
 const PL=['','Normal','High','Critical'],PC=['','var(--brand)','var(--warn)','var(--err)'];
 
 // Swatch builder
@@ -449,7 +453,7 @@ async function renderToday(){
     h+=hintCard('cmd-palette','keyboard','Press Ctrl+K to open the command palette — search tasks, navigate, and more');
     // Balance alert (max once per day)
     if(balance.dominant){
-      const balKey='balance-alert-'+new Date().toISOString().slice(0,10);
+      const balKey='balance-alert-'+_toDateStr(new Date());
       if(!localStorage.getItem(balKey)){
         localStorage.setItem(balKey,'1');
         h+=`<div class="balance-alert"><span class="material-icons-round" style="font-size:16px;color:var(--warn)">balance</span><span>${esc(balance.dominant.name)} ${balance.dominant.pct}%${balance.lowest?' · '+esc(balance.lowest.name)+' '+balance.lowest.pct+'%':''} — Consider balancing your areas</span><span class="material-icons-round balance-dismiss" style="font-size:14px;cursor:pointer;color:var(--txd);margin-left:auto">close</span></div>`;
@@ -480,7 +484,7 @@ async function renderToday(){
     if(d.length&&appSettings.showCompleted!=='false'){h+=`<div class="sl" style="color:var(--ok)">Done <span class="c">${d.length}</span></div>`;d.forEach(tk=>h+=tcHtml(tk,true))}
   }else{
     // Timeline tab — inline planner
-    const planDate=new Date().toISOString().slice(0,10);
+    const planDate=_toDateStr(new Date());
     let planData={scheduled:[],unscheduled:[]};
     try{planData=await api.get('/api/planner/'+planDate)}catch(e){}
     const myDayUnscheduled=t.filter(tk=>!tk.time_block_start&&tk.status!=='done');
@@ -522,7 +526,7 @@ async function renderToday(){
         e.preventDefault();slot.classList.remove('dragover');
         const taskId=Number(e.dataTransfer.getData('text/plain'));if(!taskId)return;
         const hour=slot.dataset.hour;const endHr=String(Number(hour)+1).padStart(2,'0');
-        await api.put('/api/tasks/'+taskId,{due_date:new Date().toISOString().slice(0,10),time_block_start:hour+':00',time_block_end:endHr+':00'});
+        await api.put('/api/tasks/'+taskId,{due_date:_toDateStr(new Date()),time_block_start:hour+':00',time_block_end:endHr+':00'});
         renderToday();
       });
     });
@@ -538,7 +542,7 @@ async function renderToday(){
 }
 function todayHabitsStrip(habits){
   if(!habits||!habits.length)return '';
-  const today=new Date().toISOString().slice(0,10);
+  const today=_toDateStr(new Date());
   let h=`<div style="margin-top:16px;border-top:1px solid var(--brd);padding-top:12px"><div class="sl" style="margin-bottom:8px">Habits</div><div style="display:flex;gap:8px;flex-wrap:wrap">`;
   habits.forEach(hab=>{
     const done=hab.logged_today||false;
@@ -621,7 +625,7 @@ async function renderFocusHub(){
       h2+=`<div style="text-align:center;padding:40px 20px;color:var(--txd)"><span class="material-icons-round" style="font-size:48px;display:block;margin-bottom:8px;opacity:.4">celebration</span>All tasks done! Add more tasks to start a focus session.</div>`;
     } else {
       const topTask=pending[0];
-      const topIsDue=topTask.due_date&&new Date(topTask.due_date+'T23:59:59')<=new Date(Date.now()+86400000);
+      const topIsDue=topTask.due_date&&(()=>{const dd=_parseDate(topTask.due_date);dd.setHours(23,59,59);return dd<=new Date(Date.now()+86400000)})();
       const topIsStale=topTask.created_at&&(Date.now()-new Date(topTask.created_at).getTime())/(1000*60*60*24)>=3;
       const nudge=topIsDue?'Your most urgent task is due soon — start now!':topIsStale?'Your top task has been waiting — small progress beats none.':'Pick a task and start a focused session.';
       h2+=`<div style="font-size:12px;color:var(--brand);margin:12px 0 4px;font-style:italic">${nudge}</div>`;
@@ -838,17 +842,17 @@ async function renderCal(target){
   const f=new Date(calY,calM,1),l=new Date(calY,calM+1,0);
   const sd=new Date(f);while(sd.getDay()!==ws)sd.setDate(sd.getDate()-1);
   const ed=new Date(l);while(ed.getDay()!==(ws+6)%7)ed.setDate(ed.getDate()+1);
-  const ss=sd.toISOString().slice(0,10),es=ed.toISOString().slice(0,10);
+  const ss=_toDateStr(sd),es=_toDateStr(ed);
   const ct2=await api.get(`/api/tasks/calendar?start=${ss}&end=${es}`);
   const bd={};ct2.forEach(t=>{if(!bd[t.due_date])bd[t.due_date]=[];bd[t.due_date].push(t)});
   const mn=f.toLocaleDateString('en-US',{month:'long',year:'numeric'});
-  const ts=new Date().toISOString().slice(0,10);
+  const ts=_toDateStr(new Date());
   const isCurrentMonth=calY===new Date().getFullYear()&&calM===new Date().getMonth();
   let h=`<div class="ch"><button class="material-icons-round" id="cp">chevron_left</button><span class="ctt">${mn}</span><button class="material-icons-round" id="cn">chevron_right</button>${!isCurrentMonth?'<button id="cal-today" style="margin-left:8px;padding:4px 12px;border-radius:6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx);font-size:11px;cursor:pointer;font-family:inherit">Today</button>':''}</div><div class="cg">`;
   const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   for(let i=0;i<7;i++)h+=`<div class="cdh">${dayNames[(ws+i)%7]}</div>`;
   const cur=new Date(sd);while(cur<=ed){
-    const ds=cur.toISOString().slice(0,10);const dt=bd[ds]||[];
+    const ds=_toDateStr(cur);const dt=bd[ds]||[];
     h+=`<div class="cc ${ds===ts?'today':''} ${cur.getMonth()!==calM?'om':''}" data-date="${ds}"><div class="cd">${cur.getDate()}</div>`;
     dt.slice(0,3).forEach(t=>h+=`<span class="ctd" data-id="${t.id}" style="background:${escA(t.goal_color||'var(--brand)')}">${esc(t.title.substring(0,18))}</span>`);
     if(dt.length>3)h+=`<span style="font-size:9px;color:var(--txd)">+${dt.length-3}</span>`;
@@ -1233,7 +1237,7 @@ async function renderMatrix(){
   // Q1: Urgent+Important (p3 or p2+overdue), Q2: Important (p2+not overdue or p3+far due)
   // Q3: Urgent (p1+overdue or p0+overdue), Q4: Neither (p0 or p1 not overdue)
   // Simpler: importance = priority >= 2, urgency = overdue or due within 3 days
-  const isUrgent=t=>{if(!t.due_date)return false;const df=Math.round((new Date(t.due_date+'T00:00:00')-new Date(new Date().toDateString()))/864e5);return df<=2};
+  const isUrgent=t=>{if(!t.due_date)return false;const df=Math.round((_parseDate(t.due_date)-new Date(new Date().toDateString()))/864e5);return df<=2};
   const isImportant=t=>t.priority>=2;
   const q1=active.filter(t=>isUrgent(t)&&isImportant(t));
   const q2=active.filter(t=>!isUrgent(t)&&isImportant(t));
@@ -2191,7 +2195,7 @@ function buildHeatmap(data){
   let h=`<div class="hm-grid">`;
   for(let i=364;i>=0;i--){
     const d=new Date(today);d.setDate(today.getDate()-i);
-    const ds=d.toISOString().slice(0,10);
+    const ds=_toDateStr(d);
     const cnt=map[ds]||0;
     let lvl='';if(cnt>=4)lvl='l4';else if(cnt>=3)lvl='l3';else if(cnt>=2)lvl='l2';else if(cnt>=1)lvl='l1';
     h+=`<div class="hm-cell ${lvl}" title="${ds}: ${cnt} task${cnt!==1?'s':''}"></div>`;
@@ -2212,7 +2216,7 @@ async function renderLogbook(){
   });
   let h=`<div style="font-size:13px;color:var(--tx2);margin-bottom:16px">${r.total} task${r.total!==1?'s':''} completed</div>`;
   Object.entries(groups).forEach(([day,items])=>{
-    const d=new Date(day+'T00:00:00');
+    const d=_parseDate(day);
     const label=fmtDue(day)||d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
     h+=`<div class="al-day"><div class="al-dh">${label}<span class="al-c">${items.length}</span></div>`;
     items.forEach(t=>{
@@ -2390,7 +2394,7 @@ function showFocusPlan(){
   $('ft-when-now').classList.add('active');
   // Set default schedule time to next hour
   const now=new Date();now.setHours(now.getHours()+1,0,0,0);
-  $('ft-schedule-time').value=now.toISOString().slice(0,16);
+  $('ft-schedule-time').value=_toDateStr(now)+'T'+String(now.getHours()).padStart(2,'0')+':00';
   // Auto-populate steps from subtasks
   if(ftTask.subtasks&&ftTask.subtasks.length){
     ftPlanSteps=ftTask.subtasks.filter(s=>!s.done).map(s=>s.title);
@@ -2828,12 +2832,12 @@ async function renderFocusHistory(target){
     h+=`<div style="display:flex;align-items:flex-end;gap:4px;height:100px;margin-bottom:16px;padding:8px;background:var(--crd);border-radius:8px">`;
     // Fill in missing days
     const days=[];const now=new Date();
-    for(let i=13;i>=0;i--){const d=new Date(now);d.setDate(d.getDate()-i);days.push(d.toISOString().slice(0,10))}
+    for(let i=13;i>=0;i--){const d=new Date(now);d.setDate(d.getDate()-i);days.push(_toDateStr(d))}
     days.forEach(day=>{
       const entry=hist.daily.find(d=>d.day===day);
       const sec=entry?entry.total_sec:0;
       const pct=Math.max(2,sec/maxSec*100);
-      const lbl=new Date(day+'T00:00:00').toLocaleDateString('en-US',{weekday:'short'});
+      const lbl=_parseDate(day).toLocaleDateString('en-US',{weekday:'short'});
       h+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
         <div style="width:100%;background:${sec>0?'var(--brand)':'var(--bd)'};border-radius:3px;height:${pct}%;min-height:2px" title="${Math.floor(sec/60)}m on ${day}"></div>
         <span style="font-size:9px;color:var(--tx2)">${lbl.slice(0,2)}</span>
@@ -3328,7 +3332,7 @@ async function renderSettings(){
       for(const a of data.areas){a.goals=await api.get('/api/areas/'+a.id+'/goals');for(const g of a.goals){g.tasks=await api.get('/api/goals/'+g.id+'/tasks')}}
       const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
       const url=URL.createObjectURL(blob);
-      const a=document.createElement('a');a.href=url;a.download='lifeflow-export-'+new Date().toISOString().slice(0,10)+'.json';a.click();
+      const a=document.createElement('a');a.href=url;a.download='lifeflow-export-'+_toDateStr(new Date())+'.json';a.click();
       URL.revokeObjectURL(url);showToast('Data exported!');
     }catch(e){showToast('Export failed')}
   });
@@ -3749,7 +3753,7 @@ async function renderHabits(){
       let dots='';
       for(let i=6;i>=0;i--){
         const d=new Date(today);d.setDate(d.getDate()-i);
-        const ds=d.toISOString().slice(0,10);
+        const ds=_toDateStr(d);
         const entry=hm.find(x=>x.date===ds);
         const count=entry?entry.count:0;
         const dayLbl=['S','M','T','W','T','F','S'][d.getDay()];
@@ -3873,12 +3877,12 @@ async function renderSavedFilter(){
 }
 
 // ─── DAY PLANNER VIEW ───
-let plannerDate = new Date().toISOString().slice(0,10);
+let plannerDate = _toDateStr(new Date());
 async function renderPlanner(){
   const mc=$('ct');
-  const d=new Date(plannerDate+'T00:00:00');
+  const d=_parseDate(plannerDate);
   const dayLabel=d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-  const isToday=plannerDate===new Date().toISOString().slice(0,10);
+  const isToday=plannerDate===_toDateStr(new Date());
   let data={scheduled:[],unscheduled:[]};
   try{data=await api.get('/api/planner/'+plannerDate)}catch(e){}
   // Also get my-day tasks without time blocks for the unscheduled pool
@@ -3931,9 +3935,9 @@ async function renderPlanner(){
   mc.innerHTML=h;
 
   // Nav events
-  $('pl-prev')?.addEventListener('click',()=>{const nd=new Date(plannerDate+'T00:00:00');nd.setDate(nd.getDate()-1);plannerDate=nd.toISOString().slice(0,10);render()});
-  $('pl-next')?.addEventListener('click',()=>{const nd=new Date(plannerDate+'T00:00:00');nd.setDate(nd.getDate()+1);plannerDate=nd.toISOString().slice(0,10);render()});
-  $('pl-today')?.addEventListener('click',()=>{plannerDate=new Date().toISOString().slice(0,10);render()});
+  $('pl-prev')?.addEventListener('click',()=>{const nd=_parseDate(plannerDate);nd.setDate(nd.getDate()-1);plannerDate=_toDateStr(nd);render()});
+  $('pl-next')?.addEventListener('click',()=>{const nd=_parseDate(plannerDate);nd.setDate(nd.getDate()+1);plannerDate=_toDateStr(nd);render()});
+  $('pl-today')?.addEventListener('click',()=>{plannerDate=_toDateStr(new Date());render()});
 
   // Drag & drop: tasks to time slots
   mc.querySelectorAll('.planner-task[draggable]').forEach(el=>{
@@ -4800,8 +4804,8 @@ function updateMultiSelectBar(){
       const d=prompt('Set due date (YYYY-MM-DD or "today"/"tomorrow"/"none"):','today');
       if(d===null)return;
       let date=d;
-      if(d==='today')date=new Date().toISOString().split('T')[0];
-      else if(d==='tomorrow'){const t=new Date();t.setDate(t.getDate()+1);date=t.toISOString().split('T')[0]}
+      if(d==='today')date=_toDateStr(new Date());
+      else if(d==='tomorrow'){const t=new Date();t.setDate(t.getDate()+1);date=_toDateStr(t)}
       else if(d==='none')date=null;
       await api.put('/api/tasks/bulk',{ids:[...selectedIds],changes:{due_date:date}});
       showToast(selectedIds.size+' tasks rescheduled');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
@@ -5005,7 +5009,7 @@ async function shareWeeklySummary(){
         navigator.share({title:'LifeFlow Weekly Summary',files:[file]}).catch(()=>{});
       }else{
         const url=URL.createObjectURL(blob);
-        const a=document.createElement('a');a.href=url;a.download='lifeflow-weekly-'+new Date().toISOString().slice(0,10)+'.png';a.click();
+        const a=document.createElement('a');a.href=url;a.download='lifeflow-weekly-'+_toDateStr(new Date())+'.png';a.click();
         URL.revokeObjectURL(url);showToast('Summary card downloaded!');
       }
     },'image/png');
