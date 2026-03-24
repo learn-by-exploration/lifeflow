@@ -893,3 +893,15 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .sa-row.archived{opacity:.7}
 .sa-row .btn-c{opacity:0;transition:opacity .15s}
 .sa-row:hover .btn-c{opacity:1}
+
+/* Task completion animation */
+.tc-completing{animation:taskComplete .4s ease-out}
+.tc-completing .tt{text-decoration:line-through;color:var(--txd)}
+@keyframes taskComplete{0%{transform:scale(1)}50%{transform:scale(1.02);background:rgba(34,197,94,.08)}100%{transform:scale(1)}}
+.tk{transition:transform .15s ease}
+
+/* All-done celebration card */
+.all-done-card{text-align:center;padding:32px 20px;background:linear-gradient(135deg,rgba(34,197,94,.06),var(--bg-s));border:1px solid var(--ok);border-radius:var(--r);margin-bottom:16px;animation:fadeIn .4s ease}
+
+/* Balance alert */
+.balance-alert{display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(245,158,11,.08);border:1px solid var(--warn);border-radius:var(--rs);margin-bottom:12px;font-size:12px;animation:fadeIn .3s ease}

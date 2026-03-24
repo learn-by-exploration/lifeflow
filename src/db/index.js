@@ -138,6 +138,9 @@ function initDatabase(dbDir) {
     FOREIGN KEY (habit_id) REFERENCES habits(id) ON DELETE CASCADE
   )`);
 
+  // ─── Habits area link ───
+  try { db.exec('ALTER TABLE habits ADD COLUMN area_id INTEGER DEFAULT NULL'); } catch(e) { /* already exists */ }
+
   // ─── Time block columns (nullable HH:MM) ───
   try { db.exec('ALTER TABLE tasks ADD COLUMN time_block_start TEXT DEFAULT NULL'); } catch(e) {}
   try { db.exec('ALTER TABLE tasks ADD COLUMN time_block_end TEXT DEFAULT NULL'); } catch(e) {}

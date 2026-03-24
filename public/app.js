@@ -344,27 +344,36 @@ function updateBC(){
 
 // ─── MY DAY ───
 let todayTab='list';
+let completionCount=0;
+function getGreeting(){const hr=new Date().getHours();if(hr<12)return 'Good morning';if(hr<17)return 'Good afternoon';return 'Good evening'}
+function streakEmoji(n){if(n>=30)return '⚡';if(n>=14)return '🔥🔥';if(n>=7)return '🔥';if(n>=3)return '🌱';return ''}
+function progressRingSvg(pct,r=18,stroke=4){const c=2*Math.PI*r;const off=c-(pct/100)*c;return `<svg width="${(r+stroke)*2}" height="${(r+stroke)*2}" style="vertical-align:middle"><circle cx="${r+stroke}" cy="${r+stroke}" r="${r}" fill="none" stroke="var(--brd)" stroke-width="${stroke}"/><circle cx="${r+stroke}" cy="${r+stroke}" r="${r}" fill="none" stroke="var(--ok)" stroke-width="${stroke}" stroke-dasharray="${c}" stroke-dashoffset="${off}" stroke-linecap="round" transform="rotate(-90 ${r+stroke} ${r+stroke})" style="transition:stroke-dashoffset .5s ease"/><text x="${r+stroke}" y="${r+stroke}" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="600" fill="var(--tx)">${pct}%</text></svg>`}
 async function renderMyDay(){return renderToday()}
 async function renderToday(){
   const c=$('ct');
   const ds=new Date().toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  // Parallel fetch: my-day tasks, overdue, stats, streaks, habits
-  const [t,overdue,stats,streakData,habits]=await Promise.all([
+  // Parallel fetch: my-day tasks, overdue, stats, streaks, habits, balance
+  const [t,overdue,stats,streakData,habits,balance]=await Promise.all([
     api.get('/api/tasks/my-day'),
     api.get('/api/tasks/overdue'),
     api.get('/api/stats'),
     api.get('/api/stats/streaks'),
-    api.get('/api/habits').catch(()=>[])
+    api.get('/api/habits').catch(()=>[]),
+    api.get('/api/stats/balance').catch(()=>({areas:[],dominant:null,lowest:null}))
   ]);
   $('myday-badge').textContent=t.filter(x=>x.status!=='done').length;
   const pct=stats.total?Math.round(stats.done/stats.total*100):0;
-  let h=`<div style="font-size:13px;color:var(--tx2);margin-bottom:10px">${ds}</div>`;
-  // Stats bar
-  h+=`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+  const sEmoji=streakEmoji(streakData.streak||0);
+  // Greeting
+  let h=`<div style="font-size:15px;font-weight:600;margin-bottom:4px">${getGreeting()}</div>`;
+  h+=`<div style="font-size:13px;color:var(--tx2);margin-bottom:10px">${ds} · ${t.filter(x=>x.status!=='done').length} tasks today</div>`;
+  // Stats bar with progress ring
+  h+=`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+    <div class="today-stat">${progressRingSvg(pct)}</div>
     <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--ok)">check_circle</span>${stats.done||0}/${stats.total||0} done</div>
     <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--brand)">timer</span>${stats.focusMinutes||0}min focus</div>
-    <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--warn)">local_fire_department</span>${streakData.streak||0} streak</div>
-    <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--err)">warning</span>${overdue.length} overdue</div>
+    <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--warn)">local_fire_department</span>${sEmoji?sEmoji+' ':''}${streakData.streak||0} streak</div>
+    ${overdue.length?`<div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--err)">warning</span>${overdue.length} overdue</div>`:''}
   </div>`;
   // Tab toggle
   h+=`<div style="display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--brd);padding-bottom:8px">
@@ -376,10 +385,27 @@ async function renderToday(){
 
   if(todayTab==='list'){
     h+=hintCard('cmd-palette','keyboard','Press Ctrl+K to open the command palette — search tasks, navigate, and more');
-    if(!t.length&&!overdue.length){
-      // Habits strip even when empty
+    // Balance alert (max once per day)
+    if(balance.dominant){
+      const balKey='balance-alert-'+new Date().toISOString().slice(0,10);
+      if(!localStorage.getItem(balKey)){
+        localStorage.setItem(balKey,'1');
+        h+=`<div class="balance-alert"><span class="material-icons-round" style="font-size:16px;color:var(--warn)">balance</span><span>${esc(balance.dominant.name)} ${balance.dominant.pct}%${balance.lowest?' · '+esc(balance.lowest.name)+' '+balance.lowest.pct+'%':''} — Consider balancing your areas</span><span class="material-icons-round balance-dismiss" style="font-size:14px;cursor:pointer;color:var(--txd);margin-left:auto">close</span></div>`;
+      }
+    }
+    const pending=t.filter(x=>x.status!=='done');
+    if(!pending.length&&!overdue.length){
+      // "All done!" celebration
+      const habDone=habits.filter(x=>x.completed).length;
+      h+=`<div class="all-done-card"><span class="material-icons-round" style="font-size:48px;color:var(--ok)">celebration</span><h3 style="margin:8px 0 4px">All done! 🎉</h3>
+        <div style="font-size:13px;color:var(--txd);margin-bottom:12px">${stats.done||0} tasks · ${stats.focusMinutes||0}min focus · ${habDone}/${habits.length} habits</div></div>`;
       h+=todayHabitsStrip(habits);
-      c.innerHTML=h;wireHints();wireTodayTabs(c);wireTodayHabits(c);
+      c.innerHTML=h;wireHints();wireTodayTabs(c);wireTodayHabits(c);wireBalanceDismiss(c);
+      await showBriefing();return;
+    }
+    if(!t.length&&!overdue.length){
+      h+=todayHabitsStrip(habits);
+      c.innerHTML=h;wireHints();wireTodayTabs(c);wireTodayHabits(c);wireBalanceDismiss(c);
       await showBriefing();return;
     }
     // Overdue section
@@ -420,7 +446,7 @@ async function renderToday(){
   }
   // Habits strip
   h+=todayHabitsStrip(habits);
-  c.innerHTML=h;attachTE();wireHints();wireTodayTabs(c);wireTodayHabits(c);
+  c.innerHTML=h;attachTE();wireHints();wireTodayTabs(c);wireTodayHabits(c);wireBalanceDismiss(c);
   // Timeline drag&drop
   if(todayTab==='timeline'){
     c.querySelectorAll('.planner-task[draggable]').forEach(el=>{
@@ -470,6 +496,9 @@ function wireTodayHabits(c){
     else{await api.post('/api/habits/'+hid+'/log',{})}
     renderToday();
   }));
+}
+function wireBalanceDismiss(c){
+  c.querySelectorAll('.balance-dismiss').forEach(el=>el.addEventListener('click',()=>{el.closest('.balance-alert').remove()}));
 }
 
 // ─── ALL ───
@@ -728,6 +757,13 @@ function attachTE(){
     let tk=tasks.find(t=>t.id===id);if(!tk){const a=await api.get('/api/tasks/all');tk=a.find(t=>t.id===id)}
     if(!tk)return;
     const newSt=tk.status==='done'?'todo':'done';
+    // Completion animation
+    if(newSt==='done'){
+      const card=el.closest('.tc');
+      if(card)card.classList.add('tc-completing');
+      completionCount++;
+      if(completionCount%5===0)fireConfetti();
+    }
     await api.put('/api/tasks/'+id,{status:newSt});
     if(newSt==='done'){
       showToast('Task completed'+(tk.recurring?' · Next '+tk.recurring+' task created':''), async()=>{
@@ -3125,12 +3161,14 @@ async function renderHabits(){
   try{habits=await api.get('/api/habits')}catch(e){}
   let h=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><h2 style="margin:0">Habits</h2><button class="btn-s" id="hab-add-btn">+ New Habit</button></div>`;
   // Add form (hidden initially)
+  const areaOpts=areas.map(a=>`<option value="${a.id}">${esc(a.icon||'')} ${esc(a.name)}</option>`).join('');
   h+=`<div id="hab-form" style="display:none;padding:12px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin-bottom:16px">
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
       <div><label style="font-size:11px">Icon</label><input type="text" id="hab-icon" value="💪" style="width:50px"></div>
       <div style="flex:1"><label style="font-size:11px">Name</label><input type="text" id="hab-name" placeholder="e.g. Exercise"></div>
       <div><label style="font-size:11px">Target/day</label><input type="number" id="hab-target" value="1" min="1" max="99" style="width:60px"></div>
       <div><label style="font-size:11px">Frequency</label><select id="hab-freq"><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
+      <div><label style="font-size:11px">Area</label><select id="hab-area"><option value="">None</option>${areaOpts}</select></div>
       <div><label style="font-size:11px">Color</label><input type="color" id="hab-color" value="#6C63FF" style="width:40px;height:32px;padding:0;border:none"></div>
       <button class="btn-s" id="hab-save">Save</button>
       <button class="btn-c" id="hab-cancel">Cancel</button>
@@ -3144,7 +3182,7 @@ async function renderHabits(){
       const pct=hab.target>0?Math.min(100,Math.round((hab.todayCount||0)/hab.target*100)):0;
       h+=`<div class="habit-card" data-hid="${hab.id}">
         <div class="hc-head"><span style="font-size:24px">${esc(hab.icon||'⭐')}</span><span style="flex:1;font-weight:600">${esc(hab.name)}</span>
-          <span class="hc-streak" style="background:${escA(hab.color||'#6C63FF')}20;color:${escA(hab.color||'#6C63FF')}">${hab.streak||0}🔥</span></div>
+          <span class="hc-streak" style="background:${escA(hab.color||'#6C63FF')}20;color:${escA(hab.color||'#6C63FF')}">${streakEmoji(hab.streak||0)} ${hab.streak||0}${hab.total_completions?' · '+hab.total_completions+' total':''}</span></div>
         <div style="display:flex;align-items:center;gap:10px;margin:8px 0">
           <div class="habit-bar" style="flex:1"><div class="habit-bar-fill" style="width:${pct}%;background:${escA(hab.color||'#6C63FF')}"></div></div>
           <span style="font-size:11px;color:var(--txd)">${hab.todayCount||0}/${hab.target}</span>
@@ -3153,7 +3191,7 @@ async function renderHabits(){
           <div class="habit-week" id="hw-${hab.id}"></div>
           <button class="habit-check ${hab.completed?'done':''}" data-hid="${hab.id}" style="--hc:${escA(hab.color||'#6C63FF')}"><span class="material-icons-round">check</span></button>
         </div>
-        <div style="display:flex;gap:4px;margin-top:6px"><button class="btn-c" style="font-size:10px;padding:2px 8px" data-edit="${hab.id}">Edit</button><button class="btn-c" style="font-size:10px;padding:2px 8px;color:var(--dn)" data-del="${hab.id}">Delete</button></div>
+        <div style="display:flex;gap:4px;margin-top:6px;align-items:center">${hab.area_name?`<span style="font-size:10px;color:var(--txd)">${esc(hab.area_icon||'')} ${esc(hab.area_name)}</span><span style="flex:1"></span>`:''}<button class="btn-c" style="font-size:10px;padding:2px 8px" data-edit="${hab.id}">Edit</button><button class="btn-c" style="font-size:10px;padding:2px 8px;color:var(--dn)" data-del="${hab.id}">Delete</button></div>
       </div>`;
     }
     h+=`</div>`;
@@ -3182,7 +3220,8 @@ async function renderHabits(){
   document.getElementById('hab-cancel')?.addEventListener('click',()=>{$('hab-form').style.display='none'});
   document.getElementById('hab-save')?.addEventListener('click',async()=>{
     const name=$('hab-name').value.trim();if(!name)return;
-    await api.post('/api/habits',{name,icon:$('hab-icon').value,color:$('hab-color').value,target:Number($('hab-target').value)||1,frequency:$('hab-freq').value});
+    const areaVal=$('hab-area').value;const areaId=areaVal?Number(areaVal):null;
+    await api.post('/api/habits',{name,icon:$('hab-icon').value,color:$('hab-color').value,target:Number($('hab-target').value)||1,frequency:$('hab-freq').value,area_id:areaId});
     showToast('Habit created!');renderHabits();
   });
   // Check buttons (log/unlog)
@@ -3203,12 +3242,13 @@ async function renderHabits(){
     $('hab-form').style.display='block';
     $('hab-name').value=hab.name;$('hab-icon').value=hab.icon||'⭐';
     $('hab-color').value=hab.color||'#6C63FF';$('hab-target').value=hab.target||1;
-    $('hab-freq').value=hab.frequency||'daily';
+    $('hab-freq').value=hab.frequency||'daily';$('hab-area').value=hab.area_id||'';
     // Replace save handler for edit
     const saveBtn=$('hab-save');const newBtn=saveBtn.cloneNode(true);saveBtn.parentNode.replaceChild(newBtn,saveBtn);
     newBtn.textContent='Update';
     newBtn.addEventListener('click',async()=>{
-      await api.put('/api/habits/'+hab.id,{name:$('hab-name').value.trim(),icon:$('hab-icon').value,color:$('hab-color').value,target:Number($('hab-target').value)||1,frequency:$('hab-freq').value});
+      const eAreaVal=$('hab-area').value;const eAreaId=eAreaVal?Number(eAreaVal):null;
+      await api.put('/api/habits/'+hab.id,{name:$('hab-name').value.trim(),icon:$('hab-icon').value,color:$('hab-color').value,target:Number($('hab-target').value)||1,frequency:$('hab-freq').value,area_id:eAreaId});
       showToast('Habit updated');renderHabits();
     });
   }));

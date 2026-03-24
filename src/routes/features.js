@@ -140,7 +140,7 @@ router.post('/api/settings/reset', (req, res) => {
 
 // ─── Habits API ───
 router.get('/api/habits', (req, res) => {
-  const habits = db.prepare('SELECT * FROM habits WHERE archived=0 ORDER BY position').all();
+  const habits = db.prepare('SELECT h.*, la.name as area_name, la.icon as area_icon FROM habits h LEFT JOIN life_areas la ON h.area_id=la.id WHERE h.archived=0 ORDER BY h.position').all();
   if (!habits.length) return res.json(habits);
   const today = new Date().toISOString().slice(0, 10);
   // Batch-load all logs for these habits (last 400 days for streak calc)
@@ -171,18 +171,24 @@ router.get('/api/habits', (req, res) => {
       else break;
     }
     h.streak = streak;
+    h.total_completions = Object.values(logs).reduce((s, c) => s + c, 0);
+    h.logged_today = h.todayCount > 0;
   });
   res.json(habits);
 });
 router.post('/api/habits', (req, res) => {
-  const { name, icon, color, frequency, target } = req.body;
+  const { name, icon, color, frequency, target, area_id } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
   const validFreqs = ['daily','weekly','monthly','yearly'];
   if (frequency && !validFreqs.includes(frequency)) return res.status(400).json({ error: 'Invalid frequency (must be daily, weekly, monthly, or yearly)' });
   if (target !== undefined && target !== null && (typeof target !== 'number' || target < 1 || !Number.isInteger(target))) return res.status(400).json({ error: 'Target must be a positive integer' });
+  if (area_id !== undefined && area_id !== null) {
+    const area = db.prepare('SELECT id FROM life_areas WHERE id=?').get(area_id);
+    if (!area) return res.status(400).json({ error: 'Invalid area_id' });
+  }
   const pos = getNextPosition('habits');
-  const r = db.prepare('INSERT INTO habits (name,icon,color,frequency,target,position) VALUES (?,?,?,?,?,?)').run(
-    name.trim(), icon || '✅', color || '#22C55E', frequency || 'daily', target || 1, pos
+  const r = db.prepare('INSERT INTO habits (name,icon,color,frequency,target,position,area_id) VALUES (?,?,?,?,?,?,?)').run(
+    name.trim(), icon || '✅', color || '#22C55E', frequency || 'daily', target || 1, pos, area_id || null
   );
   res.status(201).json(db.prepare('SELECT * FROM habits WHERE id=?').get(r.lastInsertRowid));
 });
@@ -191,9 +197,9 @@ router.put('/api/habits/:id', (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const ex = db.prepare('SELECT * FROM habits WHERE id=?').get(id);
   if (!ex) return res.status(404).json({ error: 'Not found' });
-  const { name, icon, color, frequency, target, archived } = req.body;
-  db.prepare('UPDATE habits SET name=COALESCE(?,name),icon=COALESCE(?,icon),color=COALESCE(?,color),frequency=COALESCE(?,frequency),target=COALESCE(?,target),archived=COALESCE(?,archived) WHERE id=?').run(
-    name||null, icon||null, color||null, frequency||null, target!==undefined?target:null, archived!==undefined?archived:null, id
+  const { name, icon, color, frequency, target, archived, area_id } = req.body;
+  db.prepare('UPDATE habits SET name=COALESCE(?,name),icon=COALESCE(?,icon),color=COALESCE(?,color),frequency=COALESCE(?,frequency),target=COALESCE(?,target),archived=COALESCE(?,archived),area_id=? WHERE id=?').run(
+    name||null, icon||null, color||null, frequency||null, target!==undefined?target:null, archived!==undefined?archived:null, area_id!==undefined?area_id:ex.area_id, id
   );
   res.json(db.prepare('SELECT * FROM habits WHERE id=?').get(id));
 });

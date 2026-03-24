@@ -111,6 +111,18 @@ function makeListItem(listId, overrides = {}) {
   return db.prepare('SELECT * FROM list_items WHERE id=?').get(r.lastInsertRowid);
 }
 
+function makeHabit(overrides = {}) {
+  const { db } = setup();
+  const o = { name: 'Test Habit', icon: '💪', color: '#22C55E', frequency: 'daily', target: 1, position: 0, area_id: null, ...overrides };
+  const r = db.prepare('INSERT INTO habits (name,icon,color,frequency,target,position,area_id) VALUES (?,?,?,?,?,?,?)').run(o.name, o.icon, o.color, o.frequency, o.target, o.position, o.area_id);
+  return db.prepare('SELECT * FROM habits WHERE id=?').get(r.lastInsertRowid);
+}
+
+function logHabit(habitId, date) {
+  const { db } = setup();
+  db.prepare('INSERT OR REPLACE INTO habit_logs (habit_id, date, count) VALUES (?,?,1)').run(habitId, date);
+}
+
 function agent() {
   const { app } = setup();
   return request(app);
@@ -135,4 +147,4 @@ function serverLocalDate(offsetDays = 0) {
   return d.toISOString().slice(0, 10);
 }
 
-module.exports = { setup, cleanDb, teardown, makeArea, makeGoal, makeTask, makeSubtask, makeTag, linkTag, makeFocus, makeList, makeListItem, agent, today, daysFromNow, serverLocalDate };
+module.exports = { setup, cleanDb, teardown, makeArea, makeGoal, makeTask, makeSubtask, makeTag, linkTag, makeFocus, makeList, makeListItem, makeHabit, logHabit, agent, today, daysFromNow, serverLocalDate };

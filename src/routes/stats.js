@@ -350,5 +350,24 @@ router.get('/api/stats/time-analytics', (req, res) => {
   res.json({ byArea, byHour, weeklyVelocity, accuracy });
 });
 
+// ─── Balance alert ───
+router.get('/api/stats/balance', (req, res) => {
+  const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+  const rows = db.prepare(`
+    SELECT la.id, la.name, la.icon, la.color, COUNT(t.id) as task_count
+    FROM tasks t
+    JOIN goals g ON t.goal_id = g.id
+    JOIN life_areas la ON g.area_id = la.id
+    WHERE t.created_at >= ? OR (t.due_date IS NOT NULL AND t.due_date >= ?)
+    GROUP BY la.id
+    ORDER BY task_count DESC
+  `).all(weekAgo.toISOString().slice(0,10), weekAgo.toISOString().slice(0,10));
+  const total = rows.reduce((s,r) => s + r.task_count, 0);
+  const areas = rows.map(r => ({ ...r, pct: total ? Math.round(r.task_count / total * 100) : 0 }));
+  const dominant = areas.find(a => a.pct > 60);
+  const lowest = areas.length > 1 ? areas[areas.length - 1] : null;
+  res.json({ areas, total, dominant: dominant || null, lowest: lowest || null });
+});
+
   return router;
 };
