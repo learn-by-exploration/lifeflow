@@ -597,7 +597,7 @@ async function renderFocusHub(){
       <p style="font-size:13px;color:var(--txd);margin-bottom:20px">Today: ${stats.todayMinutes||0} min focused &bull; ${stats.todaySessions||0} sessions</p>
       <button class="btn-s" id="fh-start" style="padding:12px 32px;font-size:14px"><span class="material-icons-round" style="font-size:18px;vertical-align:middle;margin-right:6px">play_arrow</span>Start Focus Session</button>
     </div>`;
-    sub.querySelector('#fh-start')?.addEventListener('click',()=>{const t=tasks.find(x=>x.status!=='done');if(t)startFocusTimer(t.id)});
+    sub.querySelector('#fh-start')?.addEventListener('click',async()=>{let t=tasks.find(x=>x.status!=='done');if(!t){const all=await api.get('/api/tasks/all');t=all.find(x=>x.status!=='done')}if(t)startFocusTimer(t.id)});
   } else if(_focusTab==='history'){
     await renderFocusHistory(sub);
   } else if(_focusTab==='analytics'){
