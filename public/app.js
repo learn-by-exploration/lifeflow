@@ -3695,7 +3695,7 @@ async function renderHabits(){
     for(const hab of habits){
       const pct=hab.target>0?Math.min(100,Math.round((hab.todayCount||0)/hab.target*100)):0;
       h+=`<div class="habit-card" data-hid="${hab.id}">
-        <div class="hc-head"><span style="font-size:24px">${esc(hab.icon||'⭐')}</span><span style="flex:1;font-weight:600">${esc(hab.name)}</span>
+        <div class="hc-head"><span style="font-size:24px">${esc(hab.icon||'⭐')}</span><span class="hc-name">${esc(hab.name)}</span>
           <span class="hc-streak" style="background:${escA(hab.color||'#6C63FF')}20;color:${escA(hab.color||'#6C63FF')}">${streakEmoji(hab.streak||0)} ${hab.streak||0}${hab.total_completions?' · '+hab.total_completions+' total':''}</span></div>
         <div style="display:flex;align-items:center;gap:10px;margin:8px 0">
           <div class="habit-bar" style="flex:1"><div class="habit-bar-fill" style="width:${pct}%;background:${escA(hab.color||'#6C63FF')}"></div></div>
@@ -3705,7 +3705,7 @@ async function renderHabits(){
           <div class="habit-week" id="hw-${hab.id}"></div>
           <button class="habit-check ${hab.completed?'done':''}" data-hid="${hab.id}" style="--hc:${escA(hab.color||'#6C63FF')}"><span class="material-icons-round">check</span></button>
         </div>
-        <div style="display:flex;gap:4px;margin-top:6px;align-items:center">${hab.area_name?`<span style="font-size:10px;color:var(--txd)">${esc(hab.area_icon||'')} ${esc(hab.area_name)}</span><span style="flex:1"></span>`:''}<button class="btn-c" style="font-size:10px;padding:2px 8px" data-edit="${hab.id}">Edit</button><button class="btn-c" style="font-size:10px;padding:2px 8px;color:var(--dn)" data-del="${hab.id}">Delete</button></div>
+        <div style="display:flex;gap:4px;margin-top:6px;align-items:center;overflow:hidden">${hab.area_name?`<span style="font-size:10px;color:var(--txd);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hab.area_icon||'')} ${esc(hab.area_name)}</span><span style="flex:1"></span>`:''}<button class="btn-c" style="font-size:10px;padding:2px 8px;flex-shrink:0" data-edit="${hab.id}">Edit</button><button class="btn-c" style="font-size:10px;padding:2px 8px;color:var(--dn);flex-shrink:0" data-del="${hab.id}">Delete</button></div>
       </div>`;
     }
     h+=`</div>`;

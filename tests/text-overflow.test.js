@@ -228,4 +228,38 @@ describe('Text overflow protection', () => {
       assertCSSProps('.al-item .al-t', ['white-space:nowrap'], 'activity log text');
     });
   });
+
+  describe('.habit-card .hc-head (habit header row)', () => {
+    it('has min-width:0', () => {
+      assertCSSProps('.habit-card .hc-head', ['min-width:0'], 'habit header');
+    });
+    it('has overflow:hidden', () => {
+      assertCSSProps('.habit-card .hc-head', ['overflow:hidden'], 'habit header');
+    });
+  });
+
+  describe('.habit-card .hc-streak (habit streak badge)', () => {
+    it('has white-space:nowrap', () => {
+      assertCSSProps('.habit-card .hc-streak', ['white-space:nowrap'], 'habit streak');
+    });
+    it('has flex-shrink:0', () => {
+      assertCSSProps('.habit-card .hc-streak', ['flex-shrink:0'], 'habit streak');
+    });
+  });
+
+  describe('.habit-check (habit check button)', () => {
+    it('has flex-shrink:0', () => {
+      assertCSSProps('.habit-check', ['flex-shrink:0'], 'habit check button');
+    });
+  });
+
+  describe('habit name uses hc-name class (not inline style)', () => {
+    it('habit card template uses class="hc-name"', () => {
+      const appJS = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+      assert.ok(
+        appJS.includes('class=\\"hc-name\\"') || appJS.includes("class=\"hc-name\""),
+        'habit name should use class="hc-name" not inline styles'
+      );
+    });
+  });
 });
