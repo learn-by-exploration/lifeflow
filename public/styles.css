@@ -16,7 +16,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 /* Toast */
 .toast-wrap{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:400;display:flex;flex-direction:column-reverse;gap:6px;pointer-events:none}
 .toast{pointer-events:auto;background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--rs);padding:10px 16px;box-shadow:var(--shd);font-size:13px;display:flex;align-items:center;gap:10px;animation:slideUp .25s ease-out;min-width:260px;max-width:420px}
-.toast .t-msg{flex:1}.toast .t-undo{color:var(--brand);font-weight:600;cursor:pointer;white-space:nowrap;font-size:12px}
+.toast .t-msg{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.toast .t-undo{color:var(--brand);font-weight:600;cursor:pointer;white-space:nowrap;font-size:12px}
 .toast .t-undo:hover{text-decoration:underline}
 @keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 @keyframes fadeOut{from{opacity:1}to{opacity:0}}
@@ -662,7 +662,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .tmpl-card:hover{border-color:var(--brand);transform:translateY(-2px);box-shadow:var(--shd)}
 .tmpl-card .tmpl-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .tmpl-card .tmpl-icon{font-size:28px}
-.tmpl-card .tmpl-name{font-size:14px;font-weight:600;flex:1}
+.tmpl-card .tmpl-name{font-size:14px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tmpl-card .tmpl-del{background:none;border:none;color:var(--txd);cursor:pointer;font-size:16px;padding:4px;border-radius:50%;opacity:0;transition:opacity .15s}
 .tmpl-card:hover .tmpl-del{opacity:1}.tmpl-card .tmpl-del:hover{color:var(--err);background:var(--bg-h)}
 .tmpl-card .tmpl-desc{font-size:11px;color:var(--tx2);margin-bottom:8px}
@@ -874,7 +874,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .list-card-meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:11px;color:var(--tx2)}
 .list-card .list-share-badge{position:absolute;top:10px;right:10px;font-size:12px;color:var(--brand)}
 .list-detail-head{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
-.list-detail-head h2{margin:0;font-size:18px;font-weight:600;flex:1}
+.list-detail-head h2{margin:0;font-size:18px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .list-detail-actions{display:flex;gap:8px;align-items:center}
 .list-detail-actions button{font-size:13px;padding:8px 14px;border-radius:var(--rs);transition:all .15s}
 .share-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;border:1px solid var(--brd);font-size:12px;cursor:pointer;background:var(--bg-c);transition:all .2s}

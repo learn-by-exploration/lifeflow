@@ -317,4 +317,129 @@ describe('Text overflow protection', () => {
       );
     });
   });
+
+  // ─── NEW: additional CSS selector tests ───
+
+  describe('.toast .t-msg (toast message text)', () => {
+    it('has overflow:hidden', () => {
+      assertCSSProps('.toast .t-msg', ['overflow:hidden'], 'toast message');
+    });
+    it('has text-overflow:ellipsis', () => {
+      assertCSSProps('.toast .t-msg', ['text-overflow:ellipsis'], 'toast message');
+    });
+    it('has white-space:nowrap', () => {
+      assertCSSProps('.toast .t-msg', ['white-space:nowrap'], 'toast message');
+    });
+  });
+
+  describe('.tmpl-card .tmpl-name (template name)', () => {
+    it('has overflow:hidden', () => {
+      assertCSSProps('.tmpl-card .tmpl-name', ['overflow:hidden'], 'template name');
+    });
+    it('has text-overflow:ellipsis', () => {
+      assertCSSProps('.tmpl-card .tmpl-name', ['text-overflow:ellipsis'], 'template name');
+    });
+    it('has white-space:nowrap', () => {
+      assertCSSProps('.tmpl-card .tmpl-name', ['white-space:nowrap'], 'template name');
+    });
+  });
+
+  describe('.list-detail-head h2 (list detail title)', () => {
+    it('has overflow:hidden', () => {
+      assertCSSProps('.list-detail-head h2', ['overflow:hidden'], 'list detail title');
+    });
+    it('has text-overflow:ellipsis', () => {
+      assertCSSProps('.list-detail-head h2', ['text-overflow:ellipsis'], 'list detail title');
+    });
+    it('has white-space:nowrap', () => {
+      assertCSSProps('.list-detail-head h2', ['white-space:nowrap'], 'list detail title');
+    });
+  });
+
+  // ─── REGRESSION GUARD: CSS flex:1 text audit ───
+
+  describe('CSS flex:1 text elements must have overflow protection', () => {
+    it('every CSS flex:1 rule on a text element has overflow:hidden', () => {
+      // Extract all CSS rules that have flex:1
+      const ruleRe = /([^{}]+)\{([^}]*flex:1[^}]*)\}/g;
+      let m;
+      const unprotected = [];
+      // Selectors that are structural containers (not text elements) — safe to skip
+      const skipPatterns = [
+        /input|button|textarea|select/i,     // form elements
+        /body|\.mn|\.ct|\.dp-body/i,         // layout containers
+        /track|bar|\.bcol|\.dp-row/i,        // structural/non-text containers
+        /\.ft-btn|\.trend-col|\.sb-bot/i,    // buttons, charts, icons
+        /\.dr-stat-card|\.streak-card/i,     // card containers (have fixed width)
+        /\.ds-ainfo|\.planner-hour/i,        // column containers
+        /\.set-row label/i,                  // fixed labels (not user text)
+        /\.dr-step/i,                        // nav steps (fixed text)
+        /\.ms-bar .ms-cnt/i,                 // programmatic count text
+        /\.qa input|\.sta input|\.tgi input/i, // input elements
+        />\*/i,                              // wildcard children (.dp-row>*)
+      ];
+      while ((m = ruleRe.exec(css)) !== null) {
+        const selector = m[1].trim();
+        const body = m[2];
+        // Skip non-text structural selectors
+        if (skipPatterns.some(p => p.test(selector))) continue;
+        // If it has flex:1 but no overflow protection, flag it
+        if (!body.includes('overflow:hidden') && !body.includes('overflow:auto') && !body.includes('overflow-y:auto')) {
+          unprotected.push(selector);
+        }
+      }
+      assert.equal(
+        unprotected.length, 0,
+        `CSS flex:1 text elements without overflow protection:\n${unprotected.map(s => `  - ${s}`).join('\n')}\nAdd overflow:hidden;text-overflow:ellipsis;white-space:nowrap to each.`
+      );
+    });
+  });
+
+  // ─── REGRESSION GUARD: inline styled user text audit ───
+
+  describe('no unprotected inline-styled title text in app.js', () => {
+    it('inline font-weight spans rendering esc() have overflow or a class', () => {
+      const appJS = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+      // Only flag elements with font-weight (title/name styling) that render user text
+      // These are the patterns that have caused real overflow bugs
+      const re = /(?:class="([^"]*)")?\s*style="([^"]*font-weight[^"]*)">\$\{esc\(/g;
+      let match;
+      const unprotected = [];
+      while ((match = re.exec(appJS)) !== null) {
+        const cls = match[1] || '';
+        const style = match[2];
+        // Has a CSS class → overflow protection comes from the class, OK
+        if (cls) continue;
+        // Has inline overflow protection → OK
+        if (style.includes('overflow:hidden') || style.includes('text-overflow')) continue;
+        // Has flex:1 → the other flex:1 guard covers it
+        if (style.includes('flex:1')) continue;
+        const line = appJS.substring(0, match.index).split('\n').length;
+        unprotected.push(`line ${line}: style="${style}">\${esc(...`);
+      }
+      assert.equal(
+        unprotected.length, 0,
+        `Found ${unprotected.length} inline font-weight title span(s) without overflow or class:\n${unprotected.join('\n')}`
+      );
+    });
+  });
+
+  // ─── REGRESSION GUARD: focus history user text overflow ───
+
+  describe('focus history session items have overflow protection', () => {
+    it('task title span in focus history has overflow:hidden', () => {
+      const appJS = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+      // Find the focus history section — looks for task_title in a font-weight span
+      const histBlock = /font-weight:500[^"]*">\$\{esc\(s\.task_title\)/;
+      const match = histBlock.exec(appJS);
+      assert.ok(match, 'focus history task title span found');
+      // Check surrounding context has overflow protection
+      const start = Math.max(0, match.index - 100);
+      const ctx = appJS.substring(start, match.index + match[0].length);
+      assert.ok(
+        ctx.includes('overflow:hidden'),
+        'focus history task title container must have overflow:hidden'
+      );
+    });
+  });
 });

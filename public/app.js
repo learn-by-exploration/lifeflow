@@ -2828,8 +2828,8 @@ async function renderFocusHistory(target){
   else{hist.items.forEach(s=>{
     const dt=new Date(s.started_at);
     h+=`<div class="tc" style="padding:8px 12px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center">
-      <div><span style="font-size:13px;font-weight:500">${esc(s.task_title)}</span><br><span style="font-size:11px;color:var(--tx2)">${esc(s.area_name)} → ${esc(s.goal_title)}</span></div>
-      <div style="text-align:right"><span style="font-size:13px;font-weight:500">${Math.floor(s.duration_sec/60)}m</span><br><span style="font-size:11px;color:var(--tx2)">${dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})} ${dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span></div>
+      <div style="min-width:0;overflow:hidden"><span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block">${esc(s.task_title)}</span><br><span style="font-size:11px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block">${esc(s.area_name)} → ${esc(s.goal_title)}</span></div>
+      <div style="text-align:right;flex-shrink:0"><span style="font-size:13px;font-weight:500">${Math.floor(s.duration_sec/60)}m</span><br><span style="font-size:11px;color:var(--tx2)">${dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})} ${dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span></div>
     </div>`;
   })}
   c.innerHTML=h;
