@@ -29,6 +29,13 @@ module.exports = function(deps) {
     res.json(GROCERY_CATEGORIES);
   });
 
+  // Configurable grocery categories from settings (falls back to hardcoded)
+  router.get('/api/lists/categories/configured', (req, res) => {
+    const row = db.prepare("SELECT value FROM settings WHERE key='groceryCategories'").get();
+    if (row) { try { return res.json(JSON.parse(row.value)); } catch {} }
+    res.json(GROCERY_CATEGORIES);
+  });
+
   router.get('/api/lists/templates', (req, res) => {
     res.json(LIST_TEMPLATES);
   });
@@ -209,6 +216,43 @@ module.exports = function(deps) {
     const result = db.prepare('DELETE FROM list_items WHERE list_id=? AND checked=1').run(id);
     rebuildSearchIndex();
     res.json({ cleared: result.changes });
+  });
+
+  // ─── Duplicate list with items ───
+  router.post('/api/lists/:id/duplicate', (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+    const ex = db.prepare('SELECT * FROM lists WHERE id=?').get(id);
+    if (!ex) return res.status(404).json({ error: 'List not found' });
+    const listCount = db.prepare('SELECT COUNT(*) as c FROM lists').get().c;
+    if (listCount >= 100) return res.status(400).json({ error: 'Maximum 100 lists reached' });
+    const keepChecked = req.body && req.body.keep_checked;
+    const pos = getNextPosition('lists');
+    const copyTx = db.transaction(() => {
+      const r = db.prepare('INSERT INTO lists (name,type,icon,color,area_id,parent_id,position) VALUES (?,?,?,?,?,?,?)').run(
+        ex.name + ' (copy)', ex.type, ex.icon, ex.color, ex.area_id, null, pos
+      );
+      const newId = r.lastInsertRowid;
+      const items = db.prepare('SELECT * FROM list_items WHERE list_id=? ORDER BY position').all(id);
+      const ins = db.prepare('INSERT INTO list_items (list_id,title,checked,category,quantity,note,position) VALUES (?,?,?,?,?,?,?)');
+      items.forEach(i => ins.run(newId, i.title, keepChecked ? i.checked : 0, i.category, i.quantity, i.note, i.position));
+      return newId;
+    });
+    const newId = copyTx();
+    rebuildSearchIndex();
+    const newList = db.prepare('SELECT * FROM lists WHERE id=?').get(newId);
+    const newItems = db.prepare('SELECT * FROM list_items WHERE list_id=? ORDER BY position').all(newId);
+    res.status(201).json({ ...newList, items: newItems });
+  });
+
+  // ─── Uncheck all items ───
+  router.post('/api/lists/:id/uncheck-all', (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+    const ex = db.prepare('SELECT * FROM lists WHERE id=?').get(id);
+    if (!ex) return res.status(404).json({ error: 'List not found' });
+    const result = db.prepare('UPDATE list_items SET checked=0 WHERE list_id=? AND checked=1').run(id);
+    res.json({ unchecked: result.changes });
   });
 
   // ─── SHARING ───

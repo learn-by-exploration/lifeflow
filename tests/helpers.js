@@ -18,6 +18,8 @@ function setup() {
 
 function cleanDb() {
   const { db } = setup();
+  db.exec('DELETE FROM focus_steps');
+  db.exec('DELETE FROM focus_session_meta');
   db.exec('DELETE FROM focus_sessions');
   db.exec('DELETE FROM task_comments');
   db.exec('DELETE FROM goal_milestones');
@@ -90,8 +92,8 @@ function linkTag(taskId, tagId) {
 
 function makeFocus(taskId, overrides = {}) {
   const { db } = setup();
-  const o = { duration_sec: 1500, type: 'pomodoro', ...overrides };
-  const r = db.prepare('INSERT INTO focus_sessions (task_id, duration_sec, type) VALUES (?,?,?)').run(taskId, o.duration_sec, o.type);
+  const o = { duration_sec: 1500, type: 'pomodoro', scheduled_at: null, ...overrides };
+  const r = db.prepare('INSERT INTO focus_sessions (task_id, duration_sec, type, scheduled_at) VALUES (?,?,?,?)').run(taskId, o.duration_sec, o.type, o.scheduled_at);
   return db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(r.lastInsertRowid);
 }
 

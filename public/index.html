@@ -26,9 +26,13 @@
     <div class="ni" data-view="all"><span class="material-icons-round">list</span>All Tasks</div>
     <div class="ni" data-view="calendar"><span class="material-icons-round">calendar_month</span>Calendar</div>
   </div>
-  <!-- Life Areas (promoted to primary level) -->
-  <div class="ns"><div class="ns-label" style="display:flex;align-items:center;justify-content:space-between">Life Areas <span class="material-icons-round" id="add-area-btn" style="font-size:16px;cursor:pointer;opacity:.6" title="New Life Area">add_circle_outline</span></div></div>
-  <div class="al" id="area-list"></div>
+  <!-- Life Areas (collapsible) -->
+  <div class="ns sb-collapsible">
+    <div class="ns-label sb-toggle" data-sec="areas" style="display:flex;align-items:center;justify-content:space-between">Life Areas <span style="display:flex;align-items:center;gap:4px"><span class="material-icons-round" id="add-area-btn" style="font-size:16px;cursor:pointer;opacity:.6" title="New Life Area">add_circle_outline</span><span class="material-icons-round sb-arrow">expand_more</span></span></div>
+    <div class="sb-sec" id="sb-areas">
+    <div class="al" id="area-list"></div>
+    </div>
+  </div>
   <!-- Plan (collapsible — 3 items) -->
   <div class="ns sb-collapsible">
     <div class="ns-label sb-toggle" data-sec="plan">Plan <span class="material-icons-round sb-arrow">expand_more</span></div>
@@ -194,19 +198,68 @@
 <!-- Focus Timer overlay -->
 <div class="ft-ov" id="ft-ov" role="dialog" aria-modal="true" aria-label="Focus Timer">
   <div class="ft-box">
-    <div class="ft-task" id="ft-task"></div>
-    <div class="ft-ring">
-      <svg width="220" height="220" viewBox="0 0 220 220">
-        <circle cx="110" cy="110" r="100" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="6"/>
-        <circle id="ft-arc" cx="110" cy="110" r="100" fill="none" stroke="var(--brand)" stroke-width="6" stroke-linecap="round" stroke-dasharray="628.32" stroke-dashoffset="0"/>
-      </svg>
-      <div class="ft-time-inner" id="ft-display">25:00</div>
+    <!-- Pre-session planning panel -->
+    <div class="ft-plan" id="ft-plan">
+      <div class="ft-task" id="ft-plan-task"></div>
+      <h3 style="color:#fff;margin:12px 0 4px;font-size:16px">Plan Your Session</h3>
+      <label style="font-size:11px;color:var(--txd);display:block;margin-bottom:4px;text-align:left">What will you accomplish?</label>
+      <input type="text" id="ft-intention" placeholder="e.g. Finish the login form validation" style="width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,.15);border-radius:8px;background:rgba(255,255,255,.06);color:#fff;font-size:13px;box-sizing:border-box;margin-bottom:10px;font-family:inherit">
+      <label style="font-size:11px;color:var(--txd);display:block;margin-bottom:4px;text-align:left">Session steps <span style="opacity:.6">(optionally loaded from subtasks)</span></label>
+      <div id="ft-plan-steps" style="margin-bottom:10px;text-align:left;max-height:140px;overflow-y:auto"></div>
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <input type="text" id="ft-step-input" placeholder="Add a step..." style="flex:1;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(255,255,255,.04);color:#fff;font-size:12px;font-family:inherit">
+        <button class="ft-btn" id="ft-step-add" style="padding:8px 14px;font-size:12px">Add</button>
+      </div>
+      <label style="font-size:11px;color:var(--txd);display:block;margin-bottom:4px;text-align:left">When?</label>
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <button class="ft-btn primary ft-when active" data-when="now" id="ft-when-now">Start Now</button>
+        <button class="ft-btn ft-when" data-when="later" id="ft-when-later">Schedule</button>
+      </div>
+      <div id="ft-schedule-row" style="display:none;margin-bottom:12px">
+        <input type="datetime-local" id="ft-schedule-time" style="width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(255,255,255,.06);color:#fff;font-size:13px;font-family:inherit;box-sizing:border-box">
+      </div>
+      <div class="ft-btns">
+        <button class="ft-btn primary" id="ft-plan-go">Begin Focus</button>
+        <button class="ft-btn danger" id="ft-plan-cancel">Cancel</button>
+      </div>
     </div>
-    <div class="ft-label" id="ft-label">Focus Time</div>
-    <div class="ft-btns">
-      <button class="ft-btn" id="ft-mode">Short Break</button>
-      <button class="ft-btn primary" id="ft-toggle">Start</button>
-      <button class="ft-btn danger" id="ft-stop">End Session</button>
+    <!-- Active timer panel -->
+    <div class="ft-timer" id="ft-timer" style="display:none">
+      <div class="ft-task" id="ft-task"></div>
+      <div class="ft-ring">
+        <svg width="220" height="220" viewBox="0 0 220 220">
+          <circle cx="110" cy="110" r="100" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="6"/>
+          <circle id="ft-arc" cx="110" cy="110" r="100" fill="none" stroke="var(--brand)" stroke-width="6" stroke-linecap="round" stroke-dasharray="628.32" stroke-dashoffset="0"/>
+        </svg>
+        <div class="ft-time-inner" id="ft-display">25:00</div>
+      </div>
+      <div class="ft-label" id="ft-label">Focus Time</div>
+      <!-- In-session steps checklist -->
+      <div id="ft-steps" class="ft-steps"></div>
+      <div class="ft-btns">
+        <button class="ft-btn" id="ft-mode">Short Break</button>
+        <button class="ft-btn primary" id="ft-toggle">Start</button>
+        <button class="ft-btn danger" id="ft-stop">End Session</button>
+      </div>
+    </div>
+    <!-- Post-session reflection panel -->
+    <div class="ft-reflect" id="ft-reflect" style="display:none">
+      <h3 style="color:#fff;margin:0 0 4px;font-size:18px" id="ft-reflect-title">Session Complete!</h3>
+      <div style="font-size:13px;color:var(--tx2);margin-bottom:16px" id="ft-reflect-summary"></div>
+      <label style="font-size:12px;color:var(--txd);display:block;margin-bottom:8px">How focused were you?</label>
+      <div class="ft-rating" id="ft-rating">
+        <button class="ft-rate" data-rate="1" title="Distracted">😫</button>
+        <button class="ft-rate" data-rate="2" title="Struggled">😐</button>
+        <button class="ft-rate" data-rate="3" title="Okay">🙂</button>
+        <button class="ft-rate" data-rate="4" title="Good">😊</button>
+        <button class="ft-rate" data-rate="5" title="In the zone">🔥</button>
+      </div>
+      <label style="font-size:11px;color:var(--txd);display:block;margin-bottom:4px;margin-top:12px;text-align:left">Quick note (optional)</label>
+      <input type="text" id="ft-reflection" placeholder="Any blockers or wins?" style="width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(255,255,255,.04);color:#fff;font-size:12px;box-sizing:border-box;font-family:inherit;margin-bottom:16px">
+      <div class="ft-btns">
+        <button class="ft-btn primary" id="ft-reflect-done">Done</button>
+        <button class="ft-btn" id="ft-reflect-continue">Keep Going</button>
+      </div>
     </div>
   </div>
 </div>

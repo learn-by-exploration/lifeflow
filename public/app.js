@@ -86,18 +86,52 @@ function renderSBLists(){
   const parents=userLists.filter(l=>!l.parent_id);
   el.innerHTML=parents.map(l=>{
     const subs=userLists.filter(s=>s.parent_id===l.id);
-    let html=`<div class="sf-item${l.id===activeListId?' active':''}" data-lid="${l.id}"><span class="sf-icon">${esc(l.icon)}</span><span>${esc(l.name)}</span><span class="sf-badge">${l.item_count?((l.checked_count||0)+'/'+l.item_count):''}</span></div>`;
+    let html=`<div class="sf-item${l.id===activeListId?' active':''}" data-lid="${l.id}"><span class="sf-icon">${esc(l.icon)}</span><span>${esc(l.name)}</span><span class="sf-badge">${l.item_count?((l.checked_count||0)+'/'+l.item_count):''}</span><button class="sf-menu material-icons-round" data-lid="${l.id}" title="Options">more_vert</button></div>`;
     subs.forEach(s=>{
       html+=`<div class="sf-item${s.id===activeListId?' active':''}" data-lid="${s.id}" style="padding-left:28px;font-size:12px"><span class="sf-icon" style="font-size:12px">${esc(s.icon)}</span><span>${esc(s.name)}</span><span class="sf-badge">${s.item_count?((s.checked_count||0)+'/'+s.item_count):''}</span></div>`;
     });
     return html;
   }).join('');
-  el.querySelectorAll('.sf-item').forEach(it=>it.addEventListener('click',()=>{
+  el.querySelectorAll('.sf-item').forEach(it=>it.addEventListener('click',e=>{
+    if(e.target.classList.contains('sf-menu'))return;
     const lid=Number(it.dataset.lid);activeListId=lid;
     const lst=userLists.find(x=>x.id===lid);activeListName=lst?lst.name:'List';
     currentView='listdetail';
     document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));
     it.classList.add('active');closeMobileSb();render();
+  }));
+  // List context menus in sidebar
+  el.querySelectorAll('.sf-menu').forEach(btn=>btn.addEventListener('click',e=>{
+    e.stopPropagation();
+    const lid=Number(btn.dataset.lid);const lst=userLists.find(x=>x.id===lid);if(!lst)return;
+    document.querySelectorAll('.ctx-menu').forEach(m=>m.remove());
+    const menu=document.createElement('div');menu.className='ctx-menu';
+    menu.innerHTML=`
+      <div class="ctx-item" data-act="edit"><span class="material-icons-round">edit</span>Edit</div>
+      <div class="ctx-item" data-act="duplicate"><span class="material-icons-round">content_copy</span>Duplicate</div>
+      <div class="ctx-item" data-act="uncheck"><span class="material-icons-round">restart_alt</span>Uncheck All</div>
+      <div class="ctx-item ctx-danger" data-act="delete"><span class="material-icons-round">delete</span>Delete</div>`;
+    const rect=btn.getBoundingClientRect();
+    menu.style.left=rect.right+'px';menu.style.top=rect.bottom+'px';
+    document.body.appendChild(menu);
+    const closeMenu=ev=>{if(!menu.contains(ev.target)){menu.remove();document.removeEventListener('click',closeMenu)}};
+    setTimeout(()=>document.addEventListener('click',closeMenu),0);
+    menu.querySelector('[data-act="edit"]').addEventListener('click',()=>{menu.remove();openListModal(lst)});
+    menu.querySelector('[data-act="duplicate"]').addEventListener('click',async()=>{
+      menu.remove();
+      try{const r=await api.post('/api/lists/'+lid+'/duplicate');if(r.error){showToast(r.error);return}
+      await loadUserLists();activeListId=r.id;activeListName=r.name;currentView='listdetail';render();
+      showToast('List duplicated')}catch(e){showToast('Failed to duplicate list')}
+    });
+    menu.querySelector('[data-act="uncheck"]').addEventListener('click',async()=>{
+      menu.remove();try{const r=await api.post('/api/lists/'+lid+'/uncheck-all');if(r.error){showToast(r.error);return}
+      await loadUserLists();render();showToast('All items unchecked')}catch(e){showToast('Failed to uncheck items')}
+    });
+    menu.querySelector('[data-act="delete"]').addEventListener('click',async()=>{
+      menu.remove();if(!confirm('Delete "'+lst.name+'" and all its items?'))return;
+      await api.del('/api/lists/'+lid);if(lid===activeListId){activeListId=null;currentView='lists'}
+      await loadUserLists();render();showToast('List deleted');
+    });
   }));
 }
 document.querySelectorAll('#smart-list .sf-item').forEach(el=>el.addEventListener('click',()=>{
@@ -148,36 +182,63 @@ function renderAreas(){
   el.innerHTML=areas.map(a=>{
     const pct=a.total_tasks?Math.round(a.done_tasks/a.total_tasks*100):0;
     return`<div class="ai ${a.id===activeAreaId?'active':''}" data-id="${a.id}">
-    <span style="font-size:15px">${esc(a.icon)}</span><span class="an">${esc(a.name)}</span>
+    <span class="ai-icon" style="font-size:15px">${esc(a.icon)}</span><span class="an">${esc(a.name)}</span>
     ${a.total_tasks?`<span class="ac" title="${a.done_tasks}/${a.total_tasks} done (${pct}%)">${a.pending_tasks||0}</span>`:`<span class="ac">0</span>`}
-    <button class="da material-icons-round" data-id="${a.id}">close</button>
+    <button class="ai-menu material-icons-round" data-id="${a.id}" title="Options">more_vert</button>
   </div>`}).join('');
   el.querySelectorAll('.ai').forEach(item=>item.addEventListener('click',e=>{
-    if(e.target.classList.contains('da'))return;
+    if(e.target.classList.contains('ai-menu'))return;
     activeAreaId=Number(item.dataset.id);activeGoalId=null;currentView='area';
     document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));item.classList.add('active');closeMobileSb();render();
   }));
-  el.querySelectorAll('.da').forEach(btn=>btn.addEventListener('click',async e=>{
+  // Three-dot context menu on each area
+  el.querySelectorAll('.ai-menu').forEach(btn=>btn.addEventListener('click',e=>{
     e.stopPropagation();
     const aid=Number(btn.dataset.id);const area=areas.find(a=>a.id===aid);if(!area)return;
-    // Snapshot goals and tasks for undo
-    const aGoals=await api.get('/api/areas/'+aid+'/goals');
-    const aTaskSets=await Promise.all(aGoals.map(g=>api.get('/api/goals/'+g.id+'/tasks')));
-    await api.del('/api/areas/'+aid);
-    if(aid===activeAreaId){activeAreaId=null;currentView='myday'}
-    await loadAreas();render();
-    showToast('Area deleted — "'+area.name+'"', async()=>{
-      // Restore area
-      const ra=await api.post('/api/areas',{name:area.name,icon:area.icon,color:area.color});
-      // Restore goals + tasks
-      for(let i=0;i<aGoals.length;i++){
-        const g=aGoals[i];
-        const rg=await api.post('/api/areas/'+ra.id+'/goals',{title:g.title,description:g.description||'',due_date:g.due_date||null,color:g.color||'#6C63FF'});
-        for(const t of aTaskSets[i]){
-          await api.post('/api/goals/'+rg.id+'/tasks',{title:t.title,notes:t.notes||'',status:t.status,priority:t.priority,due_date:t.due_date||null,my_day:t.my_day?1:0,recurring:t.recurring||null});
-        }
-      }
+    // Remove any existing context menu
+    document.querySelectorAll('.ctx-menu').forEach(m=>m.remove());
+    const menu=document.createElement('div');menu.className='ctx-menu';
+    menu.innerHTML=`
+      <div class="ctx-item" data-act="edit"><span class="material-icons-round">edit</span>Edit Area</div>
+      <div class="ctx-item" data-act="archive"><span class="material-icons-round">archive</span>Archive</div>
+      <div class="ctx-item ctx-danger" data-act="delete"><span class="material-icons-round">delete</span>Delete</div>`;
+    const rect=btn.getBoundingClientRect();
+    menu.style.left=rect.right+'px';menu.style.top=rect.bottom+'px';
+    document.body.appendChild(menu);
+    // Close on outside click
+    const closeMenu=ev=>{if(!menu.contains(ev.target)){menu.remove();document.removeEventListener('click',closeMenu)}};
+    setTimeout(()=>document.addEventListener('click',closeMenu),0);
+    menu.querySelector('[data-act="edit"]').addEventListener('click',()=>{
+      menu.remove();openAreaModal(area);
+    });
+    menu.querySelector('[data-act="archive"]').addEventListener('click',async()=>{
+      menu.remove();
+      await api.put('/api/areas/'+aid+'/archive');
+      if(aid===activeAreaId){activeAreaId=null;currentView='myday'}
       await loadAreas();render();
+      showToast('Area archived — "'+area.name+'"',async()=>{
+        await api.put('/api/areas/'+aid+'/unarchive');await loadAreas();render();
+      });
+    });
+    menu.querySelector('[data-act="delete"]').addEventListener('click',async()=>{
+      menu.remove();
+      if(!confirm('Delete "'+area.name+'" and all its goals/tasks? This cannot be undone.'))return;
+      const aGoals=await api.get('/api/areas/'+aid+'/goals');
+      const aTaskSets=await Promise.all(aGoals.map(g=>api.get('/api/goals/'+g.id+'/tasks')));
+      await api.del('/api/areas/'+aid);
+      if(aid===activeAreaId){activeAreaId=null;currentView='myday'}
+      await loadAreas();render();
+      showToast('Area deleted — "'+area.name+'"', async()=>{
+        const ra=await api.post('/api/areas',{name:area.name,icon:area.icon,color:area.color});
+        for(let i=0;i<aGoals.length;i++){
+          const g=aGoals[i];
+          const rg=await api.post('/api/areas/'+ra.id+'/goals',{title:g.title,description:g.description||'',due_date:g.due_date||null,color:g.color||'#6C63FF'});
+          for(const t of aTaskSets[i]){
+            await api.post('/api/goals/'+rg.id+'/tasks',{title:t.title,notes:t.notes||'',status:t.status,priority:t.priority,due_date:t.due_date||null,my_day:t.my_day?1:0,recurring:t.recurring||null});
+          }
+        }
+        await loadAreas();render();
+      });
     });
   }));
 }
@@ -1218,9 +1279,30 @@ $('dp-save').addEventListener('click',async()=>{
 });
 
 // ─── AREA MODAL ───
-$('add-area-btn').addEventListener('click',()=>{editingId=null;$('am-t').textContent='New Life Area';$('am-name').value='';$('am-icon').value='📋';$('am-color').value='#2563EB';buildSwatches('am-sw','am-color','#2563EB');$('am').classList.add('active');$('am-name').focus()});
+let _editAreaId=null;
+function openAreaModal(area){
+  if(area){
+    _editAreaId=area.id;$('am-t').textContent='Edit Life Area';
+    $('am-name').value=area.name;$('am-icon').value=area.icon||'📋';$('am-color').value=area.color||'#2563EB';
+    buildSwatches('am-sw','am-color',area.color||'#2563EB');
+    $('am-save').textContent='Save';
+  }else{
+    _editAreaId=null;$('am-t').textContent='New Life Area';
+    $('am-name').value='';$('am-icon').value='📋';$('am-color').value='#2563EB';
+    buildSwatches('am-sw','am-color','#2563EB');
+    $('am-save').textContent='Create';
+  }
+  $('am').classList.add('active');$('am-name').focus();
+}
+$('add-area-btn').addEventListener('click',(e)=>{e.stopPropagation();openAreaModal()});
 $('am-cancel').addEventListener('click',()=>$('am').classList.remove('active'));
-$('am-save').addEventListener('click',async()=>{const n=$('am-name').value.trim();if(!n)return;await api.post('/api/areas',{name:n,icon:$('am-icon').value||'📋',color:$('am-color').value});$('am').classList.remove('active');await loadAreas();render()});
+$('am-save').addEventListener('click',async()=>{
+  const n=$('am-name').value.trim();if(!n)return;
+  const data={name:n,icon:$('am-icon').value||'📋',color:$('am-color').value};
+  if(_editAreaId){await api.put('/api/areas/'+_editAreaId,data)}
+  else{await api.post('/api/areas',data)}
+  $('am').classList.remove('active');await loadAreas();render();
+});
 
 function openGM(id){
   if(id){editingId=id;const g=goals.find(x=>x.id===id);if(!g)return;$('gm-t').textContent='Edit Goal';$('gm-title').value=g.title;$('gm-desc').value=g.description||'';$('gm-due').value=g.due_date||'';$('gm-color').value=g.color||'#6C63FF';buildSwatches('gm-sw','gm-color',g.color||'#6C63FF');}
@@ -1935,14 +2017,114 @@ async function renderLogbook(){
 
 // ─── FOCUS TIMER / POMODORO ───
 let ftTask=null,ftInterval=null,ftRemaining=25*60,ftTotal=25*60,ftRunning=false,ftMode='focus',ftElapsed=0;
+let ftSessionId=null,ftPlanSteps=[],ftActiveSteps=[],ftRating=0,ftScheduleTimer=null;
 const FT_MODES={focus:{label:'Focus Time',dur:25*60},short:{label:'Short Break',dur:5*60},long:{label:'Long Break',dur:15*60}};
 
 function startFocusTimer(taskId){
   applySettingsToTimer();
   let tk=tasks.find(t=>t.id===taskId);
-  if(!tk){api.get('/api/tasks/'+taskId).then(t=>{ftTask=t;showFocusUI()}).catch(()=>{});return}
-  ftTask=tk;showFocusUI();
+  if(!tk){api.get('/api/tasks/'+taskId).then(t=>{ftTask=t;showFocusPlan()}).catch(()=>{});return}
+  ftTask=tk;showFocusPlan();
 }
+
+// Pre-session planning panel
+function showFocusPlan(){
+  if(!ftTask)return;
+  ftPlanSteps=[];ftRating=0;ftSessionId=null;
+  $('ft-plan-task').textContent=ftTask.title;
+  $('ft-intention').value='';
+  $('ft-step-input').value='';
+  $('ft-reflection').value='';
+  $('ft-schedule-row').style.display='none';
+  document.querySelectorAll('.ft-when').forEach(b=>b.classList.remove('active'));
+  $('ft-when-now').classList.add('active');
+  // Set default schedule time to next hour
+  const now=new Date();now.setHours(now.getHours()+1,0,0,0);
+  $('ft-schedule-time').value=now.toISOString().slice(0,16);
+  // Auto-populate steps from subtasks
+  if(ftTask.subtasks&&ftTask.subtasks.length){
+    ftPlanSteps=ftTask.subtasks.filter(s=>!s.done).map(s=>s.title);
+  }
+  renderPlanSteps();
+  $('ft-plan').style.display='';
+  $('ft-timer').style.display='none';
+  $('ft-reflect').style.display='none';
+  $('ft-ov').classList.add('active');
+}
+
+function renderPlanSteps(){
+  const c=$('ft-plan-steps');
+  if(!ftPlanSteps.length){c.innerHTML='<div style="font-size:11px;color:rgba(255,255,255,.3);padding:4px 6px">No steps yet — add some or skip</div>';return}
+  c.innerHTML=ftPlanSteps.map((s,i)=>`<div class="ft-plan-step"><span style="flex:1">${esc(s)}</span><span class="ft-plan-step-rm material-icons-round" data-i="${i}">close</span></div>`).join('');
+  c.querySelectorAll('.ft-plan-step-rm').forEach(b=>b.addEventListener('click',()=>{ftPlanSteps.splice(Number(b.dataset.i),1);renderPlanSteps()}));
+}
+
+$('ft-step-add').addEventListener('click',()=>{
+  const v=$('ft-step-input').value.trim();if(!v)return;
+  ftPlanSteps.push(v);$('ft-step-input').value='';renderPlanSteps();
+});
+$('ft-step-input').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('ft-step-add').click()}});
+
+// Schedule toggle
+document.querySelectorAll('.ft-when').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.ft-when').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  $('ft-schedule-row').style.display=b.dataset.when==='later'?'':'none';
+  $('ft-plan-go').textContent=b.dataset.when==='later'?'Schedule':'Begin Focus';
+}));
+
+$('ft-plan-cancel').addEventListener('click',()=>{
+  ftTask=null;$('ft-ov').classList.remove('active');
+});
+
+// Begin focus or schedule
+$('ft-plan-go').addEventListener('click',async()=>{
+  if(!ftTask)return;
+  const isSchedule=document.querySelector('.ft-when.active')?.dataset.when==='later';
+  const intention=$('ft-intention').value.trim();
+  const scheduledAt=isSchedule?$('ft-schedule-time').value:null;
+
+  if(isSchedule&&scheduledAt){
+    // Create session with scheduled_at, don't start timer
+    const sess=await api.post('/api/focus',{task_id:ftTask.id,duration_sec:0,type:'pomodoro',scheduled_at:scheduledAt});
+    ftSessionId=sess.id;
+    if(intention||ftPlanSteps.length){
+      await api.post('/api/focus/'+sess.id+'/meta',{intention,steps_planned:ftPlanSteps.length,strategy:'pomodoro'});
+    }
+    if(ftPlanSteps.length){
+      await api.post('/api/focus/'+sess.id+'/steps',{steps:ftPlanSteps});
+    }
+    // Set browser notification
+    const schedDate=new Date(scheduledAt);
+    const delay=schedDate.getTime()-Date.now();
+    if(delay>0){
+      if(Notification.permission==='default')Notification.requestPermission();
+      ftScheduleTimer=setTimeout(()=>{
+        if(Notification.permission==='granted'){
+          new Notification('Time to focus!',{body:ftTask.title,icon:'/manifest.json'});
+        }
+        showToast('Scheduled focus session: '+ftTask.title);
+      },delay);
+    }
+    showToast('Focus session scheduled for '+schedDate.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}));
+    ftTask=null;$('ft-ov').classList.remove('active');
+    return;
+  }
+
+  // Start immediately — create session
+  const sess=await api.post('/api/focus',{task_id:ftTask.id,duration_sec:0,type:'pomodoro'});
+  ftSessionId=sess.id;
+  if(intention||ftPlanSteps.length){
+    await api.post('/api/focus/'+sess.id+'/meta',{intention,steps_planned:ftPlanSteps.length,strategy:'pomodoro'});
+  }
+  if(ftPlanSteps.length){
+    ftActiveSteps=await api.post('/api/focus/'+sess.id+'/steps',{steps:ftPlanSteps});
+  } else {
+    ftActiveSteps=[];
+  }
+  showFocusUI();
+});
+
 function showFocusUI(){
   if(!ftTask)return;
   ftMode='focus';ftTotal=FT_MODES.focus.dur;ftRemaining=ftTotal;ftRunning=false;ftElapsed=0;
@@ -1950,9 +2132,26 @@ function showFocusUI(){
   $('ft-label').textContent=FT_MODES.focus.label;
   $('ft-toggle').textContent='Start';
   $('ft-mode').textContent='Short Break';
+  renderFTSteps();
   updateFTDisplay();
-  $('ft-ov').classList.add('active');
+  $('ft-plan').style.display='none';
+  $('ft-timer').style.display='';
+  $('ft-reflect').style.display='none';
 }
+
+function renderFTSteps(){
+  const c=$('ft-steps');
+  if(!ftActiveSteps||!ftActiveSteps.length){c.innerHTML='';return}
+  c.innerHTML=ftActiveSteps.map(s=>`<div class="ft-step-item ${s.done?'done':''}" data-sid="${s.id}"><div class="ft-step-chk">${s.done?'✓':''}</div><span>${esc(s.text)}</span></div>`).join('');
+  c.querySelectorAll('.ft-step-item').forEach(el=>el.addEventListener('click',async()=>{
+    const sid=Number(el.dataset.sid);
+    const updated=await api.put('/api/focus/steps/'+sid);
+    const idx=ftActiveSteps.findIndex(s=>s.id===sid);
+    if(idx>=0)ftActiveSteps[idx]=updated;
+    renderFTSteps();
+  }));
+}
+
 function updateFTDisplay(){
   const m=Math.floor(ftRemaining/60),s=ftRemaining%60;
   $('ft-display').textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
@@ -1970,14 +2169,10 @@ $('ft-toggle').addEventListener('click',()=>{
       if(ftRemaining<=0){
         clearInterval(ftInterval);ftRunning=false;
         if(ftMode==='focus'&&ftTask){
-          api.post('/api/focus',{task_id:ftTask.id,duration_sec:ftElapsed,type:'pomodoro'});
-          showToast('Focus session complete! '+Math.floor(ftElapsed/60)+'m logged');
-          ftElapsed=0;
-          // Auto switch to break
-          ftMode='short';ftTotal=FT_MODES.short.dur;ftRemaining=ftTotal;
-          $('ft-label').textContent=FT_MODES.short.label;
-          $('ft-toggle').textContent='Start Break';
-          $('ft-mode').textContent='Focus (25m)';
+          // End the session & show reflection
+          api.put('/api/focus/'+ftSessionId+'/end',{duration_sec:ftElapsed});
+          showReflection();
+          return;
         } else {
           ftMode='focus';ftTotal=FT_MODES.focus.dur;ftRemaining=ftTotal;
           $('ft-label').textContent=FT_MODES.focus.label;
@@ -2004,12 +2199,75 @@ $('ft-mode').addEventListener('click',()=>{
 });
 $('ft-stop').addEventListener('click',()=>{
   clearInterval(ftInterval);
-  if(ftMode==='focus'&&ftElapsed>30&&ftTask){
-    api.post('/api/focus',{task_id:ftTask.id,duration_sec:ftElapsed,type:'pomodoro'});
-    showToast(Math.floor(ftElapsed/60)+'m focus session saved');
+  if(ftMode==='focus'&&ftElapsed>30&&ftTask&&ftSessionId){
+    api.put('/api/focus/'+ftSessionId+'/end',{duration_sec:ftElapsed});
+    showReflection();
+    return;
   }
-  ftRunning=false;ftElapsed=0;ftTask=null;
+  ftRunning=false;ftElapsed=0;ftTask=null;ftSessionId=null;ftActiveSteps=[];
   $('ft-ov').classList.remove('active');
+});
+
+// Post-session reflection
+function showReflection(){
+  const mins=Math.floor(ftElapsed/60);
+  const completed=ftActiveSteps.filter(s=>s.done).length;
+  const total=ftActiveSteps.length;
+  $('ft-reflect-title').textContent='Session Complete!';
+  $('ft-reflect-summary').textContent=mins+'m focused'+(total?' · '+completed+'/'+total+' steps done':'');
+  ftRating=0;
+  document.querySelectorAll('.ft-rate').forEach(b=>b.classList.remove('active'));
+  $('ft-reflection').value='';
+  $('ft-plan').style.display='none';
+  $('ft-timer').style.display='none';
+  $('ft-reflect').style.display='';
+  showToast('Focus session complete! '+mins+'m logged');
+}
+
+document.querySelectorAll('.ft-rate').forEach(b=>b.addEventListener('click',()=>{
+  ftRating=Number(b.dataset.rate);
+  document.querySelectorAll('.ft-rate').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+}));
+
+$('ft-reflect-done').addEventListener('click',async()=>{
+  if(ftSessionId){
+    const completed=ftActiveSteps.filter(s=>s.done).length;
+    await api.post('/api/focus/'+ftSessionId+'/meta',{
+      reflection:$('ft-reflection').value.trim()||null,
+      focus_rating:ftRating,
+      steps_completed:completed
+    });
+  }
+  ftRunning=false;ftElapsed=0;ftTask=null;ftSessionId=null;ftActiveSteps=[];
+  $('ft-ov').classList.remove('active');
+  if(currentView==='focus')renderFocusHistory();
+});
+
+$('ft-reflect-continue').addEventListener('click',async()=>{
+  if(ftSessionId&&ftRating){
+    const completed=ftActiveSteps.filter(s=>s.done).length;
+    await api.post('/api/focus/'+ftSessionId+'/meta',{
+      reflection:$('ft-reflection').value.trim()||null,
+      focus_rating:ftRating,
+      steps_completed:completed
+    });
+  }
+  // Start break, then auto-return to focus
+  ftElapsed=0;
+  ftMode='short';ftTotal=FT_MODES.short.dur;ftRemaining=ftTotal;
+  $('ft-label').textContent=FT_MODES.short.label;
+  $('ft-toggle').textContent='Start Break';
+  $('ft-mode').textContent='Focus (25m)';
+  $('ft-plan').style.display='none';
+  $('ft-timer').style.display='';
+  $('ft-reflect').style.display='none';
+  // Create new session for next focus round
+  if(ftTask){
+    const sess=await api.post('/api/focus',{task_id:ftTask.id,duration_sec:0,type:'pomodoro'});
+    ftSessionId=sess.id;
+  }
+  updateFTDisplay();
 });
 
 // ─── MARKDOWN NOTE RENDERER ───
@@ -2307,6 +2565,7 @@ async function renderSettings(){
   const settingsTabDefs=[
     {id:'general',label:'General',icon:'tune'},
     {id:'appearance',label:'Appearance',icon:'palette'},
+    {id:'areas',label:'Life Areas',icon:'category'},
     {id:'tags',label:'Tags',icon:'label'},
     {id:'templates',label:'Templates',icon:'content_copy'},
     {id:'automations',label:'Automations',icon:'auto_fix_high'},
@@ -2337,6 +2596,77 @@ async function renderSettings(){
     await renderRules();
     c.insertAdjacentHTML('afterbegin',tabsHtml);
     c.querySelectorAll('.settings-tab').forEach(btn=>btn.addEventListener('click',()=>{window._settingsTab=btn.dataset.stab;renderSettings()}));
+    return;
+  }
+  if(window._settingsTab==='areas'){
+    const allAreas=await api.get('/api/areas?include_archived=1');
+    const active=allAreas.filter(a=>!a.archived);
+    const archived=allAreas.filter(a=>a.archived);
+    let h=tabsHtml+`<div class="settings-grid"><section class="settings-section"><h3>Life Areas</h3>
+    <p style="font-size:12px;color:var(--txd);margin-bottom:12px">Manage your life areas. Drag to reorder, archive to hide without deleting.</p>
+    <div id="sa-list">`;
+    active.forEach((a,i)=>{
+      h+=`<div class="sa-row" data-aid="${a.id}" draggable="true">
+        <span class="material-icons-round sa-grip" style="font-size:16px;color:var(--txd);cursor:grab">drag_indicator</span>
+        <span style="font-size:20px">${esc(a.icon)}</span>
+        <span style="flex:1;font-size:13px;font-weight:500">${esc(a.name)}</span>
+        <span class="sa-color" style="width:16px;height:16px;border-radius:50%;background:${escA(a.color)}"></span>
+        <button class="btn-c sa-edit" data-aid="${a.id}" title="Edit"><span class="material-icons-round" style="font-size:16px">edit</span></button>
+        <button class="btn-c sa-archive" data-aid="${a.id}" title="Archive"><span class="material-icons-round" style="font-size:16px">archive</span></button>
+        <button class="btn-c sa-del" data-aid="${a.id}" title="Delete" style="color:var(--dn)"><span class="material-icons-round" style="font-size:16px">delete</span></button>
+      </div>`;
+    });
+    h+=`</div><button class="btn-s" id="sa-add" style="margin-top:10px;font-size:12px;padding:8px 14px">+ Add Area</button></section>`;
+    if(archived.length){
+      h+=`<section class="settings-section"><h3>Archived</h3><div>`;
+      archived.forEach(a=>{
+        h+=`<div class="sa-row archived" data-aid="${a.id}">
+          <span style="font-size:20px;opacity:.5">${esc(a.icon)}</span>
+          <span style="flex:1;font-size:13px;color:var(--txd)">${esc(a.name)}</span>
+          <button class="btn-c sa-unarchive" data-aid="${a.id}" title="Unarchive"><span class="material-icons-round" style="font-size:16px">unarchive</span></button>
+          <button class="btn-c sa-del" data-aid="${a.id}" title="Delete permanently" style="color:var(--dn)"><span class="material-icons-round" style="font-size:16px">delete_forever</span></button>
+        </div>`;
+      });
+      h+=`</div></section>`;
+    }
+    h+=`</div>`;
+    c.innerHTML=h;
+    c.querySelectorAll('.settings-tab').forEach(btn=>btn.addEventListener('click',()=>{window._settingsTab=btn.dataset.stab;renderSettings()}));
+    // Wire area actions
+    $('sa-add')?.addEventListener('click',()=>{openAreaModal();setTimeout(()=>{const check=setInterval(()=>{if(!$('am').classList.contains('active')){clearInterval(check);renderSettings()}},300)},100)});
+    c.querySelectorAll('.sa-edit').forEach(btn=>btn.addEventListener('click',()=>{
+      const a=allAreas.find(x=>x.id===Number(btn.dataset.aid));
+      if(a){openAreaModal(a);setTimeout(()=>{const check=setInterval(()=>{if(!$('am').classList.contains('active')){clearInterval(check);renderSettings()}},300)},100)}
+    }));
+    c.querySelectorAll('.sa-archive').forEach(btn=>btn.addEventListener('click',async()=>{
+      await api.put('/api/areas/'+btn.dataset.aid+'/archive');await loadAreas();renderSettings();showToast('Area archived');
+    }));
+    c.querySelectorAll('.sa-unarchive').forEach(btn=>btn.addEventListener('click',async()=>{
+      await api.put('/api/areas/'+btn.dataset.aid+'/unarchive');await loadAreas();renderSettings();showToast('Area restored');
+    }));
+    c.querySelectorAll('.sa-del').forEach(btn=>btn.addEventListener('click',async()=>{
+      const a=allAreas.find(x=>x.id===Number(btn.dataset.aid));
+      if(!confirm('Delete "'+a.name+'" and all its goals and tasks?'))return;
+      await api.del('/api/areas/'+btn.dataset.aid);await loadAreas();renderSettings();showToast('Area deleted');
+    }));
+    // Drag & drop reorder
+    let dragAid=null;
+    c.querySelectorAll('#sa-list .sa-row').forEach(row=>{
+      row.addEventListener('dragstart',e=>{dragAid=Number(row.dataset.aid);row.style.opacity='.5'});
+      row.addEventListener('dragend',()=>{row.style.opacity='1'});
+      row.addEventListener('dragover',e=>{e.preventDefault();row.style.borderTop='2px solid var(--brand)'});
+      row.addEventListener('dragleave',()=>{row.style.borderTop=''});
+      row.addEventListener('drop',async e=>{
+        e.preventDefault();row.style.borderTop='';
+        const targetAid=Number(row.dataset.aid);if(dragAid===targetAid)return;
+        const rows=Array.from(c.querySelectorAll('#sa-list .sa-row'));
+        const ids=rows.map(r=>Number(r.dataset.aid));
+        const fromIdx=ids.indexOf(dragAid);const toIdx=ids.indexOf(targetAid);
+        ids.splice(fromIdx,1);ids.splice(toIdx,0,dragAid);
+        await api.put('/api/areas/reorder',ids.map((id,i)=>({id,position:i})));
+        await loadAreas();renderSettings();
+      });
+    });
     return;
   }
 
@@ -2602,6 +2932,8 @@ async function renderListDetail(){
     <div style="flex:1"><h2 style="margin:0">${esc(list.name)}</h2><span style="font-size:11px;color:var(--txd)">${list.type==='grocery'?'Grocery List':list.type==='notes'?'Notes':'Checklist'} · ${items.length} item${items.length!==1?'s':''}</span></div>
     <div class="list-detail-actions">
       <button class="btn-c" id="ld-edit" title="Edit list"><span class="material-icons-round" style="font-size:16px">edit</span></button>
+      <button class="btn-c" id="ld-dup" title="Duplicate list"><span class="material-icons-round" style="font-size:16px">content_copy</span></button>
+      <button class="btn-c" id="ld-uncheck" title="Uncheck all items"><span class="material-icons-round" style="font-size:16px">restart_alt</span></button>
       <button class="btn-c" id="ld-share" title="Share"><span class="material-icons-round" style="font-size:16px">${list.share_token?'link':'link_off'}</span></button>
       <button class="btn-c" id="ld-del" title="Delete list" style="color:var(--dn)"><span class="material-icons-round" style="font-size:16px">delete</span></button>
     </div>
@@ -2685,6 +3017,15 @@ async function renderListDetail(){
   c.innerHTML=h;
   // Event handlers
   $('ld-edit')?.addEventListener('click',()=>openListModal(list));
+  $('ld-dup')?.addEventListener('click',async()=>{
+    try{const r=await api.post('/api/lists/'+list.id+'/duplicate');if(r.error){showToast(r.error);return}
+    await loadUserLists();activeListId=r.id;activeListName=r.name;render();showToast('List duplicated')}catch(e){showToast('Failed to duplicate list')}
+  });
+  $('ld-uncheck')?.addEventListener('click',async()=>{
+    try{const r=await api.post('/api/lists/'+list.id+'/uncheck-all');if(r.error){showToast(r.error);return}
+    if(r.unchecked===0){showToast('No checked items');return}
+    await loadUserLists();render();showToast(r.unchecked+' item'+(r.unchecked>1?'s':'')+' unchecked')}catch(e){showToast('Failed to uncheck items')}
+  });
   $('ld-del')?.addEventListener('click',async()=>{
     if(!confirm('Delete "'+list.name+'" and all its items?'))return;
     await api.del('/api/lists/'+list.id);
@@ -3772,7 +4113,11 @@ document.addEventListener('keydown',e=>{
   if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||ce)return;
   if(e.key==='k'&&(e.ctrlKey||e.metaKey)){e.preventDefault();openSearch();return}
   if(e.key==='Escape'){
-    if($('ft-ov').classList.contains('active')){$('ft-stop').click();return}
+    if($('ft-ov').classList.contains('active')){
+      if($('ft-reflect').style.display!=='none'){$('ft-reflect-done').click();return}
+      if($('ft-timer').style.display!=='none'){$('ft-stop').click();return}
+      $('ft-plan-cancel').click();return
+    }
     if($('dr-ov').classList.contains('active')){closeDR();return}
     if($('sr-ov').classList.contains('active')){closeSearch();return}
     if($('qc-ov').classList.contains('active')){closeQC();return}

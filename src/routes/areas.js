@@ -5,30 +5,71 @@ module.exports = function(deps) {
 
 // ─── Life Areas ───
 router.get('/api/areas', (req, res) => {
+  const includeArchived = req.query.include_archived === '1';
+  const where = includeArchived ? '' : 'WHERE a.archived=0';
   res.json(db.prepare(`
     SELECT a.*,
       (SELECT COUNT(*) FROM goals g WHERE g.area_id=a.id) as goal_count,
       (SELECT COUNT(*) FROM tasks t JOIN goals g ON t.goal_id=g.id WHERE g.area_id=a.id AND t.status!='done') as pending_tasks,
       (SELECT COUNT(*) FROM tasks t JOIN goals g ON t.goal_id=g.id WHERE g.area_id=a.id) as total_tasks,
       (SELECT COUNT(*) FROM tasks t JOIN goals g ON t.goal_id=g.id WHERE g.area_id=a.id AND t.status='done') as done_tasks
-    FROM life_areas a ORDER BY a.position
+    FROM life_areas a ${where} ORDER BY a.position
   `).all());
 });
 router.post('/api/areas', (req, res) => {
   const { name, icon, color } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  if (name.trim().length > 100) return res.status(400).json({ error: 'Name too long (max 100 characters)' });
   const pos = getNextPosition('life_areas');
   const r = db.prepare('INSERT INTO life_areas (name,icon,color,position) VALUES (?,?,?,?)').run(name.trim(), icon||'📋', color||'#2563EB', pos);
   res.status(201).json(db.prepare('SELECT * FROM life_areas WHERE id=?').get(r.lastInsertRowid));
 });
+
+// ─── Reorder areas (bulk) — MUST be before :id routes ───
+router.put('/api/areas/reorder', (req, res) => {
+  const items = req.body;
+  if (!Array.isArray(items)) return res.status(400).json({ error: 'Array of {id, position} required' });
+  for (const i of items) {
+    if (!Number.isInteger(i.id) || !Number.isInteger(i.position) || i.position < 0) {
+      return res.status(400).json({ error: 'Each item must have integer id and non-negative integer position' });
+    }
+  }
+  const stmt = db.prepare('UPDATE life_areas SET position=? WHERE id=?');
+  const tx = db.transaction(() => { items.forEach(i => stmt.run(i.position, i.id)); });
+  tx();
+  res.json({ reordered: items.length });
+});
+
 router.put('/api/areas/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  const { name, icon, color } = req.body;
-  db.prepare('UPDATE life_areas SET name=COALESCE(?,name),icon=COALESCE(?,icon),color=COALESCE(?,color) WHERE id=?').run(name||null,icon||null,color||null,id);
-  const a = db.prepare('SELECT * FROM life_areas WHERE id=?').get(id);
-  if (!a) return res.status(404).json({ error: 'Not found' });
-  res.json(a);
+  const ex = db.prepare('SELECT * FROM life_areas WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Not found' });
+  const { name, icon, color, position } = req.body;
+  if (name !== undefined && (!name || !name.trim())) return res.status(400).json({ error: 'Name cannot be empty' });
+  if (name && name.trim().length > 100) return res.status(400).json({ error: 'Name too long (max 100 characters)' });
+  db.prepare('UPDATE life_areas SET name=COALESCE(?,name),icon=COALESCE(?,icon),color=COALESCE(?,color),position=COALESCE(?,position) WHERE id=?').run(
+    name ? name.trim() : null, icon||null, color||null, position!==undefined?position:null, id
+  );
+  res.json(db.prepare('SELECT * FROM life_areas WHERE id=?').get(id));
+});
+
+// ─── Archive / Unarchive area ───
+router.put('/api/areas/:id/archive', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM life_areas WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Not found' });
+  db.prepare('UPDATE life_areas SET archived=1 WHERE id=?').run(id);
+  res.json(db.prepare('SELECT * FROM life_areas WHERE id=?').get(id));
+});
+router.put('/api/areas/:id/unarchive', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM life_areas WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Not found' });
+  db.prepare('UPDATE life_areas SET archived=0 WHERE id=?').run(id);
+  res.json(db.prepare('SELECT * FROM life_areas WHERE id=?').get(id));
 });
 router.delete('/api/areas/:id', (req, res) => {
   const id = Number(req.params.id);

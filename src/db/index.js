@@ -198,6 +198,12 @@ function initDatabase(dbDir) {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  // ─── Life Areas migration: archived column ───
+  try { db.exec('ALTER TABLE life_areas ADD COLUMN archived INTEGER DEFAULT 0'); } catch(e) {}
+
+  // ─── Task Templates migration: user_created flag ───
+  try { db.exec('ALTER TABLE task_templates ADD COLUMN user_created INTEGER DEFAULT 0'); } catch(e) {}
+
   // ─── Custom Lists tables ───
   db.exec(`CREATE TABLE IF NOT EXISTS lists (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -250,6 +256,34 @@ function initDatabase(dbDir) {
     duration_sec INTEGER DEFAULT 0,
     type TEXT DEFAULT 'pomodoro',
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+  )`);
+
+  // ─── Focus Session migrations ───
+  try { db.exec('ALTER TABLE focus_sessions ADD COLUMN ended_at DATETIME'); } catch(e) {}
+  try { db.exec('ALTER TABLE focus_sessions ADD COLUMN scheduled_at DATETIME'); } catch(e) {}
+
+  // ─── Focus Session Meta table ───
+  db.exec(`CREATE TABLE IF NOT EXISTS focus_session_meta (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL UNIQUE,
+    intention TEXT,
+    reflection TEXT,
+    focus_rating INTEGER DEFAULT 0 CHECK(focus_rating BETWEEN 0 AND 5),
+    steps_planned INTEGER DEFAULT 0,
+    steps_completed INTEGER DEFAULT 0,
+    strategy TEXT DEFAULT 'pomodoro',
+    FOREIGN KEY (session_id) REFERENCES focus_sessions(id) ON DELETE CASCADE
+  )`);
+
+  // ─── Focus Steps table ───
+  db.exec(`CREATE TABLE IF NOT EXISTS focus_steps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    done INTEGER DEFAULT 0,
+    position INTEGER DEFAULT 0,
+    completed_at DATETIME,
+    FOREIGN KEY (session_id) REFERENCES focus_sessions(id) ON DELETE CASCADE
   )`);
 
   // ─── Automation Rules table ───

@@ -35,10 +35,10 @@ router.get('/api/stats', (req, res) => {
 
 // ─── Focus Session Tracking ───
 router.post('/api/focus', (req, res) => {
-  const { task_id, duration_sec, type } = req.body;
+  const { task_id, duration_sec, type, scheduled_at } = req.body;
   if (!task_id || !Number.isInteger(Number(task_id))) return res.status(400).json({ error: 'task_id required' });
-  const r = db.prepare('INSERT INTO focus_sessions (task_id, duration_sec, type) VALUES (?,?,?)').run(
-    Number(task_id), duration_sec || 0, type || 'pomodoro'
+  const r = db.prepare('INSERT INTO focus_sessions (task_id, duration_sec, type, scheduled_at) VALUES (?,?,?,?)').run(
+    Number(task_id), duration_sec || 0, type || 'pomodoro', scheduled_at || null
   );
   res.status(201).json(db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(r.lastInsertRowid));
 });
@@ -81,6 +81,64 @@ router.get('/api/focus/history', (req, res) => {
   res.json({ total, page, pages: Math.ceil(total / limit), items, daily });
 });
 
+// ─── Focus Insights ───
+router.get('/api/focus/insights', (req, res) => {
+  const peakHours = db.prepare(`
+    SELECT CAST(strftime('%H', started_at) AS INTEGER) as hour,
+      COUNT(*) as sessions, AVG(duration_sec) as avg_duration
+    FROM focus_sessions GROUP BY hour ORDER BY sessions DESC
+  `).all();
+  const byStrategy = db.prepare(`
+    SELECT COALESCE(m.strategy, 'pomodoro') as strategy, COUNT(*) as sessions,
+      AVG(f.duration_sec) as avg_duration, AVG(m.focus_rating) as avg_rating
+    FROM focus_sessions f LEFT JOIN focus_session_meta m ON m.session_id=f.id
+    GROUP BY strategy
+  `).all();
+  const avgRating = db.prepare(`SELECT AVG(focus_rating) as avg FROM focus_session_meta WHERE focus_rating > 0`).get();
+  const completionRate = db.prepare(`
+    SELECT COUNT(*) as total,
+      SUM(CASE WHEN steps_completed >= steps_planned AND steps_planned > 0 THEN 1 ELSE 0 END) as completed
+    FROM focus_session_meta WHERE steps_planned > 0
+  `).get();
+  res.json({ peakHours, byStrategy, avgRating: avgRating?.avg || 0, completionRate });
+});
+
+// ─── Focus Streak ───
+router.get('/api/focus/streak', (req, res) => {
+  const heatmap = db.prepare(`
+    SELECT date(started_at) as day, COUNT(*) as sessions, SUM(duration_sec) as total_sec
+    FROM focus_sessions WHERE started_at >= date('now','-365 days')
+    GROUP BY date(started_at) ORDER BY day
+  `).all();
+  // Use SQLite date('now') as reference to stay consistent with heatmap dates
+  const todayStr = db.prepare("SELECT date('now') as d").get().d;
+  const today = new Date(todayStr + 'T00:00:00Z');
+  const dayMs = 86400000;
+  let streak = 0;
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today.getTime() - i * dayMs);
+    const ds = d.toISOString().slice(0,10);
+    if (heatmap.find(h => h.day === ds)) streak++;
+    else break;
+  }
+  let bestStreak = 0, cur = 0;
+  for (let i = 365; i >= 0; i--) {
+    const d = new Date(today.getTime() - i * dayMs);
+    const ds = d.toISOString().slice(0,10);
+    if (heatmap.find(h => h.day === ds)) { cur++; if (cur > bestStreak) bestStreak = cur; }
+    else cur = 0;
+  }
+  res.json({ streak, bestStreak, heatmap });
+});
+
+// ─── Focus Daily Goal ───
+router.get('/api/focus/goal', (req, res) => {
+  const goalRow = db.prepare("SELECT value FROM settings WHERE key='dailyFocusGoalMinutes'").get();
+  const goalMinutes = goalRow ? Number(goalRow.value) : 120;
+  const todaySec = db.prepare("SELECT COALESCE(SUM(duration_sec),0) as total FROM focus_sessions WHERE date(started_at)=date('now')").get().total;
+  res.json({ goalMinutes, todayMinutes: Math.floor(todaySec / 60), todaySec, pct: Math.min(100, Math.round((todaySec / 60) / goalMinutes * 100)) });
+});
+
 router.put('/api/focus/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
@@ -92,6 +150,93 @@ router.put('/api/focus/:id', (req, res) => {
   );
   res.json(db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(id));
 });
+
+// ─── End Focus Session ───
+router.put('/api/focus/:id/end', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Focus session not found' });
+  const { duration_sec } = req.body;
+  db.prepare('UPDATE focus_sessions SET ended_at=CURRENT_TIMESTAMP, duration_sec=COALESCE(?,duration_sec) WHERE id=?').run(
+    duration_sec !== undefined ? duration_sec : null, id
+  );
+  res.json(db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(id));
+});
+
+// ─── Focus Session Meta (intention / reflection) ───
+router.post('/api/focus/:id/meta', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Focus session not found' });
+  const { intention, reflection, focus_rating, steps_planned, steps_completed, strategy } = req.body;
+  const rating = Number(focus_rating) || 0;
+  if (rating < 0 || rating > 5) return res.status(400).json({ error: 'focus_rating must be 0-5' });
+  const existing = db.prepare('SELECT * FROM focus_session_meta WHERE session_id=?').get(id);
+  if (existing) {
+    db.prepare(`UPDATE focus_session_meta SET
+      intention=COALESCE(?,intention), reflection=COALESCE(?,reflection),
+      focus_rating=COALESCE(?,focus_rating), steps_planned=COALESCE(?,steps_planned),
+      steps_completed=COALESCE(?,steps_completed), strategy=COALESCE(?,strategy)
+      WHERE session_id=?`).run(
+      intention ?? null, reflection ?? null,
+      rating || null, steps_planned ?? null, steps_completed ?? null, strategy ?? null, id
+    );
+  } else {
+    db.prepare(`INSERT INTO focus_session_meta (session_id, intention, reflection, focus_rating, steps_planned, steps_completed, strategy)
+      VALUES (?,?,?,?,?,?,?)`).run(id, intention || null, reflection || null, rating, steps_planned || 0, steps_completed || 0, strategy || 'pomodoro');
+  }
+  res.json(db.prepare('SELECT * FROM focus_session_meta WHERE session_id=?').get(id));
+});
+
+router.get('/api/focus/:id/meta', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const meta = db.prepare('SELECT * FROM focus_session_meta WHERE session_id=?').get(id);
+  if (!meta) return res.status(404).json({ error: 'No meta found for this session' });
+  res.json(meta);
+});
+
+// ─── Focus Steps (micro-goals) ───
+router.post('/api/focus/:id/steps', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Focus session not found' });
+  const { steps } = req.body;
+  if (!Array.isArray(steps) || !steps.length) return res.status(400).json({ error: 'steps array required' });
+  const ins = db.prepare('INSERT INTO focus_steps (session_id, text, position) VALUES (?,?,?)');
+  const run = db.transaction(() => {
+    steps.forEach((s, i) => {
+      const text = typeof s === 'string' ? s : s.text;
+      if (text && text.trim()) ins.run(id, text.trim(), i);
+    });
+  });
+  run();
+  const all = db.prepare('SELECT * FROM focus_steps WHERE session_id=? ORDER BY position').all(id);
+  res.status(201).json(all);
+});
+
+router.get('/api/focus/:id/steps', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const all = db.prepare('SELECT * FROM focus_steps WHERE session_id=? ORDER BY position').all(id);
+  res.json(all);
+});
+
+router.put('/api/focus/steps/:stepId', (req, res) => {
+  const stepId = Number(req.params.stepId);
+  if (!Number.isInteger(stepId)) return res.status(400).json({ error: 'Invalid step ID' });
+  const step = db.prepare('SELECT * FROM focus_steps WHERE id=?').get(stepId);
+  if (!step) return res.status(404).json({ error: 'Step not found' });
+  const done = step.done ? 0 : 1;
+  db.prepare('UPDATE focus_steps SET done=?, completed_at=? WHERE id=?').run(
+    done, done ? new Date().toISOString() : null, stepId
+  );
+  res.json(db.prepare('SELECT * FROM focus_steps WHERE id=?').get(stepId));
+});
+
 router.delete('/api/focus/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
