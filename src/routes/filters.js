@@ -60,21 +60,28 @@ router.get('/api/filters/execute', (req, res) => {
   `).all(...params)));
 });
 
-// Smart lists (built-in)
+// Smart lists (built-in) — thresholds from settings
 router.get('/api/filters/smart/:type', (req, res) => {
   const type = req.params.type;
-  let sql;
+  const staleDays = Number(db.prepare("SELECT value FROM settings WHERE key='smartFilterStale'").get()?.value) || 7;
+  const qwMin = Number(db.prepare("SELECT value FROM settings WHERE key='smartFilterQuickWin'").get()?.value) || 15;
+  let sql, params = [];
   if (type === 'stale') {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - staleDays);
+    const cutoffStr = cutoff.toISOString();
     sql = `SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
       FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
-      WHERE t.status!='done' AND t.created_at <= datetime('now','-7 days') AND t.completed_at IS NULL
+      WHERE t.status!='done' AND t.created_at <= ? AND t.completed_at IS NULL
       ORDER BY t.created_at ASC LIMIT 100`;
+    params = [cutoffStr];
   } else if (type === 'quickwins') {
     sql = `SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
       FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
-      WHERE t.status!='done' AND t.estimated_minutes IS NOT NULL AND t.estimated_minutes<=15
+      WHERE t.status!='done' AND t.estimated_minutes IS NOT NULL AND t.estimated_minutes<=?
       AND NOT EXISTS (SELECT 1 FROM task_deps td JOIN tasks bt ON td.blocked_by_id=bt.id WHERE td.task_id=t.id AND bt.status!='done')
       ORDER BY t.estimated_minutes ASC, t.priority DESC LIMIT 100`;
+    params = [qwMin];
   } else if (type === 'blocked') {
     sql = `SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
       FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
@@ -84,7 +91,7 @@ router.get('/api/filters/smart/:type', (req, res) => {
   } else {
     return res.status(400).json({ error: 'Unknown smart filter type' });
   }
-  res.json(enrichTasks(db.prepare(sql).all()));
+  res.json(enrichTasks(db.prepare(sql).all(...params)));
 });
 
 // ─── Saved Filters CRUD ───

@@ -128,6 +128,14 @@ router.get('/api/reviews/current', (req, res) => {
   const overdue = db.prepare(`SELECT t.*, g.title as goal_title FROM tasks t LEFT JOIN goals g ON t.goal_id=g.id 
     WHERE t.status!='done' AND t.due_date < ? ORDER BY t.due_date`).all(weekStart);
   const streakRow = db.prepare(`SELECT COUNT(DISTINCT date(completed_at)) as days FROM tasks WHERE status='done' AND completed_at >= ? AND completed_at < ?`).get(weekStart, weekEndStr);
+  // Area check-in: tasks per area this week
+  const areaStats = db.prepare(`SELECT a.id, a.name, a.icon, a.color,
+    COUNT(CASE WHEN t.status='done' AND t.completed_at >= ? AND t.completed_at < ? THEN 1 END) as completed,
+    COUNT(CASE WHEN t.status!='done' THEN 1 END) as pending
+    FROM life_areas a LEFT JOIN goals g ON g.area_id=a.id LEFT JOIN tasks t ON t.goal_id=g.id
+    WHERE a.archived=0 GROUP BY a.id ORDER BY a.position`).all(weekStart, weekEndStr);
+  // Inbox count
+  const inboxCount = db.prepare(`SELECT COUNT(*) as c FROM inbox`).get().c;
   // Check for existing review
   const existing = db.prepare('SELECT * FROM weekly_reviews WHERE week_start=?').get(weekStart);
   res.json({
@@ -137,12 +145,15 @@ router.get('/api/reviews/current', (req, res) => {
     tasksCreatedCount: created.count,
     overdueTasks: overdue,
     activeDays: streakRow.days,
+    areaStats,
+    inboxCount,
     existingReview: existing || null
   });
 });
 router.post('/api/reviews', (req, res) => {
-  const { week_start, top_accomplishments, reflection, next_week_priorities } = req.body;
+  const { week_start, top_accomplishments, reflection, next_week_priorities, rating } = req.body;
   if (!week_start) return res.status(400).json({ error: 'week_start required' });
+  const ratingVal = rating != null ? Math.min(5, Math.max(1, Number(rating))) : null;
   // Compute stats
   const weekEnd = new Date(week_start);
   weekEnd.setDate(weekEnd.getDate() + 7);
@@ -152,13 +163,13 @@ router.post('/api/reviews', (req, res) => {
   // Upsert
   const existing = db.prepare('SELECT id FROM weekly_reviews WHERE week_start=?').get(week_start);
   if (existing) {
-    db.prepare('UPDATE weekly_reviews SET tasks_completed=?, tasks_created=?, top_accomplishments=?, reflection=?, next_week_priorities=? WHERE id=?').run(
-      completed.c, created.c, JSON.stringify(top_accomplishments || []), reflection || '', JSON.stringify(next_week_priorities || []), existing.id
+    db.prepare('UPDATE weekly_reviews SET tasks_completed=?, tasks_created=?, top_accomplishments=?, reflection=?, next_week_priorities=?, rating=? WHERE id=?').run(
+      completed.c, created.c, JSON.stringify(top_accomplishments || []), reflection || '', JSON.stringify(next_week_priorities || []), ratingVal, existing.id
     );
     res.json(db.prepare('SELECT * FROM weekly_reviews WHERE id=?').get(existing.id));
   } else {
-    const r = db.prepare('INSERT INTO weekly_reviews (week_start, tasks_completed, tasks_created, top_accomplishments, reflection, next_week_priorities) VALUES (?,?,?,?,?,?)').run(
-      week_start, completed.c, created.c, JSON.stringify(top_accomplishments || []), reflection || '', JSON.stringify(next_week_priorities || [])
+    const r = db.prepare('INSERT INTO weekly_reviews (week_start, tasks_completed, tasks_created, top_accomplishments, reflection, next_week_priorities, rating) VALUES (?,?,?,?,?,?,?)').run(
+      week_start, completed.c, created.c, JSON.stringify(top_accomplishments || []), reflection || '', JSON.stringify(next_week_priorities || []), ratingVal
     );
     res.status(201).json(db.prepare('SELECT * FROM weekly_reviews WHERE id=?').get(r.lastInsertRowid));
   }

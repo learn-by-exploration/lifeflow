@@ -27,7 +27,7 @@ function buildSwatches(containerId, hiddenId, active){
 let areas=[],goals=[],tasks=[],allTags=[];
 let currentView='myday',activeAreaId=null,activeGoalId=null,goalTab='list';
 // Restore last view from localStorage
-{const lv=localStorage.getItem('lf-lastView');if(lv&&['myday','all','board','calendar','overdue','dashboard','weekly','matrix','logbook','tags','focushistory','templates','settings','habits','planner','inbox','review','notes','timeanalytics','rules'].includes(lv))currentView=lv}
+{const lv=localStorage.getItem('lf-lastView');if(lv&&['myday','all','board','calendar','overdue','dashboard','weekly','matrix','logbook','tags','focushistory','templates','settings','habits','planner','inbox','review','notes','timeanalytics','rules','tasks','focus'].includes(lv))currentView=lv}
 let calY,calM;{const n=new Date();calY=n.getFullYear();calM=n.getMonth()}
 let editingId=null;
 const expandedTasks=new Set();
@@ -35,12 +35,16 @@ const expandedTasks=new Set();
 // ─── SETTINGS STATE ───
 let appSettings={defaultView:'myday',theme:'midnight',focusDuration:'25',shortBreak:'5',longBreak:'15',weekStart:'0',defaultPriority:'0',showCompleted:'true',confirmDelete:'true',dateFormat:'relative',autoMyDay:'false'};
 async function loadSettings(){
-  try{appSettings=await api.get('/api/settings')}catch(e){console.error('Failed to load settings:',e)}
+  try{appSettings=await api.get('/api/settings');if(window.Store)Store.setSettings(appSettings)}catch(e){console.error('Failed to load settings:',e)}
 }
 async function saveSetting(key,value){
   appSettings[key]=String(value);
   try{await api.put('/api/settings',{[key]:String(value)})}catch(e){console.error('Failed to save setting:',e)}
 }
+// Configurable label helpers
+function SL(status){try{const m=JSON.parse(appSettings.statusLabels||'{}');return m[status]||{todo:'To Do',doing:'In Progress',done:'Done'}[status]||status}catch{return{todo:'To Do',doing:'In Progress',done:'Done'}[status]||status}}
+function PLbl(p){try{const m=JSON.parse(appSettings.priorityLabels||'{}');return m[String(p)]||['None','Normal','High','Critical'][p]||''}catch{return['None','Normal','High','Critical'][p]||''}}
+function PClr(p){try{const m=JSON.parse(appSettings.priorityColors||'{}');return m[String(p)]||['#64748B','#3B82F6','#F59E0B','#EF4444'][p]||'#64748B'}catch{return['#64748B','#3B82F6','#F59E0B','#EF4444'][p]||'#64748B'}}
 
 // ─── SAVED FILTERS + HABITS STATE ───
 let savedFilters=[],activeFilterId=null,activeFilterName='';
@@ -249,6 +253,8 @@ async function render(){
   // Persist last view
   if(!['area','goal','filter','smartlist','help','lists','listdetail'].includes(currentView))localStorage.setItem('lf-lastView',currentView);
   if(currentView==='myday')await renderMyDay();
+  else if(currentView==='tasks')await renderTasksHub();
+  else if(currentView==='focus')await renderFocusHub();
   else if(currentView==='all')await renderAll();
   else if(currentView==='board')await renderGlobalBoard();
   else if(currentView==='calendar')await renderCal();
@@ -282,6 +288,8 @@ async function render(){
 function updateBC(){
   const bc=$('bc'),pt=$('pt');let html='';
   if(currentView==='myday'){pt.textContent='Today';bc.innerHTML=''}
+  else if(currentView==='tasks'){pt.textContent='Tasks';bc.innerHTML=''}
+  else if(currentView==='focus'){pt.textContent='Focus';bc.innerHTML=''}
   else if(currentView==='all'){pt.textContent='All Tasks';bc.innerHTML=''}
   else if(currentView==='board'){pt.textContent='Board';bc.innerHTML=''}
   else if(currentView==='calendar'){pt.textContent='Calendar';bc.innerHTML=''}
@@ -501,10 +509,66 @@ function wireBalanceDismiss(c){
   c.querySelectorAll('.balance-dismiss').forEach(el=>el.addEventListener('click',()=>{el.closest('.balance-alert').remove()}));
 }
 
-// ─── ALL ───
-async function renderAll(){
-  const t=await api.get('/api/tasks/all');
+// ─── TASKS HUB (List / Board / Calendar tab strip) ───
+let _tasksTab=localStorage.getItem('lf-tasksTab')||'list';
+async function renderTasksHub(){
   const c=$('ct');
+  const tabs=[{id:'list',label:'List',icon:'list'},{id:'board',label:'Board',icon:'view_kanban'},{id:'calendar',label:'Calendar',icon:'calendar_month'}];
+  let h='<div class="tasks-hub-tabs" style="display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--brd);padding-bottom:8px">';
+  tabs.forEach(t=>{
+    const act=_tasksTab===t.id;
+    h+=`<button class="btn-c th-tab${act?' active':''}" data-thtab="${t.id}" style="font-size:12px;padding:6px 14px;border-radius:var(--rs);${act?'background:var(--brand);color:#fff;border-color:var(--brand)':''}"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">${t.icon}</span>${t.label}</button>`;
+  });
+  h+='</div><div id="tasks-hub-content"></div>';
+  c.innerHTML=h;
+  // Render active tab content into sub-container
+  const sub=document.getElementById('tasks-hub-content');
+  if(_tasksTab==='list')await renderAll(sub);
+  else if(_tasksTab==='board')await renderGlobalBoard(sub);
+  else if(_tasksTab==='calendar')await renderCal(sub);
+  // Wire tabs
+  c.querySelectorAll('.th-tab').forEach(btn=>btn.addEventListener('click',()=>{
+    _tasksTab=btn.dataset.thtab;localStorage.setItem('lf-tasksTab',_tasksTab);renderTasksHub();
+  }));
+}
+
+// ─── FOCUS HUB ───
+async function renderFocusHub(){
+  const c=$('ct');
+  const tabs=[{id:'timer',label:'Timer',icon:'timer'},{id:'history',label:'History',icon:'history'},{id:'analytics',label:'Analytics',icon:'analytics'}];
+  let _focusTab=window._focusHubTab||'timer';
+  let h='<div class="focus-hub-tabs" style="display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--brd);padding-bottom:8px">';
+  tabs.forEach(t=>{
+    const act=_focusTab===t.id;
+    h+=`<button class="btn-c fh-tab${act?' active':''}" data-fhtab="${t.id}" style="font-size:12px;padding:6px 14px;border-radius:var(--rs);${act?'background:var(--brand);color:#fff;border-color:var(--brand)':''}"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">${t.icon}</span>${t.label}</button>`;
+  });
+  h+='</div><div id="focus-hub-content"></div>';
+  c.innerHTML=h;
+  const sub=document.getElementById('focus-hub-content');
+  if(_focusTab==='timer'){
+    // Quick-start panel that opens the existing focus overlay
+    const [stats]=await Promise.all([api.get('/api/focus/stats')]);
+    sub.innerHTML=`<div style="text-align:center;padding:40px 20px">
+      <span class="material-icons-round" style="font-size:64px;color:var(--brand);margin-bottom:12px">timer</span>
+      <h2 style="margin:0 0 8px;font-size:20px">Focus Timer</h2>
+      <p style="font-size:13px;color:var(--txd);margin-bottom:20px">Today: ${stats.todayMinutes||0} min focused &bull; ${stats.todaySessions||0} sessions</p>
+      <button class="btn-s" id="fh-start" style="padding:12px 32px;font-size:14px"><span class="material-icons-round" style="font-size:18px;vertical-align:middle;margin-right:6px">play_arrow</span>Start Focus Session</button>
+    </div>`;
+    sub.querySelector('#fh-start')?.addEventListener('click',()=>{document.getElementById('ft-overlay')?.classList.add('active');document.getElementById('ft-plan')&&(document.getElementById('ft-plan').style.display='')});
+  } else if(_focusTab==='history'){
+    await renderFocusHistory(sub);
+  } else if(_focusTab==='analytics'){
+    await renderTimeAnalytics(sub);
+  }
+  c.querySelectorAll('.fh-tab').forEach(btn=>btn.addEventListener('click',()=>{
+    window._focusHubTab=btn.dataset.fhtab;renderFocusHub();
+  }));
+}
+
+// ─── ALL ───
+async function renderAll(target){
+  const t=await api.get('/api/tasks/all');
+  const c=target||$('ct');
   if(!t.length){c.innerHTML=emptyS('checklist','No tasks yet','Create a life area, add a goal, then add tasks',
     `<button class="btn-s" data-action="quick-capture"><span class="material-icons-round" style="font-size:14px">add</span>Quick Add</button>
      <button class="btn-c" data-action="go-inbox">Open Inbox</button>`);wireActions(c);return}
@@ -517,14 +581,14 @@ async function renderAll(){
 
 // ─── GLOBAL BOARD ───
 let gbFilters={area:'',priority:'',tag:''};
-async function renderGlobalBoard(){
+async function renderGlobalBoard(target){
   let qs=[];
   if(gbFilters.area)qs.push('area_id='+gbFilters.area);
   if(gbFilters.priority)qs.push('priority='+gbFilters.priority);
   if(gbFilters.tag)qs.push('tag_id='+gbFilters.tag);
   const url='/api/tasks/board'+(qs.length?'?'+qs.join('&'):'');
   const t=await api.get(url);
-  const c=$('ct');
+  const c=target||$('ct');
   const todo=t.filter(x=>x.status==='todo'),doing=t.filter(x=>x.status==='doing'),done=t.filter(x=>x.status==='done');
   let fh=`<div class="fb">`;
   fh+=`<span class="fb-label">Filter:</span>`;
@@ -533,9 +597,9 @@ async function renderGlobalBoard(){
   fh+=`<select id="gb-tag"><option value="">All Tags</option>${allTags.map(tg=>`<option value="${tg.id}" ${gbFilters.tag==tg.id?'selected':''}>${esc(tg.name)}</option>`).join('')}</select>`;
   fh+=`</div>`;
   let h=fh+`<div class="board" style="min-height:calc(100vh - 200px)">`;
-  h+=`<div class="bcol" data-s="todo" style="flex:1;max-width:none"><div class="bch"><span style="color:var(--tx2)">●</span>To Do<span class="c">${todo.length}</span></div><div class="bcb" data-s="todo">${todo.map(x=>tcHtml(x,true)).join('')}</div></div>`;
-  h+=`<div class="bcol" data-s="doing" style="flex:1;max-width:none"><div class="bch"><span style="color:var(--brand)">●</span>In Progress<span class="c">${doing.length}</span></div><div class="bcb" data-s="doing">${doing.map(x=>tcHtml(x,true)).join('')}</div></div>`;
-  h+=`<div class="bcol" data-s="done" style="flex:1;max-width:none"><div class="bch"><span style="color:var(--ok)">●</span>Done<span class="c">${done.length}</span></div><div class="bcb" data-s="done">${done.map(x=>tcHtml(x,true)).join('')}</div></div>`;
+  h+=`<div class="bcol" data-s="todo" style="flex:1;max-width:none"><div class="bch"><span style="color:var(--tx2)">●</span>${SL('todo')}<span class="c">${todo.length}</span></div><div class="bcb" data-s="todo">${todo.map(x=>tcHtml(x,true)).join('')}</div></div>`;
+  h+=`<div class="bcol" data-s="doing" style="flex:1;max-width:none"><div class="bch"><span style="color:var(--brand)">●</span>${SL('doing')}<span class="c">${doing.length}</span></div><div class="bcb" data-s="doing">${doing.map(x=>tcHtml(x,true)).join('')}</div></div>`;
+  h+=`<div class="bcol" data-s="done" style="flex:1;max-width:none"><div class="bch"><span style="color:var(--ok)">●</span>${SL('done')}<span class="c">${done.length}</span></div><div class="bcb" data-s="done">${done.map(x=>tcHtml(x,true)).join('')}</div></div>`;
   h+=`</div>`;
   c.innerHTML=h;
   attachTE();
@@ -658,22 +722,22 @@ function renderTL(){
   const todo=tasks.filter(t=>t.status==='todo'),doing=tasks.filter(t=>t.status==='doing'),done=tasks.filter(t=>t.status==='done');
   let h='';
   if(doing.length){h+=`<div class="sl" style="color:var(--brand)">In Progress <span class="c">${doing.length}</span></div>`;doing.forEach(t=>h+=tcHtml(t))}
-  if(todo.length){h+=`<div class="sl">To Do <span class="c">${todo.length}</span></div>`;todo.forEach(t=>h+=tcHtml(t))}
-  if(done.length){h+=`<div class="sl" style="color:var(--ok)">Done <span class="c">${done.length}</span></div>`;done.forEach(t=>h+=tcHtml(t))}
+  if(todo.length){h+=`<div class="sl">${SL('todo')} <span class="c">${todo.length}</span></div>`;todo.forEach(t=>h+=tcHtml(t))}
+  if(done.length){h+=`<div class="sl" style="color:var(--ok)">${SL('done')} <span class="c">${done.length}</span></div>`;done.forEach(t=>h+=tcHtml(t))}
   return h;
 }
 function renderBoard(){
   const todo=tasks.filter(t=>t.status==='todo'),doing=tasks.filter(t=>t.status==='doing'),done=tasks.filter(t=>t.status==='done');
   return`<div class="board">
-    <div class="bcol" data-s="todo"><div class="bch"><span style="color:var(--tx2)">●</span>To Do<span class="c">${todo.length}</span></div><div class="bcb" data-s="todo">${todo.map(t=>tcHtml(t)).join('')}</div></div>
-    <div class="bcol" data-s="doing"><div class="bch"><span style="color:var(--brand)">●</span>Doing<span class="c">${doing.length}</span></div><div class="bcb" data-s="doing">${doing.map(t=>tcHtml(t)).join('')}</div></div>
-    <div class="bcol" data-s="done"><div class="bch"><span style="color:var(--ok)">●</span>Done<span class="c">${done.length}</span></div><div class="bcb" data-s="done">${done.map(t=>tcHtml(t)).join('')}</div></div>
+    <div class="bcol" data-s="todo"><div class="bch"><span style="color:var(--tx2)">●</span>${SL('todo')}<span class="c">${todo.length}</span></div><div class="bcb" data-s="todo">${todo.map(t=>tcHtml(t)).join('')}</div></div>
+    <div class="bcol" data-s="doing"><div class="bch"><span style="color:var(--brand)">●</span>${SL('doing')}<span class="c">${doing.length}</span></div><div class="bcb" data-s="doing">${doing.map(t=>tcHtml(t)).join('')}</div></div>
+    <div class="bcol" data-s="done"><div class="bch"><span style="color:var(--ok)">●</span>${SL('done')}<span class="c">${done.length}</span></div><div class="bcb" data-s="done">${done.map(t=>tcHtml(t)).join('')}</div></div>
   </div>`;
 }
 
 // ─── CALENDAR ───
-async function renderCal(){
-  const c=$('ct');
+async function renderCal(target){
+  const c=target||$('ct');
   const ws=Number(appSettings.weekStart)||0;
   const f=new Date(calY,calM,1),l=new Date(calY,calM+1,0);
   const sd=new Date(f);while(sd.getDay()!==ws)sd.setDate(sd.getDate()-1);
@@ -2412,9 +2476,9 @@ function attachNewTag(){
 }
 
 // ─── FOCUS SESSION HISTORY VIEW ───
-async function renderFocusHistory(){
+async function renderFocusHistory(target){
   const [hist,stats]=await Promise.all([api.get('/api/focus/history'),api.get('/api/focus/stats')]);
-  const c=$('ct');
+  const c=target||$('ct');
   let h='';
   // Stats bar
   h+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px">
@@ -2600,8 +2664,10 @@ async function renderSettings(){
   // Settings tabs
   const settingsTabDefs=[
     {id:'general',label:'General',icon:'tune'},
+    {id:'taskdefaults',label:'Task Defaults',icon:'checklist'},
     {id:'appearance',label:'Appearance',icon:'palette'},
     {id:'areas',label:'Life Areas',icon:'category'},
+    {id:'listconfig',label:'Lists',icon:'format_list_bulleted'},
     {id:'tags',label:'Tags',icon:'label'},
     {id:'templates',label:'Templates',icon:'content_copy'},
     {id:'automations',label:'Automations',icon:'auto_fix_high'},
@@ -2738,6 +2804,62 @@ async function renderSettings(){
     <div class="set-row"><label>Confirm Before Delete</label>${tog('confirmDelete',appSettings.confirmDelete)}</div>
   </section>
 </div>`;
+  } else if(window._settingsTab==='taskdefaults'){
+    // Parse current label settings
+    let sl={todo:'To Do',doing:'In Progress',done:'Done'};
+    try{sl=JSON.parse(appSettings.statusLabels||'{}')}catch{}
+    let pl={'0':'None','1':'Normal','2':'High','3':'Critical'};
+    try{pl=JSON.parse(appSettings.priorityLabels||'{}')}catch{}
+    let pc={'0':'#64748B','1':'#3B82F6','2':'#F59E0B','3':'#EF4444'};
+    try{pc=JSON.parse(appSettings.priorityColors||'{}')}catch{}
+    const staleDays=appSettings.smartFilterStale||'7';
+    const qwMin=appSettings.smartFilterQuickWin||'15';
+
+    content=`<div class="settings-grid">
+  <section class="settings-section">
+    <h3>Custom Status Labels</h3>
+    <p style="font-size:11px;color:var(--txd);margin-bottom:8px">Rename statuses shown on board columns and task cards. Internal values stay the same.</p>
+    <div class="set-row"><label>To Do</label><input type="text" id="sl-todo" value="${esc(sl.todo)}" style="width:140px;padding:6px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px"></div>
+    <div class="set-row"><label>In Progress</label><input type="text" id="sl-doing" value="${esc(sl.doing)}" style="width:140px;padding:6px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px"></div>
+    <div class="set-row"><label>Done</label><input type="text" id="sl-done" value="${esc(sl.done)}" style="width:140px;padding:6px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px"></div>
+    <div style="margin-top:8px;text-align:right"><button class="btn-s" id="sl-save" style="font-size:12px;padding:6px 14px">Save Labels</button></div>
+  </section>
+  <section class="settings-section">
+    <h3>Custom Priority Labels &amp; Colors</h3>
+    <p style="font-size:11px;color:var(--txd);margin-bottom:8px">Rename priorities and customize their colors.</p>
+    <div class="set-row"><label>None</label><input type="text" id="pl-0" value="${esc(pl['0'])}" style="width:100px;padding:6px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px"><input type="color" id="pc-0" value="${pc['0']}" style="width:32px;height:32px;border:none;cursor:pointer"></div>
+    <div class="set-row"><label>Normal</label><input type="text" id="pl-1" value="${esc(pl['1'])}" style="width:100px;padding:6px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px"><input type="color" id="pc-1" value="${pc['1']}" style="width:32px;height:32px;border:none;cursor:pointer"></div>
+    <div class="set-row"><label>High</label><input type="text" id="pl-2" value="${esc(pl['2'])}" style="width:100px;padding:6px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px"><input type="color" id="pc-2" value="${pc['2']}" style="width:32px;height:32px;border:none;cursor:pointer"></div>
+    <div class="set-row"><label>Critical</label><input type="text" id="pl-3" value="${esc(pl['3'])}" style="width:100px;padding:6px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px"><input type="color" id="pc-3" value="${pc['3']}" style="width:32px;height:32px;border:none;cursor:pointer"></div>
+    <div style="margin-top:8px;text-align:right"><button class="btn-s" id="pl-save" style="font-size:12px;padding:6px 14px">Save Priorities</button></div>
+  </section>
+  <section class="settings-section">
+    <h3>Smart Filter Thresholds</h3>
+    <p style="font-size:11px;color:var(--txd);margin-bottom:8px">Configure when tasks appear in smart filters.</p>
+    <div class="set-row"><label>Stale threshold (days)</label><select data-key="smartFilterStale">${[3,5,7,14,30].map(d=>`<option value="${d}"${String(staleDays)===String(d)?' selected':''}>${d} days</option>`).join('')}</select></div>
+    <div class="set-row"><label>Quick Win max (minutes)</label><select data-key="smartFilterQuickWin">${[5,10,15,30,60].map(m=>`<option value="${m}"${String(qwMin)===String(m)?' selected':''}>${m} min</option>`).join('')}</select></div>
+  </section>
+</div>`;
+  } else if(window._settingsTab==='listconfig'){
+    // Grocery category editor
+    let cats=[];
+    try{const raw=await api.get('/api/lists/categories/configured');cats=Array.isArray(raw)?raw:[]}catch{}
+    content=`<div class="settings-grid"><section class="settings-section">
+    <h3>Grocery Categories</h3>
+    <p style="font-size:11px;color:var(--txd);margin-bottom:8px">Customize categories for grocery lists. Drag to reorder.</p>
+    <div id="gc-list">`;
+    cats.forEach((cat,i)=>{
+      content+=`<div class="gc-row" draggable="true" data-gci="${i}" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--brd)">
+        <span class="material-icons-round" style="font-size:14px;color:var(--txd);cursor:grab">drag_indicator</span>
+        <input type="text" class="gc-input" value="${esc(cat)}" style="flex:1;padding:4px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px">
+        <button class="gc-del" data-gci="${i}" style="background:none;border:none;cursor:pointer;color:var(--dn);font-size:16px"><span class="material-icons-round" style="font-size:16px">close</span></button>
+      </div>`;
+    });
+    content+=`</div>
+    <div style="margin-top:8px;display:flex;gap:8px">
+      <button class="btn-c" id="gc-add" style="font-size:12px;padding:6px 12px">+ Add Category</button>
+      <button class="btn-s" id="gc-save" style="font-size:12px;padding:6px 14px;margin-left:auto">Save Categories</button>
+    </div></section></div>`;
   } else if(window._settingsTab==='appearance'){
     const themeColors={midnight:'#2563EB',charcoal:'#8B5CF6',forest:'#00E676',ocean:'#29B6F6',rose:'#FF4081',light:'#2563EB',nord:'#88C0D0',sunset:'#FF7043'};
     content=`<div class="settings-grid"><section class="settings-section"><h3>Theme</h3>
@@ -2800,6 +2922,37 @@ async function renderSettings(){
     await saveSetting('theme',theme);
     renderSettings();
   }));
+  // Status labels save
+  $('sl-save')?.addEventListener('click',async()=>{
+    const labels={todo:$('sl-todo').value.trim()||'To Do',doing:$('sl-doing').value.trim()||'In Progress',done:$('sl-done').value.trim()||'Done'};
+    await saveSetting('statusLabels',JSON.stringify(labels));showToast('Status labels saved');
+  });
+  // Priority labels+colors save
+  $('pl-save')?.addEventListener('click',async()=>{
+    const labels={'0':$('pl-0').value.trim()||'None','1':$('pl-1').value.trim()||'Normal','2':$('pl-2').value.trim()||'High','3':$('pl-3').value.trim()||'Critical'};
+    const colors={'0':$('pc-0').value,'1':$('pc-1').value,'2':$('pc-2').value,'3':$('pc-3').value};
+    await saveSetting('priorityLabels',JSON.stringify(labels));
+    await saveSetting('priorityColors',JSON.stringify(colors));
+    showToast('Priority settings saved');
+  });
+  // Grocery category editor
+  $('gc-add')?.addEventListener('click',()=>{
+    const list=document.getElementById('gc-list');
+    const i=list.children.length;
+    const row=document.createElement('div');row.className='gc-row';row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--brd)';
+    row.innerHTML=`<span class="material-icons-round" style="font-size:14px;color:var(--txd)">drag_indicator</span>
+      <input type="text" class="gc-input" value="" placeholder="New category" style="flex:1;padding:4px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px">
+      <button class="gc-del" style="background:none;border:none;cursor:pointer;color:var(--dn);font-size:16px"><span class="material-icons-round" style="font-size:16px">close</span></button>`;
+    row.querySelector('.gc-del').addEventListener('click',()=>row.remove());
+    list.appendChild(row);
+    row.querySelector('.gc-input').focus();
+  });
+  c.querySelectorAll('.gc-del').forEach(btn=>btn.addEventListener('click',()=>btn.closest('.gc-row').remove()));
+  $('gc-save')?.addEventListener('click',async()=>{
+    const inputs=Array.from(document.querySelectorAll('#gc-list .gc-input'));
+    const cats=inputs.map(i=>i.value.trim()).filter(Boolean);
+    await saveSetting('groceryCategories',JSON.stringify(cats));showToast('Categories saved');
+  });
   // Export
   $('set-export')?.addEventListener('click',async()=>{
     try{
@@ -3666,66 +3819,146 @@ async function renderNoteEditor(note){
   $('note-goal').addEventListener('change',autoSave);
 }
 
-// ─── WEEKLY REVIEW VIEW ───
+// ─── WEEKLY REVIEW VIEW (3-step guided flow) ───
 async function renderWeeklyReview(){
   const c=$('ct');const data=await api.get('/api/reviews/current');
   const existing=data.existingReview;
-  let h=`<div style="font-size:13px;color:var(--txd);margin-bottom:14px">Week of ${data.weekStart} &mdash; ${data.weekEnd}</div>`;
+  if(!window._rvStep)window._rvStep=1;
+  const step=window._rvStep;
+
+  // Step indicator
+  let h=`<div style="font-size:13px;color:var(--txd);margin-bottom:10px">Week of ${data.weekStart} &mdash; ${data.weekEnd}</div>`;
   h+=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">
     <div class="review-stat"><span class="material-icons-round" style="font-size:14px;color:var(--ok)">check_circle</span>${data.tasksCompletedCount} completed</div>
     <div class="review-stat"><span class="material-icons-round" style="font-size:14px;color:var(--brand)">add_circle</span>${data.tasksCreatedCount} created</div>
     <div class="review-stat"><span class="material-icons-round" style="font-size:14px;color:var(--warn)">event_available</span>${data.activeDays} active days</div>
     <div class="review-stat"><span class="material-icons-round" style="font-size:14px;color:var(--err)">warning</span>${data.overdueTasks.length} overdue</div>
   </div>`;
-  // Completed tasks
-  if(data.completedTasks.length){
-    h+=`<div class="review-section"><h3><span class="material-icons-round" style="font-size:16px;color:var(--ok)">task_alt</span>Completed This Week</h3><ul class="review-list">`;
-    data.completedTasks.slice(0,15).forEach(t=>{
-      h+=`<li><span class="material-icons-round" style="font-size:14px;color:var(--ok)">check</span><span style="flex:1">${esc(t.title)}</span><span style="font-size:10px;color:var(--txd)">${t.goal_title?esc(t.goal_title):''}</span></li>`;
-    });
-    h+=`</ul></div>`;
-  }
-  // Overdue
-  if(data.overdueTasks.length){
-    h+=`<div class="review-section"><h3><span class="material-icons-round" style="font-size:16px;color:var(--err)">schedule</span>Still Outstanding</h3><ul class="review-list">`;
-    data.overdueTasks.slice(0,10).forEach(t=>{
-      h+=`<li><span class="material-icons-round" style="font-size:14px;color:var(--err)">radio_button_unchecked</span><span style="flex:1">${esc(t.title)}</span><span style="font-size:10px;color:var(--txd)">${t.due_date}</span></li>`;
-    });
-    h+=`</ul></div>`;
-  }
-  // Reflection form
-  h+=`<div class="review-section"><h3><span class="material-icons-round" style="font-size:16px;color:var(--brand)">edit_note</span>Reflection</h3>
+  // Step bar
+  h+=`<div class="rv-steps" style="display:flex;gap:6px;margin-bottom:18px">`;
+  ['Area Check-in','Triage','Reflect & Rate'].forEach((lbl,i)=>{
+    const n=i+1;const act=n===step;const done=n<step;
+    h+=`<div class="rv-step-pip${act?' active':''}${done?' done':''}" data-rvstep="${n}" style="flex:1;text-align:center;padding:8px;border-radius:var(--rs);font-size:12px;cursor:pointer;background:${act?'var(--brand)':done?'rgba(34,197,94,.15)':'var(--bg-c)'};color:${act?'#fff':done?'var(--ok)':'var(--txd)'};border:1px solid ${act?'var(--brand)':done?'rgba(34,197,94,.3)':'var(--brd)'}"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">${done?'check_circle':n===1?'category':n===2?'inbox':'edit_note'}</span>${lbl}</div>`;
+  });
+  h+=`</div>`;
+
+  if(step===1){
+    // Step 1: Area Check-in with completion bars
+    h+=`<div class="review-section"><h3><span class="material-icons-round" style="font-size:16px;color:var(--brand)">category</span>Area Check-in</h3>
+    <p style="font-size:12px;color:var(--txd);margin-bottom:12px">How did each life area progress this week?</p>`;
+    if(data.areaStats&&data.areaStats.length){
+      data.areaStats.forEach(a=>{
+        const total=a.completed+a.pending;const pct=total?Math.round(a.completed/total*100):0;
+        h+=`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--brd)">
+          <span style="font-size:20px;width:28px;text-align:center">${esc(a.icon)}</span>
+          <span style="flex:1;font-size:13px;font-weight:500">${esc(a.name)}</span>
+          <div style="width:120px;height:6px;background:var(--bg-c);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${escA(a.color)};border-radius:3px"></div></div>
+          <span style="font-size:11px;color:var(--txd);width:60px;text-align:right">${a.completed}/${total}</span>
+        </div>`;
+      });
+    } else {
+      h+=`<p style="font-size:13px;color:var(--txd)">No areas set up yet.</p>`;
+    }
+    h+=`<div style="margin-top:16px;text-align:right"><button class="btn-s rv-next" style="padding:8px 20px;font-size:13px">Next: Triage →</button></div></div>`;
+  } else if(step===2){
+    // Step 2: Inbox + Overdue Triage
+    h+=`<div class="review-section"><h3><span class="material-icons-round" style="font-size:16px;color:var(--warn)">inbox</span>Triage</h3>
+    <p style="font-size:12px;color:var(--txd);margin-bottom:12px">Review unprocessed inbox items and overdue tasks.</p>`;
+    if(data.inboxCount>0){
+      h+=`<div style="padding:10px 14px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:var(--rs);margin-bottom:12px;font-size:13px;display:flex;align-items:center;gap:8px">
+        <span class="material-icons-round" style="font-size:18px;color:var(--warn)">inbox</span>
+        <span>${data.inboxCount} unprocessed inbox item${data.inboxCount>1?'s':''}</span>
+        <button class="btn-c rv-go-inbox" style="margin-left:auto;font-size:11px;padding:4px 10px">Go to Inbox</button>
+      </div>`;
+    }
+    if(data.overdueTasks.length){
+      h+=`<h4 style="font-size:13px;margin:12px 0 6px;color:var(--err)">Overdue (${data.overdueTasks.length})</h4><ul class="review-list">`;
+      data.overdueTasks.slice(0,15).forEach(t=>{
+        h+=`<li><span class="material-icons-round" style="font-size:14px;color:var(--err)">radio_button_unchecked</span><span style="flex:1">${esc(t.title)}</span><span style="font-size:10px;color:var(--txd)">${t.due_date}</span></li>`;
+      });
+      h+=`</ul>`;
+    }
+    if(data.completedTasks.length){
+      h+=`<h4 style="font-size:13px;margin:16px 0 6px;color:var(--ok)">Completed This Week (${data.completedTasks.length})</h4><ul class="review-list">`;
+      data.completedTasks.slice(0,15).forEach(t=>{
+        h+=`<li><span class="material-icons-round" style="font-size:14px;color:var(--ok)">check</span><span style="flex:1">${esc(t.title)}</span><span style="font-size:10px;color:var(--txd)">${t.goal_title?esc(t.goal_title):''}</span></li>`;
+      });
+      h+=`</ul>`;
+    }
+    if(!data.overdueTasks.length&&!data.inboxCount){
+      h+=`<p style="font-size:13px;color:var(--ok)">✓ All clear — no overdue tasks or inbox items!</p>`;
+    }
+    h+=`<div style="margin-top:16px;display:flex;justify-content:space-between">
+      <button class="btn-c rv-prev" style="font-size:13px;padding:8px 20px">← Back</button>
+      <button class="btn-s rv-next" style="font-size:13px;padding:8px 20px">Next: Reflect →</button>
+    </div></div>`;
+  } else {
+    // Step 3: Reflection + priorities + star rating
+    const existingRating=existing?existing.rating:null;
+    h+=`<div class="review-section"><h3><span class="material-icons-round" style="font-size:16px;color:var(--brand)">edit_note</span>Reflection</h3>
+    <label style="font-size:12px;color:var(--txd);display:block;margin-bottom:4px">Rate your week</label>
+    <div class="rv-rating" id="rv-rating" style="display:flex;gap:6px;margin-bottom:14px">`;
+    for(let i=1;i<=5;i++){
+      const filled=existingRating&&i<=existingRating;
+      h+=`<button class="rv-star" data-star="${i}" style="font-size:24px;background:none;border:none;cursor:pointer;color:${filled?'var(--warn)':'var(--txd)'};padding:2px">★</button>`;
+    }
+    h+=`</div>
     <label style="font-size:12px;color:var(--txd);display:block;margin-bottom:4px">Top accomplishments (one per line)</label>
     <textarea class="review-textarea" id="rv-acc" rows="3">${existing?JSON.parse(existing.top_accomplishments||'[]').join('\n'):''}</textarea>
     <label style="font-size:12px;color:var(--txd);display:block;margin:8px 0 4px">Reflection &amp; learnings</label>
     <textarea class="review-textarea" id="rv-refl" rows="3">${existing?esc(existing.reflection||''):''}</textarea>
     <label style="font-size:12px;color:var(--txd);display:block;margin:8px 0 4px">Next week priorities (one per line)</label>
     <textarea class="review-textarea" id="rv-next" rows="3">${existing?JSON.parse(existing.next_week_priorities||'[]').join('\n'):''}</textarea>
-    <div style="margin-top:12px;text-align:right"><button id="rv-save" style="padding:8px 20px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:13px">${existing?'Update Review':'Save Review'}</button></div>
-  </div>`;
-  // Past reviews
-  const pastReviews=await api.get('/api/reviews');
-  if(pastReviews.length>0){
-    h+=`<div class="review-section"><h3><span class="material-icons-round" style="font-size:16px">history</span>Past Reviews</h3>`;
-    pastReviews.forEach(r=>{
-      h+=`<div style="padding:8px 12px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin-bottom:6px;font-size:12px;display:flex;justify-content:space-between;align-items:center">
-        <span>Week of ${r.week_start}</span><span>${r.tasks_completed} completed / ${r.tasks_created} created</span></div>`;
-    });
-    h+=`</div>`;
+    <div style="margin-top:16px;display:flex;justify-content:space-between">
+      <button class="btn-c rv-prev" style="font-size:13px;padding:8px 20px">← Back</button>
+      <button id="rv-save" class="btn-s" style="padding:8px 20px;font-size:13px">${existing?'Update Review':'Save Review'}</button>
+    </div></div>`;
   }
+
+  // Past reviews
+  if(step===3){
+    const pastReviews=await api.get('/api/reviews');
+    if(pastReviews.length>0){
+      h+=`<div class="review-section" style="margin-top:24px"><h3><span class="material-icons-round" style="font-size:16px">history</span>Past Reviews</h3>`;
+      pastReviews.forEach(r=>{
+        const stars=r.rating?'★'.repeat(r.rating)+'☆'.repeat(5-r.rating):'—';
+        h+=`<div style="padding:8px 12px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin-bottom:6px;font-size:12px;display:flex;justify-content:space-between;align-items:center">
+          <span>Week of ${r.week_start}</span><span style="color:var(--warn)">${stars}</span><span>${r.tasks_completed} done / ${r.tasks_created} created</span></div>`;
+      });
+      h+=`</div>`;
+    }
+  }
+
   c.innerHTML=h;
-  $('rv-save').addEventListener('click',async()=>{
+
+  // Wire step navigation
+  c.querySelectorAll('.rv-step-pip').forEach(el=>el.addEventListener('click',()=>{window._rvStep=Number(el.dataset.rvstep);renderWeeklyReview()}));
+  c.querySelectorAll('.rv-next').forEach(el=>el.addEventListener('click',()=>{window._rvStep=Math.min(3,step+1);renderWeeklyReview()}));
+  c.querySelectorAll('.rv-prev').forEach(el=>el.addEventListener('click',()=>{window._rvStep=Math.max(1,step-1);renderWeeklyReview()}));
+  c.querySelector('.rv-go-inbox')?.addEventListener('click',()=>{currentView='inbox';render()});
+
+  // Star rating
+  let selectedRating=existing?existing.rating:0;
+  c.querySelectorAll('.rv-star').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      selectedRating=Number(btn.dataset.star);
+      c.querySelectorAll('.rv-star').forEach(s=>{s.style.color=Number(s.dataset.star)<=selectedRating?'var(--warn)':'var(--txd)'});
+    });
+  });
+
+  // Save
+  $('rv-save')?.addEventListener('click',async()=>{
     const acc=$('rv-acc').value.split('\n').map(s=>s.trim()).filter(Boolean);
     const refl=$('rv-refl').value;
     const next=$('rv-next').value.split('\n').map(s=>s.trim()).filter(Boolean);
-    await api.post('/api/reviews',{week_start:data.weekStart,top_accomplishments:acc,reflection:refl,next_week_priorities:next});
+    await api.post('/api/reviews',{week_start:data.weekStart,top_accomplishments:acc,reflection:refl,next_week_priorities:next,rating:selectedRating||null});
     showToast('Review saved');renderWeeklyReview();
   });
 }
 
 // ─── TIME ANALYTICS VIEW ───
-async function renderTimeAnalytics(){
-  const c=$('ct');const data=await api.get('/api/stats/time-analytics');
+async function renderTimeAnalytics(target){
+  const c=target||$('ct');const data=await api.get('/api/stats/time-analytics');
   let h='';
   // Estimation accuracy summary
   if(data.accuracy&&data.accuracy.total>0){

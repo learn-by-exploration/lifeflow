@@ -204,6 +204,9 @@ function initDatabase(dbDir) {
   // ─── Life Areas migration: archived column ───
   try { db.exec('ALTER TABLE life_areas ADD COLUMN archived INTEGER DEFAULT 0'); } catch(e) {}
 
+  // ─── Weekly Review rating column ───
+  try { db.exec('ALTER TABLE weekly_reviews ADD COLUMN rating INTEGER DEFAULT NULL'); } catch(e) {}
+
   // ─── Task Templates migration: user_created flag ───
   try { db.exec('ALTER TABLE task_templates ADD COLUMN user_created INTEGER DEFAULT 0'); } catch(e) {}
 

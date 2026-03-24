@@ -16,6 +16,12 @@ const SETTINGS_DEFAULTS = {
   confirmDelete: 'true',
   dateFormat: 'relative',   // relative, iso, us, eu
   autoMyDay: 'false',       // auto-add new tasks to My Day
+  statusLabels: '{"todo":"To Do","doing":"In Progress","done":"Done"}',
+  priorityLabels: '{"0":"None","1":"Normal","2":"High","3":"Critical"}',
+  priorityColors: '{"0":"#64748B","1":"#3B82F6","2":"#F59E0B","3":"#EF4444"}',
+  smartFilterStale: '7',    // days
+  smartFilterQuickWin: '15', // minutes
+  groceryCategories: '',    // empty = use defaults
 };
 
 const SETTINGS_KEYS = new Set(Object.keys(SETTINGS_DEFAULTS));
