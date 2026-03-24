@@ -295,8 +295,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .dp-row{display:flex;gap:8px}.dp-row>*{flex:1}
 .dp-foot{padding:12px 20px;border-top:1px solid var(--brd);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
 .dp-foot button{padding:10px 20px;border-radius:var(--rs);border:none;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;letter-spacing:.01em}
-.btn-c{background:var(--bg-c);color:var(--tx);border:1px solid var(--brd);transition:all .15s}.btn-c:hover{background:var(--bg-h);border-color:var(--tx2)}
-.btn-s{background:var(--brand);color:#fff;box-shadow:0 2px 8px rgba(37,99,235,.2);transition:all .18s}.btn-s:hover{background:var(--brand-h);box-shadow:0 4px 14px rgba(37,99,235,.3);transform:translateY(-1px)}
+.btn-c{background:var(--bg-c);color:var(--tx);border:1px solid var(--brd);border-radius:var(--rs);transition:all .15s}.btn-c:hover{background:var(--bg-h);border-color:var(--tx2)}
+.btn-s{background:var(--brand);color:#fff;border-radius:var(--rs);box-shadow:0 2px 8px rgba(37,99,235,.2);transition:all .18s}.btn-s:hover{background:var(--brand-h);box-shadow:0 4px 14px rgba(37,99,235,.3);transform:translateY(-1px)}
 
 /* Subtask list in detail panel */
 .stl{margin-bottom:10px}
