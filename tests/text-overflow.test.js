@@ -242,8 +242,8 @@ describe('Text overflow protection', () => {
     it('has white-space:nowrap', () => {
       assertCSSProps('.habit-card .hc-streak', ['white-space:nowrap'], 'habit streak');
     });
-    it('has flex-shrink:0', () => {
-      assertCSSProps('.habit-card .hc-streak', ['flex-shrink:0'], 'habit streak');
+    it('has overflow:hidden and max-width to prevent card blowout', () => {
+      assertCSSProps('.habit-card .hc-streak', ['overflow:hidden', 'max-width:50%'], 'habit streak');
     });
   });
 

@@ -408,12 +408,12 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 
 /* Habits */
 .habit-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
-.habit-card{background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--r);padding:16px;cursor:pointer;transition:border-color .15s}
+.habit-card{background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--r);padding:16px;cursor:pointer;transition:border-color .15s;overflow:hidden}
 .habit-card:hover{border-color:var(--brand)}
 .habit-card .hc-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;min-width:0;overflow:hidden}
 .habit-card .hc-icon{font-size:24px}
 .habit-card .hc-name{font-weight:600;font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.habit-card .hc-streak{font-size:10px;color:var(--txd);background:var(--bg-s);padding:2px 8px;border-radius:10px;white-space:nowrap;flex-shrink:0}
+.habit-card .hc-streak{font-size:10px;color:var(--txd);background:var(--bg-s);padding:2px 8px;border-radius:10px;white-space:nowrap;flex-shrink:1;overflow:hidden;text-overflow:ellipsis;max-width:50%}
 .habit-card .hc-streak.active{color:var(--warn);background:rgba(245,158,11,.12)}
 .habit-bar{height:6px;border-radius:3px;background:var(--bg-s);overflow:hidden;margin-bottom:10px}
 .habit-bar .fill{height:100%;border-radius:3px;transition:width .3s}
