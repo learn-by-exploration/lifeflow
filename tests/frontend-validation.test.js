@@ -30,6 +30,11 @@ const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
 const scriptContent = scriptMatch ? scriptMatch[1] : '';
 const htmlWithoutScript = html.replace(/<script>[\s\S]*?<\/script>/, '');
 const serverCode = fs.readFileSync(SERVER_PATH, 'utf8');
+const routesDir = path.join(__dirname, '..', 'src', 'routes');
+const routeCode = fs.existsSync(routesDir)
+  ? fs.readdirSync(routesDir).filter(f => f.endsWith('.js')).map(f => fs.readFileSync(path.join(routesDir, f), 'utf8')).join('\n')
+  : '';
+const allServerCode = serverCode + '\n' + routeCode;
 
 describe('Frontend Validation', () => {
 
@@ -315,10 +320,10 @@ describe('API Route Consistency', () => {
       feCalls.push({ method, route });
     }
 
-    // Extract server routes
-    const serverRouteRegex = /app\.(get|post|put|delete)\('(\/api\/[^']+)'/g;
+    // Extract server routes (from app.xxx and router.xxx)
+    const serverRouteRegex = /(?:app|router)\.(get|post|put|delete)\('(\/api\/[^']+)'/g;
     const serverRoutes = [];
-    while ((match = serverRouteRegex.exec(serverCode)) !== null) {
+    while ((match = serverRouteRegex.exec(allServerCode)) !== null) {
       serverRoutes.add ? null : null; // just collecting
       serverRoutes.push({ method: match[1], pattern: match[2] });
     }

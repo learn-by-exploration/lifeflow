@@ -1,0 +1,209 @@
+const { Router } = require('express');
+module.exports = function(deps) {
+  const { db, enrichTasks } = deps;
+  const router = Router();
+
+// ─── Stats / Dashboard ───
+router.get('/api/stats', (req, res) => {
+  const total = db.prepare('SELECT COUNT(*) as c FROM tasks').get().c;
+  const done = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='done'").get().c;
+  const overdue = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE due_date < date('now') AND status != 'done'").get().c;
+  const dueToday = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE due_date = date('now') AND status != 'done'").get().c;
+  const thisWeek = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE completed_at >= date('now','-7 days') AND status='done'").get().c;
+  const byArea = db.prepare(`
+    SELECT a.name, a.icon, a.color,
+      COUNT(t.id) as total,
+      SUM(CASE WHEN t.status='done' THEN 1 ELSE 0 END) as done
+    FROM life_areas a
+    LEFT JOIN goals g ON g.area_id=a.id
+    LEFT JOIN tasks t ON t.goal_id=g.id
+    GROUP BY a.id ORDER BY a.position
+  `).all();
+  const byPriority = db.prepare(`
+    SELECT priority, COUNT(*) as total,
+      SUM(CASE WHEN status='done' THEN 1 ELSE 0 END) as done
+    FROM tasks GROUP BY priority
+  `).all();
+  const recentDone = db.prepare(`
+    SELECT t.title, t.completed_at, g.title as goal_title
+    FROM tasks t JOIN goals g ON t.goal_id=g.id
+    WHERE t.status='done' AND t.completed_at IS NOT NULL
+    ORDER BY t.completed_at DESC LIMIT 10
+  `).all();
+  res.json({ total, done, overdue, dueToday, thisWeek, byArea, byPriority, recentDone });
+});
+
+// ─── Focus Session Tracking ───
+router.post('/api/focus', (req, res) => {
+  const { task_id, duration_sec, type } = req.body;
+  if (!task_id || !Number.isInteger(Number(task_id))) return res.status(400).json({ error: 'task_id required' });
+  const r = db.prepare('INSERT INTO focus_sessions (task_id, duration_sec, type) VALUES (?,?,?)').run(
+    Number(task_id), duration_sec || 0, type || 'pomodoro'
+  );
+  res.status(201).json(db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(r.lastInsertRowid));
+});
+
+// CRITICAL: /api/focus/stats and /api/focus/history BEFORE /api/focus/:id routes
+router.get('/api/focus/stats', (req, res) => {
+  const today = db.prepare("SELECT COALESCE(SUM(duration_sec),0) as total FROM focus_sessions WHERE date(started_at)=date('now')").get().total;
+  const week = db.prepare("SELECT COALESCE(SUM(duration_sec),0) as total FROM focus_sessions WHERE started_at>=date('now','-7 days')").get().total;
+  const sessions = db.prepare("SELECT COALESCE(COUNT(*),0) as c FROM focus_sessions WHERE date(started_at)=date('now')").get().c;
+  const byTask = db.prepare(`
+    SELECT t.title, SUM(f.duration_sec) as total_sec, COUNT(f.id) as sessions
+    FROM focus_sessions f JOIN tasks t ON f.task_id=t.id
+    WHERE f.started_at>=date('now','-7 days')
+    GROUP BY f.task_id ORDER BY total_sec DESC LIMIT 10
+  `).all();
+  res.json({ today, week, sessions, byTask });
+});
+
+// ─── Focus Session History ───
+router.get('/api/focus/history', (req, res) => {
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+  const offset = (page - 1) * limit;
+  const total = db.prepare('SELECT COUNT(*) as c FROM focus_sessions').get().c;
+  const items = db.prepare(`
+    SELECT f.*, t.title as task_title, g.title as goal_title, a.name as area_name
+    FROM focus_sessions f
+    JOIN tasks t ON f.task_id=t.id
+    JOIN goals g ON t.goal_id=g.id
+    JOIN life_areas a ON g.area_id=a.id
+    ORDER BY f.started_at DESC LIMIT ? OFFSET ?
+  `).all(limit, offset);
+  // Also return daily totals for the last 14 days
+  const daily = db.prepare(`
+    SELECT date(started_at) as day, SUM(duration_sec) as total_sec, COUNT(*) as sessions
+    FROM focus_sessions
+    WHERE started_at >= date('now', '-14 days')
+    GROUP BY date(started_at) ORDER BY day
+  `).all();
+  res.json({ total, page, pages: Math.ceil(total / limit), items, daily });
+});
+
+router.put('/api/focus/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Focus session not found' });
+  const { duration_sec, type } = req.body;
+  db.prepare('UPDATE focus_sessions SET duration_sec=COALESCE(?,duration_sec), type=COALESCE(?,type) WHERE id=?').run(
+    duration_sec !== undefined ? duration_sec : null, type || null, id
+  );
+  res.json(db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(id));
+});
+router.delete('/api/focus/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(id);
+  if (!ex) return res.status(404).json({ error: 'Focus session not found' });
+  db.prepare('DELETE FROM focus_sessions WHERE id=?').run(id);
+  res.json({ ok: true });
+});
+
+// ─── Streak & Heatmap ───
+router.get('/api/stats/streaks', (req, res) => {
+  // Heatmap: completions per day for last 365 days
+  const heatmap = db.prepare(`
+    SELECT date(completed_at) as day, COUNT(*) as count
+    FROM tasks WHERE status='done' AND completed_at IS NOT NULL
+      AND completed_at >= date('now','-365 days')
+    GROUP BY date(completed_at) ORDER BY day
+  `).all();
+  // Streak: consecutive days with at least 1 completion ending today
+  let streak = 0;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dayMs = 86400000;
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today - i * dayMs);
+    const ds = d.toISOString().slice(0,10);
+    const cnt = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='done' AND date(completed_at)=?").get(ds).c;
+    if (cnt > 0) streak++;
+    else break;
+  }
+  const bestStreak = (() => {
+    let best = 0, cur = 0;
+    for (let i = 365; i >= 0; i--) {
+      const d = new Date(today - i * dayMs);
+      const ds = d.toISOString().slice(0,10);
+      const found = heatmap.find(h => h.day === ds);
+      if (found && found.count > 0) { cur++; if (cur > best) best = cur; }
+      else cur = 0;
+    }
+    return best;
+  })();
+  res.json({ streak, bestStreak, heatmap });
+});
+
+// ─── Activity Log ───
+router.get('/api/activity', (req, res) => {
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+  const offset = (page - 1) * limit;
+  const total = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='done' AND completed_at IS NOT NULL").get().c;
+  const items = db.prepare(`
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.status='done' AND t.completed_at IS NOT NULL
+    ORDER BY t.completed_at DESC LIMIT ? OFFSET ?
+  `).all(limit, offset);
+  res.json({ total, page, pages: Math.ceil(total / limit), items: enrichTasks(items) });
+});
+
+router.get('/api/stats/trends', (req, res) => {
+  const weeks = [];
+  const now = new Date();
+  for (let i = 7; i >= 0; i--) {
+    const end = new Date(now);
+    end.setDate(end.getDate() - i * 7);
+    const start = new Date(end);
+    start.setDate(start.getDate() - 7);
+    const startStr = start.toISOString().split('T')[0];
+    const endStr = end.toISOString().split('T')[0];
+    const row = db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE status='done' AND completed_at >= ? AND completed_at < ?`).get(startStr, endStr);
+    weeks.push({ week_start: startStr, week_end: endStr, completed: row.count });
+  }
+  res.json(weeks);
+});
+
+// ─── TIME ANALYTICS ───
+router.get('/api/stats/time-analytics', (req, res) => {
+  // Estimate vs actual per area
+  const byArea = db.prepare(`
+    SELECT la.name, la.icon, la.color,
+      SUM(t.estimated_minutes) as total_estimated,
+      SUM(t.actual_minutes) as total_actual,
+      COUNT(CASE WHEN t.estimated_minutes > 0 THEN 1 END) as estimated_count,
+      COUNT(*) as task_count
+    FROM tasks t
+    JOIN goals g ON t.goal_id = g.id
+    JOIN life_areas la ON g.area_id = la.id
+    WHERE t.status = 'done'
+    GROUP BY la.id ORDER BY total_actual DESC
+  `).all();
+  // Completion by hour of day
+  const byHour = db.prepare(`
+    SELECT CAST(strftime('%H', completed_at) AS INTEGER) as hour, COUNT(*) as count
+    FROM tasks WHERE status='done' AND completed_at IS NOT NULL
+    GROUP BY hour ORDER BY hour
+  `).all();
+  // Weekly velocity (last 8 weeks)
+  const weeklyVelocity = db.prepare(`
+    SELECT strftime('%Y-W%W', completed_at) as week, COUNT(*) as count,
+      SUM(actual_minutes) as minutes
+    FROM tasks WHERE status='done' AND completed_at >= date('now', '-56 days')
+    GROUP BY week ORDER BY week
+  `).all();
+  // Estimation accuracy
+  const accuracy = db.prepare(`
+    SELECT COUNT(*) as total,
+      SUM(CASE WHEN actual_minutes <= estimated_minutes THEN 1 ELSE 0 END) as on_time,
+      SUM(CASE WHEN actual_minutes > estimated_minutes THEN 1 ELSE 0 END) as over,
+      AVG(CASE WHEN estimated_minutes > 0 THEN CAST(actual_minutes AS FLOAT) / estimated_minutes END) as avg_ratio
+    FROM tasks WHERE status='done' AND estimated_minutes > 0 AND actual_minutes > 0
+  `).get();
+  res.json({ byArea, byHour, weeklyVelocity, accuracy });
+});
+
+  return router;
+};
