@@ -981,3 +981,4 @@ button:focus-visible,.ni:focus-visible,.tc:focus-visible,.sf-item:focus-visible{
 body.demo-mode .sb{top:36px;height:calc(100vh - 36px)}
 body.demo-mode .mn{margin-top:36px}
 body.demo-mode .ham{top:50px}
+.link-task-row:hover{background:var(--bg-h)}

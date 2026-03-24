@@ -1823,6 +1823,7 @@ function bellItem(t,type){
 }
 $('bell-btn').addEventListener('click',e=>{e.stopPropagation();$('bell-dd').classList.toggle('open');loadBellReminders()});
 document.addEventListener('click',e=>{if(!e.target.closest('#bell-wrap'))$('bell-dd').classList.remove('open')});
+$('tb-search-btn').addEventListener('click',()=>openSearch());
 // Refresh bell every 60 seconds
 setInterval(loadBellReminders,60000);
 
@@ -3025,8 +3026,9 @@ async function renderSettings(){
       </div>`;
     });
     h+=`</div><button class="btn-s" id="sa-add" style="margin-top:10px;font-size:12px;padding:8px 14px">+ Add Area</button></section>`;
+    h+=`<section class="settings-section"><h3>Archived</h3>`;
     if(archived.length){
-      h+=`<section class="settings-section"><h3>Archived</h3><div>`;
+      h+=`<div>`;
       archived.forEach(a=>{
         h+=`<div class="sa-row archived" data-aid="${a.id}">
           <span style="font-size:20px;opacity:.5">${esc(a.icon)}</span>
@@ -3035,8 +3037,11 @@ async function renderSettings(){
           <button class="btn-c sa-del" data-aid="${a.id}" title="Delete permanently" style="color:var(--dn)"><span class="material-icons-round" style="font-size:16px">delete_forever</span></button>
         </div>`;
       });
-      h+=`</div></section>`;
+      h+=`</div>`;
+    } else {
+      h+=`<div style="padding:16px;text-align:center;color:var(--txd);font-size:12px"><span class="material-icons-round" style="font-size:28px;display:block;margin-bottom:6px;opacity:.4">inventory_2</span>No archived areas. Use the <span class="material-icons-round" style="font-size:13px;vertical-align:middle">archive</span> button on an area to archive it.</div>`;
     }
+    h+=`</section>`;
     h+=`</div>`;
     c.innerHTML=h;
     c.querySelectorAll('.settings-tab').forEach(btn=>btn.addEventListener('click',()=>{window._settingsTab=btn.dataset.stab;renderSettings()}));
@@ -4070,6 +4075,7 @@ async function renderInbox(){
       ${it.note?`<div class="inbox-meta">${esc(it.note)}</div>`:''}
       <div class="inbox-meta">${timeAgo(it.created_at)}</div>
     </div><div class="inbox-actions">
+      <button class="ib-link material-icons-round" data-id="${it.id}" title="Link to existing task">link</button>
       <button class="ib-triage material-icons-round" data-id="${it.id}" title="Triage to goal">move_to_inbox</button>
       <button class="ib-del material-icons-round" data-id="${it.id}" title="Delete">delete</button>
     </div></div>`;
@@ -4077,7 +4083,10 @@ async function renderInbox(){
   c.innerHTML=h;
   c.querySelector('.ib-add-btn').addEventListener('click',inboxQuickAdd);
   c.querySelectorAll('.ib-del').forEach(b=>b.addEventListener('click',async e=>{
-    e.stopPropagation();await api.delete('/api/inbox/'+b.dataset.id);showToast('Deleted');renderInbox();loadOverdueBadge();
+    e.stopPropagation();await api.del('/api/inbox/'+b.dataset.id);showToast('Deleted');renderInbox();loadOverdueBadge();
+  }));
+  c.querySelectorAll('.ib-link').forEach(b=>b.addEventListener('click',async e=>{
+    e.stopPropagation();showLinkToTaskModal(Number(b.dataset.id),items.find(i=>i.id===Number(b.dataset.id)));
   }));
   c.querySelectorAll('.ib-triage').forEach(b=>b.addEventListener('click',async e=>{
     e.stopPropagation();showTriageModal(Number(b.dataset.id));
@@ -4088,6 +4097,40 @@ async function inboxQuickAdd(){
   if(!title||!title.trim())return;
   await api.post('/api/inbox',{title:title.trim()});
   showToast('Captured');renderInbox();loadOverdueBadge();
+}
+async function showLinkToTaskModal(inboxId,item){
+  const m=document.createElement('div');m.className='triage-modal';
+  m.innerHTML=`<div class="triage-box"><h3 style="margin:0 0 12px;font-size:14px">Link to Existing Task</h3>
+    <input type="text" id="link-task-search" placeholder="Search tasks..." style="width:100%;padding:8px 10px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px;box-sizing:border-box">
+    <div id="link-task-results" style="max-height:200px;overflow-y:auto;margin-top:8px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button id="link-cancel" style="padding:6px 14px;background:none;border:1px solid var(--brd);border-radius:var(--rs);cursor:pointer;color:var(--tx)">Cancel</button>
+    </div></div>`;
+  document.body.appendChild(m);
+  m.querySelector('#link-cancel').addEventListener('click',()=>m.remove());
+  m.addEventListener('click',e=>{if(e.target===m)m.remove()});
+  let searchTimer;
+  m.querySelector('#link-task-search').addEventListener('input',e=>{
+    clearTimeout(searchTimer);
+    searchTimer=setTimeout(async()=>{
+      const q=e.target.value.trim();
+      const rd=m.querySelector('#link-task-results');
+      if(!q){rd.innerHTML='';return}
+      const tasks=await api.get('/api/tasks/search?q='+encodeURIComponent(q));
+      if(!tasks.length){rd.innerHTML='<div style="padding:8px;font-size:12px;color:var(--txd)">No tasks found</div>';return}
+      rd.innerHTML=tasks.slice(0,10).map(t=>`<div class="link-task-row" data-tid="${t.id}" style="padding:8px;cursor:pointer;border-radius:var(--rs);font-size:13px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--brd)">
+        <span class="material-icons-round" style="font-size:16px;color:var(--txd)">task_alt</span>
+        <div style="flex:1"><div>${esc(t.title)}</div><div style="font-size:11px;color:var(--txd)">${t.area_name?esc(t.area_icon+' '+t.area_name+' → '+t.goal_title):''}</div></div>
+      </div>`).join('');
+      rd.querySelectorAll('.link-task-row').forEach(row=>row.addEventListener('click',async()=>{
+        const tid=Number(row.dataset.tid);
+        await api.post('/api/tasks/'+tid+'/subtasks',{title:item.title});
+        await api.del('/api/inbox/'+inboxId);
+        m.remove();showToast('Linked as subtask');renderInbox();loadOverdueBadge();
+      }));
+    },300);
+  });
+  m.querySelector('#link-task-search').focus();
 }
 async function showTriageModal(inboxId){
   const m=document.createElement('div');m.className='triage-modal';
@@ -4161,7 +4204,7 @@ async function renderNoteEditor(note){
   $('note-back').addEventListener('click',()=>{activeNoteId=null;renderNotes()});
   $('note-del').addEventListener('click',async()=>{
     if(!confirm('Delete this note?'))return;
-    await api.delete('/api/notes/'+note.id);activeNoteId=null;showToast('Deleted');renderNotes();
+    await api.del('/api/notes/'+note.id);activeNoteId=null;showToast('Deleted');renderNotes();
   });
   let saveTimer;
   const autoSave=()=>{clearTimeout(saveTimer);saveTimer=setTimeout(async()=>{
