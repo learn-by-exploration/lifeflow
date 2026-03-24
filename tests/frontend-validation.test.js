@@ -27,8 +27,14 @@ const SERVER_PATH = path.join(__dirname, '..', 'src', 'server.js');
 // Load and parse once
 const html = fs.readFileSync(HTML_PATH, 'utf8');
 const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
-const scriptContent = scriptMatch ? scriptMatch[1] : '';
-const htmlWithoutScript = html.replace(/<script>[\s\S]*?<\/script>/, '');
+const APP_JS_PATH = path.join(__dirname, '..', 'public', 'app.js');
+const externalScript = fs.existsSync(APP_JS_PATH) ? fs.readFileSync(APP_JS_PATH, 'utf8') : '';
+const scriptContent = (scriptMatch ? scriptMatch[1] : '') + '\n' + externalScript;
+const STYLES_PATH = path.join(__dirname, '..', 'public', 'styles.css');
+const externalCSS = fs.existsSync(STYLES_PATH) ? fs.readFileSync(STYLES_PATH, 'utf8') : '';
+const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
+const fullCSS = (styleMatch ? styleMatch[1] : '') + '\n' + externalCSS;
+const htmlWithoutScript = html.replace(/<script>[\s\S]*?<\/script>/, '').replace(/<style>[\s\S]*?<\/style>/, '');
 const serverCode = fs.readFileSync(SERVER_PATH, 'utf8');
 const routesDir = path.join(__dirname, '..', 'src', 'routes');
 const routeCode = fs.existsSync(routesDir)
@@ -442,10 +448,8 @@ describe('Inline Handlers & Function References', () => {
 describe('CSS Integrity', () => {
 
   it('CSS custom properties used in styles are defined', () => {
-    // Extract the <style> block
-    const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
-    if (!styleMatch) return; // no style block
-    const styleContent = styleMatch[1];
+    const styleContent = fullCSS;
+    if (!styleContent.trim()) return; // no styles
 
     // Find all var(--xxx) usages
     const varUsageRegex = /var\(--([a-zA-Z0-9_-]+)/g;
@@ -476,9 +480,8 @@ describe('CSS Integrity', () => {
   });
 
   it('All theme variants define required base variables', () => {
-    const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
-    if (!styleMatch) return;
-    const styleContent = styleMatch[1];
+    const styleContent = fullCSS;
+    if (!styleContent.trim()) return;
 
     // Required variables that every theme must define
     const requiredVars = ['bg', 'bg-s', 'bg-c', 'tx', 'tx2', 'txd', 'brand', 'brand-h', 'ok', 'err', 'brd'];
@@ -740,9 +743,8 @@ describe('Interactive Tour', () => {
   });
 
   it('tour CSS classes are defined in stylesheet', () => {
-    const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
-    if (!styleMatch) { assert.fail('No <style> block found'); return; }
-    const styleContent = styleMatch[1];
+    const styleContent = fullCSS;
+    if (!styleContent.trim()) { assert.fail('No styles found'); return; }
     const requiredClasses = ['tour-ov', 'tour-backdrop', 'tour-spotlight', 'tour-tooltip', 'tour-progress', 'tour-dot'];
     const missing = requiredClasses.filter(cls => !styleContent.includes('.' + cls));
     if (missing.length > 0) {
@@ -756,9 +758,8 @@ describe('Interactive Tour', () => {
 describe('Help Page CSS', () => {
 
   it('Help page CSS classes are defined in stylesheet', () => {
-    const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
-    if (!styleMatch) { assert.fail('No <style> block found'); return; }
-    const styleContent = styleMatch[1];
+    const styleContent = fullCSS;
+    if (!styleContent.trim()) { assert.fail('No styles found'); return; }
     const requiredClasses = ['help-grid', 'help-card', 'help-section', 'help-shortcuts', 'help-sc-row', 'help-step', 'help-step-num', 'help-getting-started'];
     const missing = requiredClasses.filter(cls => !styleContent.includes('.' + cls));
     if (missing.length > 0) {
@@ -767,10 +768,9 @@ describe('Help Page CSS', () => {
   });
 
   it('Help page uses responsive grid layout', () => {
-    const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
-    if (!styleMatch) return;
-    const hasGrid = /help-grid.*grid-template-columns.*auto-fill/s.test(styleMatch[1]) ||
-                    styleMatch[1].includes('.help-grid{') && styleMatch[1].includes('auto-fill');
+    if (!fullCSS.trim()) return;
+    const hasGrid = /help-grid.*grid-template-columns.*auto-fill/s.test(fullCSS) ||
+                    fullCSS.includes('.help-grid{') && fullCSS.includes('auto-fill');
     assert.ok(hasGrid, 'Help grid must use responsive auto-fill grid layout');
   });
 });
