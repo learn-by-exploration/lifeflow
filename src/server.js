@@ -3,6 +3,8 @@ const path = require('path');
 const fs = require('fs');
 const initDatabase = require('./db');
 const createHelpers = require('./helpers');
+const errorHandler = require('./middleware/errors');
+const pkg = require('../package.json');
 
 const app = express();
 const PORT = process.env.PORT || 3456;
@@ -35,18 +37,20 @@ app.get('/share/:token', (req, res) => {
 
 // ─── Health check ───
 app.get('/health', (req, res) => {
-  try {
-    db.prepare('SELECT 1').get();
-    res.json({ status: 'ok', uptime: process.uptime() });
-  } catch {
-    res.status(503).json({ status: 'error' });
-  }
+  let dbOk = false;
+  try { db.prepare('SELECT 1').get(); dbOk = true; } catch {}
+  const status = dbOk ? 'ok' : 'error';
+  const code = dbOk ? 200 : 503;
+  res.status(code).json({ status, version: pkg.version, uptime: process.uptime(), dbOk });
 });
 
 // SPA fallback
 app.get('/{*splat}', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
+
+// ─── Global error handler (must be last) ───
+app.use(errorHandler);
 
 // Export for testing; start server only when run directly
 if (require.main === module) {

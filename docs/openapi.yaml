@@ -1,0 +1,2892 @@
+openapi: 3.0.3
+info:
+  title: LifeFlow API
+  description: |
+    Personal productivity API for task management, goal tracking, habits,
+    focus sessions, lists, notes, and more.
+
+    ## Error Responses
+    All error responses use a consistent shape:
+    ```json
+    { "error": "Human-readable error message" }
+    ```
+
+    ## Common Status Codes
+    | Code | Meaning |
+    |------|---------|
+    | 200  | Success |
+    | 201  | Created (POST that creates a resource) |
+    | 400  | Bad request (validation error) |
+    | 404  | Resource not found |
+    | 409  | Conflict (constraint violation) |
+    | 500  | Internal server error |
+  version: 0.0.11
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3456
+    description: Local development
+
+tags:
+  - name: Tasks
+    description: Task CRUD, search, calendar, board, reorder, bulk operations
+  - name: Subtasks
+    description: Subtask management within tasks
+  - name: Dependencies
+    description: Task dependency management
+  - name: Comments
+    description: Task comments
+  - name: Areas
+    description: Life area management
+  - name: Goals
+    description: Goal management within areas
+  - name: Milestones
+    description: Goal milestones
+  - name: Tags
+    description: Tag management and task tagging
+  - name: Lists
+    description: Lists, list items, sharing, templates
+  - name: Habits
+    description: Habit tracking and logging
+  - name: Focus
+    description: Focus/pomodoro sessions
+  - name: Stats
+    description: Dashboard stats, streaks, trends, activity
+  - name: Notes
+    description: Personal notes
+  - name: Inbox
+    description: Quick-capture inbox and triage
+  - name: Reviews
+    description: Weekly reviews
+  - name: Filters
+    description: Saved and smart filters
+  - name: Templates
+    description: Task templates
+  - name: Rules
+    description: Automation rules
+  - name: Planner
+    description: Daily planner and smart suggestions
+  - name: Settings
+    description: Application settings
+  - name: Data
+    description: Backup, export, import, iCal, search
+  - name: Health
+    description: Health check endpoint
+
+paths:
+  # ─── Tasks ───
+  /api/goals/{goalId}/tasks:
+    get:
+      tags: [Tasks]
+      summary: List tasks for a goal
+      parameters:
+        - name: goalId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Array of enriched tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Task' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    post:
+      tags: [Tasks]
+      summary: Create a task in a goal
+      parameters:
+        - name: goalId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string }
+                note: { type: string }
+                priority: { type: integer, minimum: 0, maximum: 3 }
+                due_date: { type: string, format: date }
+                due_time: { type: string }
+                recurring: { type: string }
+                assigned_to: { type: string }
+                my_day: { type: integer, enum: [0, 1] }
+                tagIds: { type: array, items: { type: integer } }
+                time_block_start: { type: string }
+                time_block_end: { type: string }
+                estimated_minutes: { type: number, minimum: 0 }
+                list_id: { type: integer }
+      responses:
+        '201':
+          description: Created task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/tasks/my-day:
+    get:
+      tags: [Tasks]
+      summary: Get My Day tasks (flagged or due today)
+      responses:
+        '200':
+          description: Array of enriched tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Task' }
+
+  /api/tasks/all:
+    get:
+      tags: [Tasks]
+      summary: Get all tasks
+      responses:
+        '200':
+          description: Array of enriched tasks ordered by status, priority, due date
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Task' }
+
+  /api/tasks/board:
+    get:
+      tags: [Tasks]
+      summary: Get tasks for kanban board view
+      parameters:
+        - name: goal_id
+          in: query
+          schema: { type: integer }
+        - name: area_id
+          in: query
+          schema: { type: integer }
+        - name: priority
+          in: query
+          schema: { type: integer }
+        - name: tag_id
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Array of enriched tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Task' }
+
+  /api/tasks/calendar:
+    get:
+      tags: [Tasks]
+      summary: Get tasks within a date range
+      parameters:
+        - name: start
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: end
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Array of enriched tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Task' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/tasks/overdue:
+    get:
+      tags: [Tasks]
+      summary: Get overdue tasks
+      responses:
+        '200':
+          description: Array of enriched overdue tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Task' }
+
+  /api/tasks/recurring:
+    get:
+      tags: [Tasks]
+      summary: Get recurring tasks
+      responses:
+        '200':
+          description: Array of enriched recurring tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Task' }
+
+  /api/tasks/search:
+    get:
+      tags: [Tasks]
+      summary: Search tasks by query
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Array of matching tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Task' }
+
+  /api/tasks/{id}:
+    get:
+      tags: [Tasks]
+      summary: Get a single task by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Enriched task object
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Tasks]
+      summary: Update a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                note: { type: string }
+                status: { type: string, enum: [todo, doing, done] }
+                priority: { type: integer, minimum: 0, maximum: 3 }
+                due_date: { type: string, format: date, nullable: true }
+                due_time: { type: string, nullable: true }
+                recurring: { type: string, nullable: true }
+                my_day: { type: integer, enum: [0, 1] }
+                goal_id: { type: integer }
+                estimated_minutes: { type: number, minimum: 0, nullable: true }
+                list_id: { type: integer, nullable: true }
+      responses:
+        '200':
+          description: Updated enriched task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Tasks]
+      summary: Delete a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/tasks/parse:
+    post:
+      tags: [Tasks]
+      summary: Parse natural language into task fields
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string }
+      responses:
+        '200':
+          description: Parsed task fields
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title: { type: string }
+                  due_date: { type: string, format: date, nullable: true }
+                  priority: { type: integer }
+                  recurring: { type: string, nullable: true }
+
+  /api/tasks/{id}/skip:
+    post:
+      tags: [Tasks]
+      summary: Skip current occurrence of a recurring task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Updated task with next due date
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/tasks/{id}/move:
+    post:
+      tags: [Tasks]
+      summary: Move a task to a different goal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [goal_id]
+              properties:
+                goal_id: { type: integer }
+      responses:
+        '200':
+          description: Moved task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/tasks/reorder:
+    put:
+      tags: [Tasks]
+      summary: Reorder tasks within a goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: { type: array, items: { type: integer } }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/tasks/bulk:
+    put:
+      tags: [Tasks]
+      summary: Bulk update tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: { type: array, items: { type: integer } }
+                status: { type: string }
+                priority: { type: integer }
+                due_date: { type: string, format: date }
+                my_day: { type: integer }
+                goal_id: { type: integer }
+      responses:
+        '200':
+          description: Bulk update result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated: { type: integer }
+
+  /api/tasks/bulk-myday:
+    post:
+      tags: [Tasks]
+      summary: Add/remove tasks from My Day in bulk
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids, my_day]
+              properties:
+                ids: { type: array, items: { type: integer } }
+                my_day: { type: integer, enum: [0, 1] }
+      responses:
+        '200':
+          description: Bulk update result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated: { type: integer }
+
+  /api/tasks/reschedule:
+    post:
+      tags: [Tasks]
+      summary: Reschedule overdue tasks
+      responses:
+        '200':
+          description: Number of rescheduled tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rescheduled: { type: integer }
+
+  /api/tasks/{id}/time:
+    post:
+      tags: [Tasks]
+      summary: Log time tracked on a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [minutes]
+              properties:
+                minutes: { type: number, minimum: 0 }
+                note: { type: string }
+      responses:
+        '200':
+          description: Time entry created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+
+  # ─── Subtasks ───
+  /api/tasks/{taskId}/subtasks:
+    get:
+      tags: [Subtasks]
+      summary: List subtasks for a task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Array of subtasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Subtask' }
+    post:
+      tags: [Subtasks]
+      summary: Create a subtask
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string }
+      responses:
+        '201':
+          description: Created subtask
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subtask' }
+
+  /api/subtasks/{id}:
+    put:
+      tags: [Subtasks]
+      summary: Update a subtask
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                done: { type: integer, enum: [0, 1] }
+      responses:
+        '200':
+          description: Updated subtask
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subtask' }
+    delete:
+      tags: [Subtasks]
+      summary: Delete a subtask
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/subtasks/reorder:
+    put:
+      tags: [Subtasks]
+      summary: Reorder subtasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: { type: array, items: { type: integer } }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  # ─── Dependencies ───
+  /api/tasks/{id}/deps:
+    get:
+      tags: [Dependencies]
+      summary: Get task dependencies
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Array of dependency objects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: integer }
+                    title: { type: string }
+                    status: { type: string }
+    put:
+      tags: [Dependencies]
+      summary: Set task dependencies
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [blocked_by]
+              properties:
+                blocked_by: { type: array, items: { type: integer } }
+      responses:
+        '200':
+          description: Updated dependencies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  # ─── Comments ───
+  /api/tasks/{id}/comments:
+    get:
+      tags: [Comments]
+      summary: List comments on a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Array of comments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Comment' }
+    post:
+      tags: [Comments]
+      summary: Add a comment to a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string }
+      responses:
+        '201':
+          description: Created comment
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Comment' }
+
+  /api/tasks/{id}/comments/{commentId}:
+    put:
+      tags: [Comments]
+      summary: Update a comment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: commentId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string }
+      responses:
+        '200':
+          description: Updated comment
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Comment' }
+    delete:
+      tags: [Comments]
+      summary: Delete a comment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: commentId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  # ─── Tags ───
+  /api/tags:
+    get:
+      tags: [Tags]
+      summary: List all tags
+      responses:
+        '200':
+          description: Array of tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Tag' }
+    post:
+      tags: [Tags]
+      summary: Create a tag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                color: { type: string }
+      responses:
+        '201':
+          description: Created tag
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tag' }
+
+  /api/tags/{id}:
+    put:
+      tags: [Tags]
+      summary: Update a tag
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                color: { type: string }
+      responses:
+        '200':
+          description: Updated tag
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tag' }
+    delete:
+      tags: [Tags]
+      summary: Delete a tag
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/tags/stats:
+    get:
+      tags: [Tags]
+      summary: Get tag usage statistics
+      responses:
+        '200':
+          description: Array of tags with task counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: integer }
+                    name: { type: string }
+                    color: { type: string }
+                    task_count: { type: integer }
+
+  /api/tasks/{id}/tags:
+    put:
+      tags: [Tags]
+      summary: Set tags on a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tagIds]
+              properties:
+                tagIds: { type: array, items: { type: integer } }
+      responses:
+        '200':
+          description: Updated tag list for task
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Tag' }
+
+  # ─── Areas ───
+  /api/areas:
+    get:
+      tags: [Areas]
+      summary: List all life areas with nested goals
+      responses:
+        '200':
+          description: Array of areas with goals
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Area' }
+    post:
+      tags: [Areas]
+      summary: Create a life area
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                icon: { type: string }
+                color: { type: string }
+      responses:
+        '201':
+          description: Created area
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Area' }
+
+  /api/areas/{id}:
+    put:
+      tags: [Areas]
+      summary: Update an area
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                icon: { type: string }
+                color: { type: string }
+      responses:
+        '200':
+          description: Updated area
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Area' }
+    delete:
+      tags: [Areas]
+      summary: Delete an area and its goals/tasks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  # ─── Goals ───
+  /api/areas/{areaId}/goals:
+    get:
+      tags: [Goals]
+      summary: List goals for an area
+      parameters:
+        - name: areaId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Array of goals
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Goal' }
+    post:
+      tags: [Goals]
+      summary: Create a goal in an area
+      parameters:
+        - name: areaId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string }
+                color: { type: string }
+                target_date: { type: string, format: date }
+                description: { type: string }
+      responses:
+        '201':
+          description: Created goal
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Goal' }
+
+  /api/goals:
+    get:
+      tags: [Goals]
+      summary: List all goals
+      responses:
+        '200':
+          description: Array of all goals with area info
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Goal' }
+
+  /api/goals/{id}:
+    put:
+      tags: [Goals]
+      summary: Update a goal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                color: { type: string }
+                target_date: { type: string, format: date }
+                description: { type: string }
+                status: { type: string }
+      responses:
+        '200':
+          description: Updated goal
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Goal' }
+    delete:
+      tags: [Goals]
+      summary: Delete a goal and its tasks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/goals/{goalId}/tasks:
+    get:
+      tags: [Goals]
+      summary: List tasks for a goal
+      parameters:
+        - name: goalId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Array of enriched tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Task' }
+
+  # ─── Milestones ───
+  /api/goals/{id}/milestones:
+    get:
+      tags: [Milestones]
+      summary: List milestones for a goal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Array of milestones
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Milestone' }
+    post:
+      tags: [Milestones]
+      summary: Create a milestone
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string }
+                due_date: { type: string, format: date }
+      responses:
+        '201':
+          description: Created milestone
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Milestone' }
+
+  /api/milestones/{id}:
+    put:
+      tags: [Milestones]
+      summary: Update a milestone
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                due_date: { type: string, format: date }
+                completed: { type: integer, enum: [0, 1] }
+      responses:
+        '200':
+          description: Updated milestone
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Milestone' }
+    delete:
+      tags: [Milestones]
+      summary: Delete a milestone
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/goals/{id}/progress:
+    get:
+      tags: [Goals]
+      summary: Get goal progress (task completion stats)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Progress object
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  done: { type: integer }
+                  percentage: { type: number }
+
+  # ─── Lists ───
+  /api/lists:
+    get:
+      tags: [Lists]
+      summary: List all lists
+      responses:
+        '200':
+          description: Array of lists with item counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/List' }
+    post:
+      tags: [Lists]
+      summary: Create a list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                icon: { type: string }
+                color: { type: string }
+                type: { type: string, enum: [checklist, grocery, todo] }
+                parent_id: { type: integer, nullable: true }
+      responses:
+        '201':
+          description: Created list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/List' }
+
+  /api/lists/{id}:
+    put:
+      tags: [Lists]
+      summary: Update a list
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                icon: { type: string }
+                color: { type: string }
+      responses:
+        '200':
+          description: Updated list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/List' }
+    delete:
+      tags: [Lists]
+      summary: Delete a list
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/lists/{id}/items:
+    get:
+      tags: [Lists]
+      summary: Get items in a list
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Array of list items
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ListItem' }
+    post:
+      tags: [Lists]
+      summary: Add an item to a list
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string }
+                category: { type: string }
+                quantity: { type: string }
+      responses:
+        '201':
+          description: Created list item
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ListItem' }
+
+  /api/lists/{id}/items/{itemId}:
+    put:
+      tags: [Lists]
+      summary: Update a list item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Updated list item
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ListItem' }
+    delete:
+      tags: [Lists]
+      summary: Delete a list item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/lists/{id}/sublists:
+    get:
+      tags: [Lists]
+      summary: Get sublists of a list
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Array of sublists
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/List' }
+
+  /api/lists/{id}/clear-checked:
+    post:
+      tags: [Lists]
+      summary: Remove all checked items from a list
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Number of items removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cleared: { type: integer }
+
+  /api/lists/{id}/items/reorder:
+    patch:
+      tags: [Lists]
+      summary: Reorder items in a list
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: { type: array, items: { type: integer } }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/lists/{id}/share:
+    post:
+      tags: [Lists]
+      summary: Create a share link for a list
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Share token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  url: { type: string }
+    delete:
+      tags: [Lists]
+      summary: Revoke share link
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Share revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/shared/{token}:
+    get:
+      tags: [Lists]
+      summary: Get shared list by token
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Shared list with items
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/List' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/shared/{token}/items:
+    post:
+      tags: [Lists]
+      summary: Add item to shared list
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string }
+      responses:
+        '201':
+          description: Created item
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ListItem' }
+
+  /api/shared/{token}/items/{itemId}:
+    put:
+      tags: [Lists]
+      summary: Update item on shared list
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Updated item
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ListItem' }
+
+  /api/lists/categories:
+    get:
+      tags: [Lists]
+      summary: Get grocery categories
+      responses:
+        '200':
+          description: Category map
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/lists/templates:
+    get:
+      tags: [Lists]
+      summary: Get list templates
+      responses:
+        '200':
+          description: Array of list templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /api/lists/from-template:
+    post:
+      tags: [Lists]
+      summary: Create a list from a template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [templateId]
+              properties:
+                templateId: { type: string }
+                name: { type: string }
+      responses:
+        '201':
+          description: Created list with template items
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/List' }
+
+  # ─── Habits ───
+  /api/habits:
+    get:
+      tags: [Habits]
+      summary: List all habits with today's completion status
+      responses:
+        '200':
+          description: Array of habits
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Habit' }
+    post:
+      tags: [Habits]
+      summary: Create a habit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                icon: { type: string }
+                color: { type: string }
+                frequency: { type: string, enum: [daily, weekly, monthly, yearly] }
+                target: { type: integer, minimum: 1 }
+      responses:
+        '201':
+          description: Created habit
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Habit' }
+
+  /api/habits/{id}:
+    put:
+      tags: [Habits]
+      summary: Update a habit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Updated habit
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Habit' }
+    delete:
+      tags: [Habits]
+      summary: Delete a habit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/habits/{id}/log:
+    post:
+      tags: [Habits]
+      summary: Log a habit completion
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                date: { type: string, format: date }
+                value: { type: number }
+      responses:
+        '201':
+          description: Log entry created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+    delete:
+      tags: [Habits]
+      summary: Remove today's habit log
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Log removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/habits/{id}/heatmap:
+    get:
+      tags: [Habits]
+      summary: Get habit completion heatmap data
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Array of date-value pairs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    date: { type: string, format: date }
+                    value: { type: number }
+
+  # ─── Focus Sessions ───
+  /api/focus:
+    post:
+      tags: [Focus]
+      summary: Create a focus session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [task_id]
+              properties:
+                task_id: { type: integer }
+                duration_sec: { type: integer }
+                type: { type: string, enum: [pomodoro, deep, short] }
+                started_at: { type: string, format: date-time }
+                ended_at: { type: string, format: date-time }
+      responses:
+        '201':
+          description: Created session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+
+  /api/focus/{id}:
+    put:
+      tags: [Focus]
+      summary: Update a focus session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Updated session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FocusSession' }
+    delete:
+      tags: [Focus]
+      summary: Delete a focus session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/focus/stats:
+    get:
+      tags: [Focus]
+      summary: Get focus session statistics
+      responses:
+        '200':
+          description: Focus stats object
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_sessions: { type: integer }
+                  total_seconds: { type: integer }
+                  today_sessions: { type: integer }
+                  today_seconds: { type: integer }
+                  streak: { type: integer }
+
+  /api/focus/history:
+    get:
+      tags: [Focus]
+      summary: Get focus session history
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Array of focus sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/FocusSession' }
+
+  # ─── Stats ───
+  /api/stats:
+    get:
+      tags: [Stats]
+      summary: Get dashboard statistics
+      responses:
+        '200':
+          description: Stats object with counts and completion data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_tasks: { type: integer }
+                  tasks_done: { type: integer }
+                  tasks_today: { type: integer }
+                  overdue: { type: integer }
+
+  /api/stats/streaks:
+    get:
+      tags: [Stats]
+      summary: Get streak data
+      responses:
+        '200':
+          description: Streak information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  current: { type: integer }
+                  longest: { type: integer }
+                  today_done: { type: boolean }
+
+  /api/stats/trends:
+    get:
+      tags: [Stats]
+      summary: Get weekly trend data
+      responses:
+        '200':
+          description: Trend data
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/stats/time-analytics:
+    get:
+      tags: [Stats]
+      summary: Get time tracking analytics
+      responses:
+        '200':
+          description: Time analytics data
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/activity:
+    get:
+      tags: [Stats]
+      summary: Get activity feed
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: Array of activity entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  # ─── Notes ───
+  /api/notes:
+    get:
+      tags: [Notes]
+      summary: List all notes
+      responses:
+        '200':
+          description: Array of notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Note' }
+    post:
+      tags: [Notes]
+      summary: Create a note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string }
+                content: { type: string }
+                pinned: { type: integer, enum: [0, 1] }
+                color: { type: string }
+      responses:
+        '201':
+          description: Created note
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Note' }
+
+  /api/notes/{id}:
+    get:
+      tags: [Notes]
+      summary: Get a note by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Note object
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Note' }
+    put:
+      tags: [Notes]
+      summary: Update a note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Updated note
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Note' }
+    delete:
+      tags: [Notes]
+      summary: Delete a note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  # ─── Inbox ───
+  /api/inbox:
+    get:
+      tags: [Inbox]
+      summary: List inbox items
+      responses:
+        '200':
+          description: Array of inbox items
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/InboxItem' }
+    post:
+      tags: [Inbox]
+      summary: Quick-capture to inbox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string }
+      responses:
+        '201':
+          description: Created inbox item
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InboxItem' }
+
+  /api/inbox/{id}:
+    put:
+      tags: [Inbox]
+      summary: Update an inbox item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Updated inbox item
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InboxItem' }
+    delete:
+      tags: [Inbox]
+      summary: Delete an inbox item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/inbox/{id}/triage:
+    post:
+      tags: [Inbox]
+      summary: Triage inbox item to a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [goal_id]
+              properties:
+                goal_id: { type: integer }
+                priority: { type: integer }
+                due_date: { type: string, format: date }
+      responses:
+        '200':
+          description: Created task from inbox item
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+
+  # ─── Reviews ───
+  /api/reviews:
+    get:
+      tags: [Reviews]
+      summary: List weekly reviews
+      responses:
+        '200':
+          description: Array of reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Review' }
+    post:
+      tags: [Reviews]
+      summary: Create a weekly review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                wins: { type: string }
+                challenges: { type: string }
+                next_week: { type: string }
+                rating: { type: integer, minimum: 1, maximum: 5 }
+      responses:
+        '201':
+          description: Created review
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Review' }
+
+  /api/reviews/current:
+    get:
+      tags: [Reviews]
+      summary: Get current week's review
+      responses:
+        '200':
+          description: Review object or null
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/Review' }
+                  - type: 'null'
+
+  /api/reviews/{id}:
+    delete:
+      tags: [Reviews]
+      summary: Delete a review
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  # ─── Filters ───
+  /api/filters:
+    get:
+      tags: [Filters]
+      summary: List saved filters
+      responses:
+        '200':
+          description: Array of filters
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Filter' }
+    post:
+      tags: [Filters]
+      summary: Create a saved filter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, criteria]
+              properties:
+                name: { type: string }
+                icon: { type: string }
+                criteria: { type: object }
+      responses:
+        '201':
+          description: Created filter
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Filter' }
+
+  /api/filters/{id}:
+    put:
+      tags: [Filters]
+      summary: Update a saved filter
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Updated filter
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Filter' }
+    delete:
+      tags: [Filters]
+      summary: Delete a saved filter
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/filters/execute:
+    get:
+      tags: [Filters]
+      summary: Execute a filter and return matching tasks
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: priority
+          in: query
+          schema: { type: integer }
+        - name: area_id
+          in: query
+          schema: { type: integer }
+        - name: goal_id
+          in: query
+          schema: { type: integer }
+        - name: tag_id
+          in: query
+          schema: { type: integer }
+        - name: overdue
+          in: query
+          schema: { type: string, enum: ['true'] }
+        - name: has_note
+          in: query
+          schema: { type: string, enum: ['true'] }
+        - name: recurring
+          in: query
+          schema: { type: string, enum: ['true'] }
+      responses:
+        '200':
+          description: Array of matching tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Task' }
+
+  /api/filters/smart/{type}:
+    get:
+      tags: [Filters]
+      summary: Get tasks matching a smart filter
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [high-priority, due-this-week, no-due-date, completed-today, untagged, blocked]
+      responses:
+        '200':
+          description: Array of matching tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Task' }
+
+  /api/filters/counts:
+    get:
+      tags: [Filters]
+      summary: Get counts for all smart filters
+      responses:
+        '200':
+          description: Object with filter type keys and count values
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ─── Templates ───
+  /api/templates:
+    get:
+      tags: [Templates]
+      summary: List task templates
+      responses:
+        '200':
+          description: Array of templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Template' }
+    post:
+      tags: [Templates]
+      summary: Create a task template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, tasks]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                icon: { type: string }
+                tasks:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      title: { type: string }
+                      priority: { type: integer }
+                      subtasks: { type: array, items: { type: string } }
+      responses:
+        '201':
+          description: Created template
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Template' }
+
+  /api/templates/{id}:
+    put:
+      tags: [Templates]
+      summary: Update a template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Updated template
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Template' }
+    delete:
+      tags: [Templates]
+      summary: Delete a template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/templates/{id}/apply:
+    post:
+      tags: [Templates]
+      summary: Apply a template to create tasks in a goal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [goalId]
+              properties:
+                goalId: { type: integer }
+      responses:
+        '201':
+          description: Array of created tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Task' }
+
+  # ─── Automation Rules ───
+  /api/rules:
+    get:
+      tags: [Rules]
+      summary: List automation rules
+      responses:
+        '200':
+          description: Array of rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Rule' }
+    post:
+      tags: [Rules]
+      summary: Create an automation rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, trigger, action]
+              properties:
+                name: { type: string }
+                trigger: { type: string }
+                action: { type: string }
+                config: { type: object }
+                enabled: { type: integer, enum: [0, 1] }
+      responses:
+        '201':
+          description: Created rule
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Rule' }
+
+  /api/rules/{id}:
+    put:
+      tags: [Rules]
+      summary: Update a rule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Updated rule
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Rule' }
+    delete:
+      tags: [Rules]
+      summary: Delete a rule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  # ─── Planner ───
+  /api/planner/{date}:
+    get:
+      tags: [Planner]
+      summary: Get planned tasks for a date
+      parameters:
+        - name: date
+          in: path
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Planner data for the date
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/planner/suggest:
+    get:
+      tags: [Planner]
+      summary: Get AI-suggested tasks for today
+      responses:
+        '200':
+          description: Array of suggested tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Task' }
+
+  /api/planner/smart:
+    get:
+      tags: [Planner]
+      summary: Get smart briefing
+      responses:
+        '200':
+          description: Smart planner analysis
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ─── Settings ───
+  /api/settings:
+    get:
+      tags: [Settings]
+      summary: Get all settings
+      responses:
+        '200':
+          description: Settings object
+          content:
+            application/json:
+              schema:
+                type: object
+    put:
+      tags: [Settings]
+      summary: Update settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/settings/reset:
+    post:
+      tags: [Settings]
+      summary: Reset all settings to defaults
+      responses:
+        '200':
+          description: Default settings
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ─── Reminders ───
+  /api/reminders:
+    get:
+      tags: [Settings]
+      summary: Get tasks with upcoming reminders
+      responses:
+        '200':
+          description: Array of tasks with reminders
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Task' }
+
+  # ─── Data Management ───
+  /api/backup:
+    post:
+      tags: [Data]
+      summary: Trigger a manual backup
+      responses:
+        '200':
+          description: Backup result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  file: { type: string }
+
+  /api/backups:
+    get:
+      tags: [Data]
+      summary: List available backups
+      responses:
+        '200':
+          description: Array of backup files
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name: { type: string }
+                    size: { type: integer }
+                    date: { type: string }
+
+  /api/export:
+    get:
+      tags: [Data]
+      summary: Export all data as JSON
+      responses:
+        '200':
+          description: Full data export
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exportDate: { type: string, format: date-time }
+                  areas: { type: array }
+                  goals: { type: array }
+                  tasks: { type: array }
+                  tags: { type: array }
+
+  /api/export/ical:
+    get:
+      tags: [Data]
+      summary: Export tasks as iCal feed
+      responses:
+        '200':
+          description: iCalendar data
+          content:
+            text/calendar:
+              schema:
+                type: string
+
+  /api/import:
+    post:
+      tags: [Data]
+      summary: Import data (destructive — requires confirm)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm, areas, goals, tasks]
+              properties:
+                confirm: { type: string, enum: [DESTROY_ALL_DATA] }
+                areas: { type: array }
+                goals: { type: array }
+                tasks: { type: array }
+                tags: { type: array }
+      responses:
+        '200':
+          description: Import result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  imported: { type: object }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          description: Missing confirmation string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+
+  /api/search:
+    get:
+      tags: [Data]
+      summary: Full-text search across tasks, notes, subtasks
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks: { type: array }
+                  notes: { type: array }
+                  subtasks: { type: array }
+
+  # ─── Health ───
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ok] }
+                  version: { type: string }
+                  uptime: { type: number }
+                  dbOk: { type: boolean }
+        '503':
+          description: Service unhealthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [error] }
+                  version: { type: string }
+                  uptime: { type: number }
+                  dbOk: { type: boolean }
+
+components:
+  responses:
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string }
+
+  schemas:
+    Task:
+      type: object
+      properties:
+        id: { type: integer }
+        goal_id: { type: integer }
+        title: { type: string }
+        note: { type: string, nullable: true }
+        status: { type: string, enum: [todo, doing, done] }
+        priority: { type: integer, minimum: 0, maximum: 3 }
+        position: { type: integer }
+        due_date: { type: string, format: date, nullable: true }
+        due_time: { type: string, nullable: true }
+        recurring: { type: string, nullable: true }
+        assigned_to: { type: string, nullable: true }
+        my_day: { type: integer, enum: [0, 1] }
+        created_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time, nullable: true }
+        estimated_minutes: { type: number, nullable: true }
+        actual_minutes: { type: number, nullable: true }
+        time_block_start: { type: string, nullable: true }
+        time_block_end: { type: string, nullable: true }
+        list_id: { type: integer, nullable: true }
+        reminder_at: { type: string, nullable: true }
+        tags:
+          type: array
+          items: { $ref: '#/components/schemas/Tag' }
+        subtasks:
+          type: array
+          items: { $ref: '#/components/schemas/Subtask' }
+        blocked_by:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              title: { type: string }
+              status: { type: string }
+
+    Subtask:
+      type: object
+      properties:
+        id: { type: integer }
+        task_id: { type: integer }
+        title: { type: string }
+        done: { type: integer, enum: [0, 1] }
+        position: { type: integer }
+
+    Tag:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        color: { type: string, nullable: true }
+
+    Area:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        icon: { type: string }
+        color: { type: string }
+        position: { type: integer }
+        goals:
+          type: array
+          items: { $ref: '#/components/schemas/Goal' }
+
+    Goal:
+      type: object
+      properties:
+        id: { type: integer }
+        area_id: { type: integer }
+        title: { type: string }
+        color: { type: string, nullable: true }
+        target_date: { type: string, format: date, nullable: true }
+        description: { type: string, nullable: true }
+        status: { type: string }
+        position: { type: integer }
+
+    Milestone:
+      type: object
+      properties:
+        id: { type: integer }
+        goal_id: { type: integer }
+        title: { type: string }
+        due_date: { type: string, format: date, nullable: true }
+        completed: { type: integer, enum: [0, 1] }
+        created_at: { type: string, format: date-time }
+
+    List:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        icon: { type: string }
+        color: { type: string }
+        type: { type: string }
+        parent_id: { type: integer, nullable: true }
+        created_at: { type: string, format: date-time }
+        item_count: { type: integer }
+        checked_count: { type: integer }
+
+    ListItem:
+      type: object
+      properties:
+        id: { type: integer }
+        list_id: { type: integer }
+        text: { type: string }
+        checked: { type: integer, enum: [0, 1] }
+        category: { type: string, nullable: true }
+        quantity: { type: string, nullable: true }
+        position: { type: integer }
+
+    Habit:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        icon: { type: string }
+        color: { type: string }
+        frequency: { type: string }
+        target: { type: integer }
+        streak: { type: integer }
+        created_at: { type: string, format: date-time }
+        done_today: { type: integer, enum: [0, 1] }
+
+    FocusSession:
+      type: object
+      properties:
+        id: { type: integer }
+        task_id: { type: integer }
+        duration_sec: { type: integer }
+        type: { type: string }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time, nullable: true }
+
+    Note:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        content: { type: string }
+        pinned: { type: integer, enum: [0, 1] }
+        color: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    InboxItem:
+      type: object
+      properties:
+        id: { type: integer }
+        text: { type: string }
+        created_at: { type: string, format: date-time }
+        processed: { type: integer, enum: [0, 1] }
+
+    Review:
+      type: object
+      properties:
+        id: { type: integer }
+        week_start: { type: string, format: date }
+        wins: { type: string }
+        challenges: { type: string }
+        next_week: { type: string }
+        rating: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    Filter:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        icon: { type: string, nullable: true }
+        criteria: { type: object }
+        created_at: { type: string, format: date-time }
+
+    Template:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        icon: { type: string }
+        tasks: { type: array }
+        created_at: { type: string, format: date-time }
+
+    Rule:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        trigger: { type: string }
+        action: { type: string }
+        config: { type: object }
+        enabled: { type: integer, enum: [0, 1] }
+        created_at: { type: string, format: date-time }
