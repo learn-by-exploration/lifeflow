@@ -290,6 +290,7 @@ async function render(){
   else if(currentView==='rules')await renderRules();
   else if(currentView==='reports')await renderReports();
   else if(currentView==='help')renderHelp();
+  else if(currentView==='changelog')renderChangelog();
   else if(currentView==='lists')await renderLists();
   else if(currentView==='listdetail')await renderListDetail();
   else if(currentView==='smartlist')await renderSmartList();
@@ -325,6 +326,7 @@ function updateBC(){
   else if(currentView==='rules'){pt.textContent='Automations';bc.innerHTML=''}
   else if(currentView==='reports'){pt.textContent='Reports';bc.innerHTML=''}
   else if(currentView==='help'){pt.textContent='Help & Guide';bc.innerHTML=''}
+  else if(currentView==='changelog'){pt.textContent='Changelog';bc.innerHTML=''}
   else if(currentView==='lists'){pt.textContent='Lists';bc.innerHTML=''}
   else if(currentView==='listdetail'){
     pt.textContent=activeListName||'List';
@@ -3746,6 +3748,7 @@ $('dr-btn')?.addEventListener('click',openDailyReview);
 $('sb-settings-btn')?.addEventListener('click',()=>go('settings'));
 $('sb-reports-btn')?.addEventListener('click',()=>go('reports'));
 $('sb-help-btn')?.addEventListener('click',()=>go('help'));
+$('sb-changelog-btn')?.addEventListener('click',()=>go('changelog'));
 $('sb-new-list')?.addEventListener('click',()=>openListModal());
 $('dr-ov').addEventListener('click',e=>{if(e.target===$('dr-ov'))closeDR()});
 $('dr-skip').addEventListener('click',closeDR);
@@ -4366,6 +4369,32 @@ async function showBriefing(){
     }
     await loadAreas();render();loadOverdueBadge();
   });
+}
+
+// ─── CHANGELOG VIEW ───
+function renderChangelog(){
+  const c=$('ct');
+  const versions=[
+    {v:'0.1.0',date:'2025-07-18',theme:'Hello World',items:['Landing page with feature showcase','User-facing changelog (this view)','PWA manifest polish + meta tags','Bug bash: full regression pass','Performance audit']},
+    {v:'0.0.18',date:'2025-07-18',theme:'Advanced Power',items:['Custom recurring patterns (JSON config: specific-days, endDate, endAfter)','Keyboard shortcut rebinding in Settings → Shortcuts','Shareable weekly summary card (canvas → PNG)','Shareable focus card (canvas → PNG)','Achievement badges gallery in Settings → Badges']},
+    {v:'0.0.17',date:'2025-07-18',theme:'Everyone Welcome',items:['Mobile bottom tab bar (5 tabs)','Skip-to-content link for screen readers','ARIA labels on all icon-only buttons','Focus trapping in modals','prefers-reduced-motion support','Demo mode with sample data']},
+    {v:'0.0.16',date:'2025-07-17',theme:'Make It Yours',items:['Enhanced recurring engine (biweekly, weekdays, JSON patterns)','Save-as-template from goals and lists','Achievement badges system (6 badge types)','Demo mode (start + reset)','Default view per life area','Onboarding settings and user persona']},
+    {v:'0.0.15',date:'2025-07-17',theme:'Find Everything',items:['Universal search with Ctrl+K command palette','Quick capture overlay (N key)','Saved filters and smart lists','Tag management','Template CRUD + apply','Automation rules engine']},
+    {v:'0.0.14',date:'2025-07-17',theme:'Feel the Progress',items:['Dashboard with charts (completion, streaks, areas)','Weekly review flow','Activity log / logbook','Focus session history','Time analytics','Reports view']}
+  ];
+  let h=`<div style="max-width:640px;margin:0 auto">`;
+  h+=`<p style="font-size:13px;color:var(--tx-s);margin-bottom:24px">What's new in LifeFlow — version history and highlights.</p>`;
+  versions.forEach(ver=>{
+    h+=`<div style="margin-bottom:28px;padding:20px;background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--r)">`;
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-weight:700;font-size:16px">v${esc(ver.v)} — ${esc(ver.theme)}</span>
+      <span style="font-size:11px;color:var(--tx-s)">${esc(ver.date)}</span></div>`;
+    h+=`<ul style="margin:0;padding-left:20px;font-size:13px;color:var(--tx-s);line-height:1.8">`;
+    ver.items.forEach(item=>{h+=`<li>${esc(item)}</li>`});
+    h+=`</ul></div>`;
+  });
+  h+=`</div>`;
+  c.innerHTML=h;
 }
 
 // ─── ENHANCED MULTI-SELECT BAR ───
