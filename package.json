@@ -5,6 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node src/server.js",
+    "backup": "bash scripts/backup.sh",
+    "pretest": "bash scripts/backup.sh",
     "test": "node --test --test-force-exit tests/*.test.js"
   },
   "keywords": [],

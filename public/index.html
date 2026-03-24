@@ -217,10 +217,21 @@
 <!-- Focus Timer overlay -->
 <div class="ft-ov" id="ft-ov" role="dialog" aria-modal="true" aria-label="Focus Timer">
   <div class="ft-box">
+    <!-- Technique picker panel -->
+    <div class="ft-pick" id="ft-pick" style="display:none">
+      <div class="ft-task" id="ft-pick-task"></div>
+      <h3 style="color:#fff;margin:12px 0 4px;font-size:16px">Choose Your Focus</h3>
+      <p style="font-size:11px;color:var(--txd);margin:0 0 14px" id="ft-pick-hint">Pick a technique to get started</p>
+      <div class="ft-tech-grid" id="ft-tech-grid"></div>
+      <div class="ft-btns" style="margin-top:14px">
+        <button class="ft-btn danger" id="ft-pick-cancel">Cancel</button>
+      </div>
+    </div>
     <!-- Pre-session planning panel -->
-    <div class="ft-plan" id="ft-plan">
+    <div class="ft-plan" id="ft-plan" style="display:none">
       <div class="ft-task" id="ft-plan-task"></div>
-      <h3 style="color:#fff;margin:12px 0 4px;font-size:16px">Plan Your Session</h3>
+      <div id="ft-plan-technique" style="font-size:13px;color:var(--tx2);margin:4px 0 10px;cursor:pointer" title="Change technique"></div>
+      <h3 style="color:#fff;margin:4px 0 4px;font-size:16px">Plan Your Session</h3>
       <label style="font-size:11px;color:var(--txd);display:block;margin-bottom:4px;text-align:left">What will you accomplish?</label>
       <input type="text" id="ft-intention" placeholder="e.g. Finish the login form validation" style="width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,.15);border-radius:8px;background:rgba(255,255,255,.06);color:#fff;font-size:13px;box-sizing:border-box;margin-bottom:10px;font-family:inherit">
       <label style="font-size:11px;color:var(--txd);display:block;margin-bottom:4px;text-align:left">Session steps <span style="opacity:.6">(optionally loaded from subtasks)</span></label>
@@ -228,6 +239,10 @@
       <div style="display:flex;gap:6px;margin-bottom:12px">
         <input type="text" id="ft-step-input" placeholder="Add a step..." style="flex:1;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(255,255,255,.04);color:#fff;font-size:12px;font-family:inherit">
         <button class="ft-btn" id="ft-step-add" style="padding:8px 14px;font-size:12px">Add</button>
+      </div>
+      <div id="ft-timebox-row" style="display:none;margin-bottom:12px">
+        <label style="font-size:11px;color:var(--txd);display:block;margin-bottom:4px;text-align:left">Session duration (minutes)</label>
+        <input type="number" id="ft-timebox-dur" min="5" max="180" value="30" step="5" style="width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(255,255,255,.06);color:#fff;font-size:13px;font-family:inherit;box-sizing:border-box">
       </div>
       <label style="font-size:11px;color:var(--txd);display:block;margin-bottom:4px;text-align:left">When?</label>
       <div style="display:flex;gap:8px;margin-bottom:16px">
@@ -255,6 +270,14 @@
       <div class="ft-label" id="ft-label">Focus Time</div>
       <!-- In-session steps checklist -->
       <div id="ft-steps" class="ft-steps"></div>
+      <!-- Quick Start extend bar -->
+      <div class="ft-extend-bar" id="ft-extend-bar" style="display:none">
+        <span style="font-size:12px;color:var(--tx2)">Keep going?</span>
+        <button class="ft-btn" data-extend="5">+5 min</button>
+        <button class="ft-btn" data-extend="15">+15 min</button>
+        <button class="ft-btn" data-extend="25">+25 min</button>
+        <button class="ft-btn primary" data-extend="done">I'm Done</button>
+      </div>
       <div class="ft-btns">
         <button class="ft-btn" id="ft-mode">Short Break</button>
         <button class="ft-btn primary" id="ft-toggle">Start</button>

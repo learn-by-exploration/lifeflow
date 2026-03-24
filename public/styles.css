@@ -54,7 +54,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
   .bell-dd .bell-item{padding:12px 14px}
   /* Focus timer fullscreen on mobile */
   .ft-box{width:100%;padding:0 16px}
-  .ft-plan,.ft-reflect{max-width:100%}
+  .ft-plan,.ft-reflect,.ft-pick{max-width:100%}
+  .ft-tech-grid{grid-template-columns:1fr}
   .ft-ring{width:180px;height:180px}
   .ft-ring svg{width:180px;height:180px}
   .ft-ring circle{r:80}
@@ -511,6 +512,18 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .ft-step-item:hover{background:rgba(255,255,255,.06)}
 .ft-step-item.done{opacity:.5;text-decoration:line-through}
 .ft-step-item .ft-step-chk{width:18px;height:18px;border:2px solid rgba(255,255,255,.3);border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px}
+.ft-pick{max-width:440px;margin:0 auto;text-align:center;color:#fff}
+.ft-tech-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:left}
+.ft-tech-card{padding:14px;border:2px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.04);cursor:pointer;transition:all .2s}
+.ft-tech-card:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2)}
+.ft-tech-card.selected{border-color:var(--brand);background:rgba(99,102,241,.15)}
+.ft-tech-card .ft-tech-icon{font-size:24px;margin-bottom:6px}
+.ft-tech-card .ft-tech-name{font-size:13px;font-weight:600;color:#fff;margin-bottom:2px}
+.ft-tech-card .ft-tech-desc{font-size:11px;color:var(--txd);line-height:1.4}
+.ft-tech-card .ft-tech-tag{display:inline-block;font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.08);color:var(--tx2);margin-top:6px}
+.ft-tech-card.recommended .ft-tech-tag{background:rgba(99,102,241,.2);color:var(--brand)}
+.ft-extend-bar{display:flex;gap:8px;justify-content:center;margin-top:12px;padding:10px;background:rgba(255,255,255,.04);border-radius:8px}
+.ft-extend-bar .ft-btn{padding:8px 16px;font-size:12px}
 .ft-step-item.done .ft-step-chk{border-color:var(--ok);background:var(--ok);color:#fff}
 .ft-plan-step{display:flex;align-items:center;gap:6px;padding:4px 6px;font-size:12px;color:#fff;border-radius:4px;margin-bottom:2px}
 .ft-plan-step .ft-plan-step-rm{opacity:.4;cursor:pointer;font-size:14px}

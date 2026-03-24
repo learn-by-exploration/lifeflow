@@ -2161,13 +2161,115 @@ async function renderLogbook(){
 // ─── FOCUS TIMER / POMODORO ───
 let ftTask=null,ftInterval=null,ftRemaining=25*60,ftTotal=25*60,ftRunning=false,ftMode='focus',ftElapsed=0;
 let ftSessionId=null,ftPlanSteps=[],ftActiveSteps=[],ftRating=0,ftScheduleTimer=null;
+let ftTechnique='pomodoro'; // current selected technique
 const FT_MODES={focus:{label:'Focus Time',dur:25*60},short:{label:'Short Break',dur:5*60},long:{label:'Long Break',dur:15*60}};
+
+// Technique definitions
+const FT_TECHNIQUES={
+  pomodoro:{id:'pomodoro',icon:'🍅',name:'Pomodoro',desc:'Work in focused bursts with short breaks between.',tag:'Best for most tasks',dur:25,short:5,long:15,hasBreaks:true,skipPlan:false},
+  deep:{id:'deep',icon:'🧠',name:'Deep Work',desc:'One long uninterrupted block for complex or creative tasks.',tag:'Complex & creative work',dur:60,short:0,long:0,hasBreaks:false,skipPlan:false},
+  quick:{id:'quick',icon:'⚡',name:'Quick Start',desc:'Just 5 minutes — beat procrastination. Extend if you keep going.',tag:'Tasks you\'ve been avoiding',dur:5,short:0,long:0,hasBreaks:false,skipPlan:true},
+  timebox:{id:'timebox',icon:'⏱️',name:'Timebox',desc:'Set your own duration. Great when you know how long you need.',tag:'You decide the time',dur:0,short:0,long:0,hasBreaks:false,skipPlan:false}
+};
+
+// Remember last technique per area
+function getLastTechnique(areaId){
+  try{const v=localStorage.getItem('ft_tech_'+areaId);if(v&&FT_TECHNIQUES[v])return v}catch(e){}
+  return null;
+}
+function saveLastTechnique(areaId,tech){
+  try{localStorage.setItem('ft_tech_'+areaId,tech)}catch(e){}
+}
 
 function startFocusTimer(taskId){
   applySettingsToTimer();
   let tk=tasks.find(t=>t.id===taskId);
-  if(!tk){api.get('/api/tasks/'+taskId).then(t=>{ftTask=t;showFocusPlan()}).catch(()=>{});return}
-  ftTask=tk;showFocusPlan();
+  if(!tk){api.get('/api/tasks/'+taskId).then(t=>{ftTask=t;showTechniquePicker()}).catch(()=>{});return}
+  ftTask=tk;showTechniquePicker();
+}
+
+// Technique picker screen
+function showTechniquePicker(){
+  if(!ftTask)return;
+  ftTechnique=null;
+  $('ft-pick-task').textContent=ftTask.title;
+
+  // Determine smart default — last used for this area, or suggest quick for stale tasks
+  const areaId=ftTask.area_id||ftTask.goal_id||0;
+  let recommended=getLastTechnique(areaId)||'pomodoro';
+  // If task is stale (created 3+ days ago, never done), suggest quick start
+  if(ftTask.created_at){
+    const age=(Date.now()-new Date(ftTask.created_at).getTime())/(1000*60*60*24);
+    if(age>=3&&ftTask.status==='todo')recommended='quick';
+  }
+
+  const grid=$('ft-tech-grid');
+  grid.innerHTML=Object.values(FT_TECHNIQUES).map(t=>{
+    const isRec=t.id===recommended;
+    return `<div class="ft-tech-card${isRec?' recommended':''}" data-tech="${t.id}">
+      <div class="ft-tech-icon">${t.icon}</div>
+      <div class="ft-tech-name">${t.name}${t.dur?' <span style="opacity:.5;font-weight:400;font-size:11px">${t.dur}min</span>':''}</div>
+      <div class="ft-tech-desc">${t.desc}</div>
+      <span class="ft-tech-tag">${isRec?'✦ Suggested':t.tag}</span>
+    </div>`;
+  }).join('');
+
+  $('ft-pick-hint').textContent=recommended==='quick'
+    ?'This task has been waiting — try Quick Start!'
+    :'Pick a technique to get started';
+
+  grid.querySelectorAll('.ft-tech-card').forEach(card=>{
+    card.addEventListener('click',()=>{
+      const tech=card.dataset.tech;
+      ftTechnique=tech;
+      const aId=ftTask.area_id||ftTask.goal_id||0;
+      saveLastTechnique(aId,tech);
+
+      const t=FT_TECHNIQUES[tech];
+      // Apply technique-specific timer config
+      if(tech==='pomodoro'){
+        applySettingsToTimer(); // use user's custom pomodoro settings
+      } else if(tech==='deep'){
+        FT_MODES.focus.dur=t.dur*60;FT_MODES.short.dur=0;FT_MODES.long.dur=0;
+      } else if(tech==='quick'){
+        FT_MODES.focus.dur=t.dur*60;FT_MODES.short.dur=0;FT_MODES.long.dur=0;
+      } else if(tech==='timebox'){
+        // Will be set by user in plan phase
+        FT_MODES.focus.dur=30*60;FT_MODES.short.dur=0;FT_MODES.long.dur=0;
+      }
+
+      if(t.skipPlan){
+        // Quick Start: skip planning, go straight to timer
+        quickStartSession();
+      } else {
+        showFocusPlan();
+      }
+    });
+  });
+
+  $('ft-pick').style.display='';
+  $('ft-plan').style.display='none';
+  $('ft-timer').style.display='none';
+  $('ft-reflect').style.display='none';
+  $('ft-ov').classList.add('active');
+}
+
+$('ft-pick-cancel').addEventListener('click',()=>{
+  ftTask=null;$('ft-ov').classList.remove('active');
+});
+
+// Quick Start: create session immediately and start 5-min timer
+async function quickStartSession(){
+  if(!ftTask)return;
+  const sess=await api.post('/api/focus',{task_id:ftTask.id,duration_sec:0,type:'quick'});
+  ftSessionId=sess.id;
+  ftActiveSteps=[];
+  // Auto-populate steps from subtasks (but don't require planning)
+  if(ftTask.subtasks&&ftTask.subtasks.length){
+    const steps=ftTask.subtasks.filter(s=>!s.done).map(s=>s.title);
+    if(steps.length)ftActiveSteps=await api.post('/api/focus/'+sess.id+'/steps',{steps});
+  }
+  showFocusUI();
 }
 
 // Pre-session planning panel
@@ -2189,6 +2291,20 @@ function showFocusPlan(){
     ftPlanSteps=ftTask.subtasks.filter(s=>!s.done).map(s=>s.title);
   }
   renderPlanSteps();
+
+  // Show technique badge and timebox duration input
+  const tech=FT_TECHNIQUES[ftTechnique]||FT_TECHNIQUES.pomodoro;
+  const badge=$('ft-plan-technique');
+  if(badge){
+    badge.innerHTML=`<span style="font-size:16px;vertical-align:middle">${tech.icon}</span> ${tech.name}${tech.dur?' <span style="opacity:.5">(${tech.dur}min)</span>':''} <span style="font-size:10px;opacity:.4">↺ change</span>`;
+    badge.onclick=()=>showTechniquePicker();
+  }
+  const tbRow=$('ft-timebox-row');
+  if(tbRow)tbRow.style.display=ftTechnique==='timebox'?'':'none';
+  const tbInput=$('ft-timebox-dur');
+  if(tbInput)tbInput.value='30';
+
+  $('ft-pick').style.display='none';
   $('ft-plan').style.display='';
   $('ft-timer').style.display='none';
   $('ft-reflect').style.display='none';
@@ -2227,12 +2343,19 @@ $('ft-plan-go').addEventListener('click',async()=>{
   const intention=$('ft-intention').value.trim();
   const scheduledAt=isSchedule?$('ft-schedule-time').value:null;
 
+  const sessType=ftTechnique||'pomodoro';
+  // Apply timebox duration if applicable
+  if(sessType==='timebox'){
+    const dur=parseInt($('ft-timebox-dur').value)||30;
+    FT_MODES.focus.dur=Math.max(5,Math.min(180,dur))*60;
+  }
+
   if(isSchedule&&scheduledAt){
     // Create session with scheduled_at, don't start timer
-    const sess=await api.post('/api/focus',{task_id:ftTask.id,duration_sec:0,type:'pomodoro',scheduled_at:scheduledAt});
+    const sess=await api.post('/api/focus',{task_id:ftTask.id,duration_sec:0,type:sessType,scheduled_at:scheduledAt});
     ftSessionId=sess.id;
     if(intention||ftPlanSteps.length){
-      await api.post('/api/focus/'+sess.id+'/meta',{intention,steps_planned:ftPlanSteps.length,strategy:'pomodoro'});
+      await api.post('/api/focus/'+sess.id+'/meta',{intention,steps_planned:ftPlanSteps.length,strategy:sessType});
     }
     if(ftPlanSteps.length){
       await api.post('/api/focus/'+sess.id+'/steps',{steps:ftPlanSteps});
@@ -2255,10 +2378,10 @@ $('ft-plan-go').addEventListener('click',async()=>{
   }
 
   // Start immediately — create session
-  const sess=await api.post('/api/focus',{task_id:ftTask.id,duration_sec:0,type:'pomodoro'});
+  const sess=await api.post('/api/focus',{task_id:ftTask.id,duration_sec:0,type:sessType});
   ftSessionId=sess.id;
   if(intention||ftPlanSteps.length){
-    await api.post('/api/focus/'+sess.id+'/meta',{intention,steps_planned:ftPlanSteps.length,strategy:'pomodoro'});
+    await api.post('/api/focus/'+sess.id+'/meta',{intention,steps_planned:ftPlanSteps.length,strategy:sessType});
   }
   if(ftPlanSteps.length){
     ftActiveSteps=await api.post('/api/focus/'+sess.id+'/steps',{steps:ftPlanSteps});
@@ -2272,11 +2395,17 @@ function showFocusUI(){
   if(!ftTask)return;
   ftMode='focus';ftTotal=FT_MODES.focus.dur;ftRemaining=ftTotal;ftRunning=false;ftElapsed=0;
   $('ft-task').textContent=ftTask.title;
-  $('ft-label').textContent=FT_MODES.focus.label;
+  const tech=FT_TECHNIQUES[ftTechnique]||FT_TECHNIQUES.pomodoro;
+  $('ft-label').textContent=ftTechnique==='deep'?'Deep Focus':ftTechnique==='quick'?'Quick Start — 5min':ftTechnique==='timebox'?'Timebox':FT_MODES.focus.label;
   $('ft-toggle').textContent='Start';
+  // Show break mode button only for pomodoro
+  $('ft-mode').style.display=tech.hasBreaks?'':'none';
   $('ft-mode').textContent='Short Break';
+  // Hide extend bar initially
+  $('ft-extend-bar').style.display='none';
   renderFTSteps();
   updateFTDisplay();
+  $('ft-pick').style.display='none';
   $('ft-plan').style.display='none';
   $('ft-timer').style.display='';
   $('ft-reflect').style.display='none';
@@ -2312,6 +2441,14 @@ $('ft-toggle').addEventListener('click',()=>{
       if(ftRemaining<=0){
         clearInterval(ftInterval);ftRunning=false;
         if(ftMode==='focus'&&ftTask){
+          // Quick Start: show extend options instead of ending
+          if(ftTechnique==='quick'){
+            $('ft-extend-bar').style.display='';
+            $('ft-toggle').textContent='Start';
+            $('ft-label').textContent='Time\'s up! Keep going?';
+            updateFTDisplay();
+            return;
+          }
           // End the session & show reflection
           api.put('/api/focus/'+ftSessionId+'/end',{duration_sec:ftElapsed});
           showReflection();
@@ -2351,13 +2488,44 @@ $('ft-stop').addEventListener('click',()=>{
   $('ft-ov').classList.remove('active');
 });
 
+// Quick Start extend bar handlers
+$('ft-extend-bar').querySelectorAll('[data-extend]').forEach(btn=>btn.addEventListener('click',()=>{
+  const val=btn.dataset.extend;
+  if(val==='done'){
+    // End session and reflect
+    $('ft-extend-bar').style.display='none';
+    api.put('/api/focus/'+ftSessionId+'/end',{duration_sec:ftElapsed});
+    showReflection();
+  } else {
+    // Extend by N minutes
+    const mins=parseInt(val);
+    ftTotal=mins*60;ftRemaining=mins*60;
+    $('ft-extend-bar').style.display='none';
+    $('ft-label').textContent='Quick Start — +'+mins+'min';
+    updateFTDisplay();
+    // Auto-start the extended timer
+    ftRunning=true;$('ft-toggle').textContent='Pause';
+    ftInterval=setInterval(()=>{
+      ftRemaining--;ftElapsed++;
+      if(ftRemaining<=0){
+        clearInterval(ftInterval);ftRunning=false;
+        $('ft-extend-bar').style.display='';
+        $('ft-toggle').textContent='Start';
+        $('ft-label').textContent='Time\'s up! Keep going?';
+      }
+      updateFTDisplay();
+    },1000);
+  }
+}));
+
 // Post-session reflection
 function showReflection(){
   const mins=Math.floor(ftElapsed/60);
   const completed=ftActiveSteps.filter(s=>s.done).length;
   const total=ftActiveSteps.length;
-  $('ft-reflect-title').textContent='Session Complete!';
-  $('ft-reflect-summary').textContent=mins+'m focused'+(total?' · '+completed+'/'+total+' steps done':'');
+  const tech=FT_TECHNIQUES[ftTechnique]||FT_TECHNIQUES.pomodoro;
+  $('ft-reflect-title').textContent=ftTechnique==='quick'?'Nice start!':ftTechnique==='deep'?'Deep session done!':'Session Complete!';
+  $('ft-reflect-summary').textContent=tech.icon+' '+mins+'m focused'+(total?' · '+completed+'/'+total+' steps done':'');
   ftRating=0;
   document.querySelectorAll('.ft-rate').forEach(b=>b.classList.remove('active'));
   $('ft-reflection').value='';
@@ -2396,18 +2564,28 @@ $('ft-reflect-continue').addEventListener('click',async()=>{
       steps_completed:completed
     });
   }
-  // Start break, then auto-return to focus
+  // Start break (pomodoro) or new focus round
   ftElapsed=0;
-  ftMode='short';ftTotal=FT_MODES.short.dur;ftRemaining=ftTotal;
-  $('ft-label').textContent=FT_MODES.short.label;
-  $('ft-toggle').textContent='Start Break';
-  $('ft-mode').textContent='Focus (25m)';
+  const tech=FT_TECHNIQUES[ftTechnique]||FT_TECHNIQUES.pomodoro;
+  if(tech.hasBreaks){
+    ftMode='short';ftTotal=FT_MODES.short.dur;ftRemaining=ftTotal;
+    $('ft-label').textContent=FT_MODES.short.label;
+    $('ft-toggle').textContent='Start Break';
+    $('ft-mode').textContent='Focus (25m)';
+  } else {
+    // Non-pomodoro: go straight back to focus
+    ftMode='focus';ftTotal=FT_MODES.focus.dur;ftRemaining=ftTotal;
+    $('ft-label').textContent=ftTechnique==='deep'?'Deep Focus':ftTechnique==='quick'?'Quick Start — 5min':'Timebox';
+    $('ft-toggle').textContent='Start';
+    $('ft-mode').style.display='none';
+  }
   $('ft-plan').style.display='none';
   $('ft-timer').style.display='';
   $('ft-reflect').style.display='none';
   // Create new session for next focus round
   if(ftTask){
-    const sess=await api.post('/api/focus',{task_id:ftTask.id,duration_sec:0,type:'pomodoro'});
+    const sessType=ftTechnique||'pomodoro';
+    const sess=await api.post('/api/focus',{task_id:ftTask.id,duration_sec:0,type:sessType});
     ftSessionId=sess.id;
   }
   updateFTDisplay();
