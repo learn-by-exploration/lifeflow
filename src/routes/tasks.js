@@ -216,18 +216,20 @@ router.put('/api/tasks/:id', (req, res) => {
   );
   // Recurring: spawn next task when completed
   if (status === 'done' && ex.status !== 'done' && ex.recurring) {
-    const recurTx = db.transaction(() => {
-      const nd = nextDueDate(ex.due_date, ex.recurring);
-      const rpos = getNextPosition('tasks', 'goal_id', ex.goal_id);
-      const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position) VALUES (?,?,?,?,?,?,?,?,?,?)').run(
-        ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.due_time, ex.recurring, ex.assigned_to, 0, rpos
-      );
-      // Copy tags to new task
-      const oldTags = db.prepare('SELECT tag_id FROM task_tags WHERE task_id=?').all(id);
-      const insTag = db.prepare('INSERT OR IGNORE INTO task_tags (task_id,tag_id) VALUES (?,?)');
-      oldTags.forEach(tt => insTag.run(r.lastInsertRowid, tt.tag_id));
-    });
-    recurTx();
+    const nd = nextDueDate(ex.due_date, ex.recurring);
+    if (nd) {
+      const recurTx = db.transaction(() => {
+        const rpos = getNextPosition('tasks', 'goal_id', ex.goal_id);
+        const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position) VALUES (?,?,?,?,?,?,?,?,?,?)').run(
+          ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.due_time, ex.recurring, ex.assigned_to, 0, rpos
+        );
+        // Copy tags to new task
+        const oldTags = db.prepare('SELECT tag_id FROM task_tags WHERE task_id=?').all(id);
+        const insTag = db.prepare('INSERT OR IGNORE INTO task_tags (task_id,tag_id) VALUES (?,?)');
+        oldTags.forEach(tt => insTag.run(r.lastInsertRowid, tt.tag_id));
+      });
+      recurTx();
+    }
   }
   // Execute automation rules on completion
   if (status === 'done' && ex.status !== 'done') {

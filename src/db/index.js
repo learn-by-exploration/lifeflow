@@ -292,6 +292,19 @@ function initDatabase(dbDir) {
     FOREIGN KEY (session_id) REFERENCES focus_sessions(id) ON DELETE CASCADE
   )`);
 
+  // ─── Life Areas default_view ───
+  try { db.exec('ALTER TABLE life_areas ADD COLUMN default_view TEXT DEFAULT NULL'); } catch(e) {}
+
+  // ─── Task Templates source_type ───
+  try { db.exec("ALTER TABLE task_templates ADD COLUMN source_type TEXT DEFAULT 'task'"); } catch(e) {}
+
+  // ─── Badges table (Phase 5) ───
+  db.exec(`CREATE TABLE IF NOT EXISTS badges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL UNIQUE,
+    earned_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   // ─── Automation Rules table ───
   db.exec(`CREATE TABLE IF NOT EXISTS automation_rules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

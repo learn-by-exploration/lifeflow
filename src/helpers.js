@@ -53,19 +53,48 @@ module.exports = function createHelpers(db) {
   function nextDueDate(dueDate, recurrence) {
     if (!dueDate || !recurrence) return null;
     const d = new Date(dueDate + 'T00:00:00');
-    if (recurrence === 'daily') d.setDate(d.getDate() + 1);
-    else if (recurrence === 'weekly') d.setDate(d.getDate() + 7);
-    else if (recurrence === 'monthly') d.setMonth(d.getMonth() + 1);
-    else if (recurrence === 'yearly') d.setFullYear(d.getFullYear() + 1);
-    else {
-      const evDays = recurrence.match(/^every-(\d+)-days$/);
-      const evWeeks = recurrence.match(/^every-(\d+)-weeks$/);
-      if (evDays) d.setDate(d.getDate() + Number(evDays[1]));
-      else if (evWeeks) d.setDate(d.getDate() + Number(evWeeks[1]) * 7);
-      else if (recurrence === 'weekdays') {
+    // Try to parse JSON recurring config
+    let cfg = null;
+    try { cfg = JSON.parse(recurrence); } catch {}
+    if (cfg && typeof cfg === 'object') {
+      // Advanced recurring: {pattern, interval, days, endAfter, endDate, count}
+      const p = cfg.pattern || 'daily';
+      const n = cfg.interval || 1;
+      if (p === 'daily') d.setDate(d.getDate() + n);
+      else if (p === 'weekly') d.setDate(d.getDate() + 7 * n);
+      else if (p === 'biweekly') d.setDate(d.getDate() + 14);
+      else if (p === 'monthly') { for (let i = 0; i < n; i++) d.setMonth(d.getMonth() + 1); }
+      else if (p === 'yearly') d.setFullYear(d.getFullYear() + n);
+      else if (p === 'weekdays') {
         do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
+      } else if (p === 'specific-days' && Array.isArray(cfg.days)) {
+        // days = [0-6] (Sun-Sat). Find next matching day.
+        for (let i = 0; i < 7; i++) {
+          d.setDate(d.getDate() + 1);
+          if (cfg.days.includes(d.getDay())) break;
+        }
+      } else return null;
+      // Check end conditions
+      const nextDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      if (cfg.endDate && nextDate > cfg.endDate) return null;
+      if (cfg.endAfter && typeof cfg.count === 'number' && cfg.count >= cfg.endAfter) return null;
+    } else {
+      // Simple string recurrence (backward compatible)
+      if (recurrence === 'daily') d.setDate(d.getDate() + 1);
+      else if (recurrence === 'weekly') d.setDate(d.getDate() + 7);
+      else if (recurrence === 'biweekly') d.setDate(d.getDate() + 14);
+      else if (recurrence === 'monthly') d.setMonth(d.getMonth() + 1);
+      else if (recurrence === 'yearly') d.setFullYear(d.getFullYear() + 1);
+      else {
+        const evDays = recurrence.match(/^every-(\d+)-days$/);
+        const evWeeks = recurrence.match(/^every-(\d+)-weeks$/);
+        if (evDays) d.setDate(d.getDate() + Number(evDays[1]));
+        else if (evWeeks) d.setDate(d.getDate() + Number(evWeeks[1]) * 7);
+        else if (recurrence === 'weekdays') {
+          do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
+        }
+        else return null;
       }
-      else return null;
     }
     const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
     return `${y}-${m}-${day}`;

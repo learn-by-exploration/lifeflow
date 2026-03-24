@@ -41,6 +41,7 @@ function cleanDb() {
   db.exec('DELETE FROM saved_filters');
   db.exec('DELETE FROM list_items');
   db.exec('DELETE FROM lists');
+  try { db.exec('DELETE FROM badges'); } catch(e) {}
 }
 
 function teardown() {

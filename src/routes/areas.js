@@ -45,12 +45,18 @@ router.put('/api/areas/:id', (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const ex = db.prepare('SELECT * FROM life_areas WHERE id=?').get(id);
   if (!ex) return res.status(404).json({ error: 'Not found' });
-  const { name, icon, color, position } = req.body;
+  const { name, icon, color, position, default_view } = req.body;
   if (name !== undefined && (!name || !name.trim())) return res.status(400).json({ error: 'Name cannot be empty' });
   if (name && name.trim().length > 100) return res.status(400).json({ error: 'Name too long (max 100 characters)' });
-  db.prepare('UPDATE life_areas SET name=COALESCE(?,name),icon=COALESCE(?,icon),color=COALESCE(?,color),position=COALESCE(?,position) WHERE id=?').run(
-    name ? name.trim() : null, icon||null, color||null, position!==undefined?position:null, id
-  );
+  if (default_view !== undefined) {
+    db.prepare('UPDATE life_areas SET name=COALESCE(?,name),icon=COALESCE(?,icon),color=COALESCE(?,color),position=COALESCE(?,position),default_view=? WHERE id=?').run(
+      name ? name.trim() : null, icon||null, color||null, position!==undefined?position:null, default_view||null, id
+    );
+  } else {
+    db.prepare('UPDATE life_areas SET name=COALESCE(?,name),icon=COALESCE(?,icon),color=COALESCE(?,color),position=COALESCE(?,position) WHERE id=?').run(
+      name ? name.trim() : null, icon||null, color||null, position!==undefined?position:null, id
+    );
+  }
   res.json(db.prepare('SELECT * FROM life_areas WHERE id=?').get(id));
 });
 

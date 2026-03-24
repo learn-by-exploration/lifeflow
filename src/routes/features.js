@@ -22,6 +22,9 @@ const SETTINGS_DEFAULTS = {
   smartFilterStale: '7',    // days
   smartFilterQuickWin: '15', // minutes
   groceryCategories: '',    // empty = use defaults
+  onboardingComplete: 'false',
+  userPersona: '',
+  keyboardShortcuts: '',    // JSON map of custom key bindings
 };
 
 const SETTINGS_KEYS = new Set(Object.keys(SETTINGS_DEFAULTS));
@@ -107,6 +110,163 @@ router.post('/api/templates/:id/apply', (req, res) => {
   });
   txn();
   res.json({ ok: true, created });
+});
+
+// ─── Save Goal as Template ───
+router.post('/api/goals/:id/save-as-template', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const goal = db.prepare('SELECT * FROM goals WHERE id=?').get(id);
+  if (!goal) return res.status(404).json({ error: 'Goal not found' });
+  const tasks = db.prepare('SELECT * FROM tasks WHERE goal_id=? ORDER BY position').all(id);
+  const safeTasks = tasks.map(t => {
+    const subs = db.prepare('SELECT title FROM subtasks WHERE task_id=? ORDER BY position').all(t.id);
+    return { title: t.title, priority: t.priority || 0, subtasks: subs.map(s => s.title) };
+  });
+  const name = (req.body.name || goal.title).trim().slice(0, 200);
+  const r = db.prepare("INSERT INTO task_templates (name, description, icon, tasks, user_created, source_type) VALUES (?,?,?,?,1,'goal')").run(
+    name, goal.description || '', goal.color ? '🎯' : '📋', JSON.stringify(safeTasks)
+  );
+  res.json({ id: r.lastInsertRowid, name, tasks: safeTasks });
+});
+
+// ─── Save List as Template ───
+router.post('/api/lists/:id/save-as-template', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const list = db.prepare('SELECT * FROM lists WHERE id=?').get(id);
+  if (!list) return res.status(404).json({ error: 'List not found' });
+  const items = db.prepare('SELECT * FROM list_items WHERE list_id=? ORDER BY position').all(id);
+  const safeTasks = items.map(it => ({ title: it.title, priority: 0, subtasks: [] }));
+  const name = (req.body.name || list.name).trim().slice(0, 200);
+  const r = db.prepare("INSERT INTO task_templates (name, description, icon, tasks, user_created, source_type) VALUES (?,?,?,?,1,'list')").run(
+    name, '', list.icon || '📋', JSON.stringify(safeTasks)
+  );
+  res.json({ id: r.lastInsertRowid, name, tasks: safeTasks });
+});
+
+// ─── Badges ───
+router.get('/api/badges', (req, res) => {
+  res.json(db.prepare('SELECT * FROM badges ORDER BY earned_at DESC').all());
+});
+
+router.post('/api/badges/check', (req, res) => {
+  const earned = [];
+  const has = (type) => db.prepare('SELECT 1 FROM badges WHERE type=?').get(type);
+  const ins = db.prepare('INSERT OR IGNORE INTO badges (type) VALUES (?)');
+  // First 10 tasks
+  if (!has('first-10-tasks')) {
+    const cnt = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='done'").get().c;
+    if (cnt >= 10) { ins.run('first-10-tasks'); earned.push('first-10-tasks'); }
+  }
+  // First focus session
+  if (!has('first-focus')) {
+    const cnt = db.prepare('SELECT COUNT(*) as c FROM focus_sessions').get().c;
+    if (cnt >= 1) { ins.run('first-focus'); earned.push('first-focus'); }
+  }
+  // 7-day streak
+  if (!has('streak-7')) {
+    const days = db.prepare("SELECT COUNT(DISTINCT date(completed_at)) as c FROM tasks WHERE status='done' AND completed_at >= date('now','-7 days')").get().c;
+    if (days >= 7) { ins.run('streak-7'); earned.push('streak-7'); }
+  }
+  // 30-day streak
+  if (!has('streak-30')) {
+    const days = db.prepare("SELECT COUNT(DISTINCT date(completed_at)) as c FROM tasks WHERE status='done' AND completed_at >= date('now','-30 days')").get().c;
+    if (days >= 30) { ins.run('streak-30'); earned.push('streak-30'); }
+  }
+  // 100 tasks completed
+  if (!has('century')) {
+    const cnt = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='done'").get().c;
+    if (cnt >= 100) { ins.run('century'); earned.push('century'); }
+  }
+  // All areas active (at least 1 task per area in last 7 days)
+  if (!has('all-areas-active')) {
+    const areaCount = db.prepare('SELECT COUNT(*) as c FROM life_areas WHERE archived=0').get().c;
+    if (areaCount > 0) {
+      const activeAreas = db.prepare("SELECT COUNT(DISTINCT a.id) as c FROM life_areas a JOIN goals g ON g.area_id=a.id JOIN tasks t ON t.goal_id=g.id WHERE a.archived=0 AND t.completed_at >= date('now','-7 days')").get().c;
+      if (activeAreas >= areaCount) { ins.run('all-areas-active'); earned.push('all-areas-active'); }
+    }
+  }
+  res.json({ earned });
+});
+
+// ─── Demo Mode ───
+router.post('/api/demo/start', (req, res) => {
+  const txn = db.transaction(() => {
+    // Create sample areas
+    const aIns = db.prepare('INSERT INTO life_areas (name,icon,color,position) VALUES (?,?,?,?)');
+    const a1 = aIns.run('Work','💼','#3B82F6',0).lastInsertRowid;
+    const a2 = aIns.run('Health','💪','#22C55E',1).lastInsertRowid;
+    const a3 = aIns.run('Personal','🏠','#F59E0B',2).lastInsertRowid;
+    // Create goals
+    const gIns = db.prepare('INSERT INTO goals (area_id,title,description,status) VALUES (?,?,?,?)');
+    const g1 = gIns.run(a1,'Q2 Launch','Ship the product by June','active').lastInsertRowid;
+    const g2 = gIns.run(a1,'Team Management','Keep the team productive','active').lastInsertRowid;
+    const g3 = gIns.run(a2,'Run a Marathon','Train for a 42K marathon','active').lastInsertRowid;
+    const g4 = gIns.run(a2,'Eat Healthy','Meal prep and nutrition','active').lastInsertRowid;
+    const g5 = gIns.run(a3,'Learn Guitar','Practice 30 min daily','active').lastInsertRowid;
+    // Create 20 tasks
+    const tIns = db.prepare('INSERT INTO tasks (goal_id,title,status,priority,due_date,my_day) VALUES (?,?,?,?,?,?)');
+    const today = new Date().toISOString().slice(0,10);
+    const tomorrow = new Date(Date.now()+864e5).toISOString().slice(0,10);
+    tIns.run(g1,'Design API endpoints','todo',2,today,1);
+    tIns.run(g1,'Write unit tests','todo',1,today,1);
+    tIns.run(g1,'Deploy to staging','todo',2,tomorrow,0);
+    tIns.run(g1,'Code review PR #42','doing',1,today,1);
+    tIns.run(g1,'Update documentation','todo',0,null,0);
+    tIns.run(g2,'1:1 with Alice','todo',1,today,1);
+    tIns.run(g2,'Sprint retrospective','todo',1,tomorrow,0);
+    tIns.run(g2,'Write performance reviews','todo',2,null,0);
+    tIns.run(g3,'Run 5K','done',1,today,0);
+    tIns.run(g3,'Interval training','todo',1,tomorrow,0);
+    tIns.run(g3,'Long run 15K','todo',2,null,0);
+    tIns.run(g3,'Stretch and recovery','todo',0,today,1);
+    tIns.run(g4,'Meal prep Sunday','todo',1,null,0);
+    tIns.run(g4,'Buy groceries','todo',0,tomorrow,0);
+    tIns.run(g4,'Try new recipe','todo',0,null,0);
+    tIns.run(g5,'Practice chords','todo',1,today,1);
+    tIns.run(g5,'Learn Wonderwall','todo',0,null,0);
+    tIns.run(g5,'Watch tutorial','done',0,null,0);
+    tIns.run(g5,'Buy new strings','todo',0,tomorrow,0);
+    tIns.run(g5,'Record a practice session','todo',0,null,0);
+    // 3 habits
+    const hIns = db.prepare('INSERT INTO habits (name,icon,color,frequency,area_id) VALUES (?,?,?,?,?)');
+    hIns.run('Exercise','🏃','#22C55E','daily',a2);
+    hIns.run('Read 30 min','📚','#3B82F6','daily',a3);
+    hIns.run('Meditate','🧘','#8B5CF6','daily',a2);
+  });
+  txn();
+  res.json({ ok: true });
+});
+
+router.post('/api/demo/reset', (req, res) => {
+  const txn = db.transaction(() => {
+    db.exec('DELETE FROM focus_steps');
+    db.exec('DELETE FROM focus_session_meta');
+    db.exec('DELETE FROM focus_sessions');
+    db.exec('DELETE FROM task_comments');
+    db.exec('DELETE FROM goal_milestones');
+    db.exec('DELETE FROM inbox');
+    db.exec('DELETE FROM notes');
+    db.exec('DELETE FROM weekly_reviews');
+    db.exec('DELETE FROM automation_rules');
+    db.exec('DELETE FROM task_tags');
+    db.exec('DELETE FROM task_deps');
+    db.exec('DELETE FROM subtasks');
+    db.exec('DELETE FROM tasks');
+    db.exec('DELETE FROM goals');
+    db.exec('DELETE FROM life_areas');
+    db.exec('DELETE FROM tags');
+    db.exec('DELETE FROM settings');
+    db.exec('DELETE FROM habit_logs');
+    db.exec('DELETE FROM habits');
+    db.exec('DELETE FROM saved_filters');
+    db.exec('DELETE FROM list_items');
+    db.exec('DELETE FROM lists');
+    db.exec('DELETE FROM badges');
+  });
+  txn();
+  res.json({ ok: true });
 });
 
 // ─── Settings ───
