@@ -14,7 +14,9 @@
 <body>
 <body>
 
-<button class="ham" id="ham"><span class="material-icons-round">menu</span></button>
+<a href="#ct" class="skip-link">Skip to content</a>
+<div id="demo-banner-slot"></div>
+<button class="ham" id="ham" aria-label="Open navigation menu"><span class="material-icons-round">menu</span></button>
 <div class="sb-overlay" id="sb-ov"></div>
 
 <aside class="sb" id="sb" role="navigation" aria-label="Sidebar navigation">
@@ -82,7 +84,7 @@
 <main class="mn">
   <div class="tb"><div class="bc" id="bc"></div><h2 id="pt">Today</h2>
     <div class="bell-wrap" id="bell-wrap">
-      <button class="bell-btn" id="bell-btn"><span class="material-icons-round">notifications</span><span class="bell-badge" id="bell-badge"></span></button>
+      <button class="bell-btn" id="bell-btn" aria-label="Notifications"><span class="material-icons-round">notifications</span><span class="bell-badge" id="bell-badge"></span></button>
       <div class="bell-dd" id="bell-dd"></div>
     </div>
   </div>
@@ -95,7 +97,7 @@
 
 <!-- Task detail panel -->
 <div class="dp" id="dp" role="dialog" aria-label="Task Details">
-  <div class="dp-head"><h3 id="dp-title">Task</h3><button class="material-icons-round" id="dp-close">close</button></div>
+  <div class="dp-head"><h3 id="dp-title">Task</h3><button class="material-icons-round" id="dp-close" aria-label="Close task details">close</button></div>
   <div class="dp-body" id="dp-body"></div>
   <div class="dp-foot"><button class="btn-c" id="dp-cancel">Cancel</button><button class="btn-s" id="dp-save">Save</button></div>
 </div>
@@ -376,8 +378,17 @@
   </div>
 </div>
 
+<!-- Mobile bottom tab bar -->
+<nav class="mobile-bottom-bar" id="mobile-bar" aria-label="Mobile navigation">
+  <button class="mb-tab active" data-view="myday" aria-label="Today"><span class="material-icons-round">wb_sunny</span>Today</button>
+  <button class="mb-tab" data-view="tasks" aria-label="Tasks"><span class="material-icons-round">checklist</span>Tasks</button>
+  <button class="mb-tab" data-view="focus" aria-label="Focus"><span class="material-icons-round">timer</span>Focus</button>
+  <button class="mb-tab" data-view="habits" aria-label="Habits"><span class="material-icons-round">repeat</span>Habits</button>
+  <button class="mb-tab" data-view="settings" aria-label="More"><span class="material-icons-round">more_horiz</span>More</button>
+</nav>
+
 <!-- FAB -->
-<button class="fab" id="fab-btn" title="Quick add task (N)"><span class="material-icons-round">add</span></button>
+<button class="fab" id="fab-btn" title="Quick add task (N)" aria-label="Quick add task"><span class="material-icons-round">add</span></button>
 
 <!-- Toast container -->
 <div class="toast-wrap" id="toast-wrap"></div>

@@ -4452,4 +4452,43 @@ document.addEventListener('keydown',e=>{if(e.key==='k'&&(e.ctrlKey||e.metaKey)){
 
 function go(view){currentView=view;activeAreaId=null;activeGoalId=null;vimIdx=-1;
   document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));
-  document.querySelector(`.ni[data-view="${view}"]`)?.classList.add('active');render()}
+  document.querySelector(`.ni[data-view="${view}"]`)?.classList.add('active');
+  // Update mobile bottom bar
+  document.querySelectorAll('.mb-tab').forEach(t=>t.classList.toggle('active',t.dataset.view===view));
+  render();
+}
+
+// ─── MOBILE BOTTOM BAR ───
+document.querySelectorAll('.mb-tab').forEach(tab=>{
+  tab.addEventListener('click',()=>go(tab.dataset.view));
+});
+
+// ─── FOCUS TRAP UTILITY FOR MODALS ───
+function trapFocus(container){
+  const focusable=container.querySelectorAll('button,input,select,textarea,[tabindex]:not([tabindex="-1"])');
+  if(!focusable.length)return;
+  const first=focusable[0],last=focusable[focusable.length-1];
+  function handler(e){
+    if(e.key!=='Tab')return;
+    if(e.shiftKey){if(document.activeElement===first){e.preventDefault();last.focus()}}
+    else{if(document.activeElement===last){e.preventDefault();first.focus()}}
+  }
+  container.addEventListener('keydown',handler);
+  first.focus();
+  return ()=>container.removeEventListener('keydown',handler);
+}
+
+// Auto-trap focus in open modals
+const modalObserver=new MutationObserver(()=>{
+  ['am','gm','lm','sr-ov','qc-ov','kb-ov','ft-ov','tour-ov','onb-ov','tmpl-apply-ov','dr-ov'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el&&el.classList.contains('active')&&!el._focusTrapped){
+      el._focusTrapped=true;
+      el._removeTrap=trapFocus(el);
+    }else if(el&&!el.classList.contains('active')&&el._focusTrapped){
+      if(el._removeTrap)el._removeTrap();
+      el._focusTrapped=false;
+    }
+  });
+});
+modalObserver.observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});

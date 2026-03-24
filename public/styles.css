@@ -905,3 +905,40 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 
 /* Balance alert */
 .balance-alert{display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(245,158,11,.08);border:1px solid var(--warn);border-radius:var(--rs);margin-bottom:12px;font-size:12px;animation:fadeIn .3s ease}
+
+/* Skip to content link (accessibility) */
+.skip-link{position:fixed;top:-50px;left:50%;transform:translateX(-50%);background:var(--brand);color:#fff;padding:8px 16px;border-radius:0 0 var(--rs) var(--rs);font-size:13px;z-index:9999;transition:top .2s}
+.skip-link:focus{top:0}
+
+/* Mobile bottom tab bar */
+.mobile-bottom-bar{display:none;position:fixed;bottom:0;left:0;right:0;height:56px;background:var(--bg-s);border-top:1px solid var(--brd);z-index:50;padding:0 8px;align-items:center;justify-content:space-around}
+.mobile-bottom-bar .mb-tab{display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--txd);font-size:10px;cursor:pointer;padding:6px 14px;border:none;background:none;transition:color .15s}
+.mobile-bottom-bar .mb-tab.active{color:var(--brand)}
+.mobile-bottom-bar .mb-tab .material-icons-round{font-size:22px}
+
+@media(max-width:768px){
+  .mobile-bottom-bar{display:flex}
+  .fab{bottom:70px}
+  .toast-wrap{bottom:70px}
+  .ms-bar{bottom:56px}
+  .ct{padding-bottom:72px !important}
+}
+
+/* Reduced motion */
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important}
+  .tc-completing{animation:none}
+  .all-done-card{animation:none}
+  .balance-alert{animation:none}
+}
+
+/* Focus visible styles for keyboard navigation */
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+button:focus-visible,.ni:focus-visible,.tc:focus-visible,.sf-item:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+
+/* Demo banner */
+.demo-banner{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 16px;background:linear-gradient(135deg,var(--brand),var(--brand-h));color:#fff;font-size:12px;font-weight:500;position:fixed;top:0;left:0;right:0;z-index:100;height:36px}
+.demo-banner button{background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:4px;padding:2px 10px;cursor:pointer;font-size:11px}
+body.demo-mode .sb{top:36px;height:calc(100vh - 36px)}
+body.demo-mode .mn{margin-top:36px}
+body.demo-mode .ham{top:50px}

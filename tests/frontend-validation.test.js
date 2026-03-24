@@ -115,7 +115,7 @@ ${scriptContent}
     ]);
 
     // Dynamic prefixes (ids created in loops with numeric/key suffixes)
-    const dynamicIdPrefixes = ['gb-', 'pl-', 'pc-', 'sl-', 'gc-', 'fh-', 'set-', 'hab-', 'fb-', 'gm-', 'dp-', 'ld-', 'lm-'];
+    const dynamicIdPrefixes = ['gb-', 'pl-', 'pc-', 'sl-', 'gc-', 'fh-', 'set-', 'hab-', 'fb-', 'gm-', 'dp-', 'ld-', 'lm-', 'mb-', 'demo-'];
 
     const missing = [...hardRefs].filter(id => {
       if (htmlIds.has(id)) return false;
