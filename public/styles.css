@@ -132,7 +132,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .review-section h3{font-size:14px;font-weight:600;margin:0 0 8px;display:flex;align-items:center;gap:6px}
 .review-stat{display:inline-flex;align-items:center;gap:4px;padding:6px 14px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);font-size:12px;font-weight:600}
 .review-list{list-style:none;padding:0;margin:0}
-.review-list li{padding:6px 0;font-size:12px;border-bottom:1px solid var(--brd);display:flex;gap:6px;align-items:center}
+.review-list li{padding:6px 0;font-size:12px;border-bottom:1px solid var(--brd);display:flex;gap:6px;align-items:center;overflow:hidden}
 .review-textarea{width:100%;min-height:80px;padding:8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-family:inherit;font-size:13px;resize:vertical}
 /* Time estimate */
 .time-est{display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--txd);padding:1px 5px;background:var(--bg-c);border-radius:10px}
@@ -445,14 +445,14 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .planner-hour-label{width:56px;flex-shrink:0;font-size:11px;font-weight:500;color:var(--txd);padding:4px 8px;border-right:1px solid var(--brd);text-align:right}
 .planner-hour-tasks{flex:1;padding:4px 8px;min-height:48px;display:flex;flex-direction:column;gap:2px}
 .planner-hour-tasks.dragover{background:var(--brand);opacity:.12}
-.planner-task{padding:6px 10px;border-radius:var(--rs);font-size:12px;cursor:grab;display:flex;align-items:center;gap:6px;border-left:3px solid var(--brand)}
+.planner-task{padding:6px 10px;border-radius:var(--rs);font-size:12px;cursor:grab;display:flex;align-items:center;gap:6px;border-left:3px solid var(--brand);overflow:hidden}
 .planner-task .material-icons-round{font-size:14px}
 .planner-task.done{opacity:.5;text-decoration:line-through}
 .planner-unscheduled{padding:8px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--r)}
 .planner-unscheduled h4{font-size:12px;font-weight:600;color:var(--txd);margin:0 0 8px;text-transform:uppercase;letter-spacing:.5px}
 .planner-task-drag{opacity:.6}
 /* Task Comments */
-.dp-comment{display:flex;gap:8px;padding:8px 0;border-bottom:1px solid var(--brd);font-size:12px}
+.dp-comment{display:flex;gap:8px;padding:8px 0;border-bottom:1px solid var(--brd);font-size:12px;overflow:hidden}
 .dp-comment:last-child{border-bottom:none}
 .dp-comment-time{font-size:10px;color:var(--txd);white-space:nowrap}
 .dp-comment-del{opacity:0;font-size:12px;cursor:pointer;color:var(--txd)}
@@ -928,7 +928,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .ai-menu:hover,.sf-menu:hover{background:var(--bg-s);color:var(--tx)}
 
 /* Settings area rows */
-.sa-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--rs);border:1px solid transparent;transition:background .15s}
+.sa-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--rs);border:1px solid transparent;transition:background .15s;overflow:hidden}
 .sa-row:hover{background:var(--bg-s)}
 .sa-row.archived{opacity:.7}
 .sa-row .btn-c{opacity:0;transition:opacity .15s}

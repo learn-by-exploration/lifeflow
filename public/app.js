@@ -482,7 +482,7 @@ async function renderToday(){
       h+=`<div class="planner-hour" data-hour="${hKey}"><div class="planner-hour-label">${label}</div><div class="planner-hour-tasks" data-hour="${hKey}">`;
       slotTasks.forEach(st=>{
         h+=`<div class="planner-task ${st.status==='done'?'done':''}" draggable="true" data-id="${st.id}" style="border-left-color:${escA(st.goal_color||'var(--brand)')};background:${escA(st.goal_color||'var(--brand)')}15">
-          <span style="flex:1">${esc(st.title)}</span>
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(st.title)}</span>
           <span style="font-size:10px;color:var(--txd)">${st.time_block_start}${st.time_block_end?'–'+st.time_block_end:''}</span>
           <span class="material-icons-round" style="font-size:12px;cursor:pointer;color:var(--txd)" data-unblock="${st.id}">close</span></div>`;
       });
@@ -491,7 +491,7 @@ async function renderToday(){
     h+=`</div><div class="planner-sidebar"><div class="planner-unscheduled"><h4>Unscheduled (${allUnsched.length})</h4>`;
     if(!allUnsched.length)h+=`<div style="text-align:center;padding:12px;color:var(--txd);font-size:12px">Drag tasks to time slots</div>`;
     allUnsched.forEach(u=>{
-      h+=`<div class="planner-task" draggable="true" data-id="${u.id}" style="border-left-color:${escA(u.goal_color||'var(--brand)')};background:${escA(u.goal_color||'var(--brand)')}15;margin-bottom:4px"><span style="flex:1">${esc(u.title)}</span></div>`;
+      h+=`<div class="planner-task" draggable="true" data-id="${u.id}" style="border-left-color:${escA(u.goal_color||'var(--brand)')};background:${escA(u.goal_color||'var(--brand)')}15;margin-bottom:4px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.title)}</span></div>`;
     });
     h+=`</div></div></div>`;
   }
@@ -1324,7 +1324,7 @@ async function renderComments(){
     el.innerHTML=comments.map(c=>{
       const d=new Date(c.created_at);
       const when=d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
-      return `<div class="dp-comment"><div style="flex:1">${esc(c.text)}</div><span class="dp-comment-time">${when}</span><span class="material-icons-round dp-comment-del" data-cid="${c.id}">close</span></div>`;
+      return `<div class="dp-comment"><div style="flex:1;min-width:0;overflow:hidden">${esc(c.text)}</div><span class="dp-comment-time">${when}</span><span class="material-icons-round dp-comment-del" data-cid="${c.id}">close</span></div>`;
     }).join('');
     el.querySelectorAll('.dp-comment-del').forEach(b=>b.addEventListener('click',async()=>{
       await api.del('/api/tasks/'+dpTask.id+'/comments/'+b.dataset.cid);renderComments();
@@ -1819,7 +1819,7 @@ async function loadBellReminders(){
 function bellItem(t,type){
   const icon=type==='od'?'error':'event';
   const color=type==='od'?'var(--err)':type==='today'?'var(--warn)':'var(--txd)';
-  return`<div class="bell-item" data-id="${t.id}"><span class="material-icons-round" style="font-size:16px;color:${color}">${icon}</span><span style="flex:1;font-weight:500">${esc(t.title)}</span><span class="bell-due">${fmtDue(t.due_date)}</span></div>`;
+  return`<div class="bell-item" data-id="${t.id}"><span class="material-icons-round" style="font-size:16px;color:${color}">${icon}</span><span>${esc(t.title)}</span><span class="bell-due">${fmtDue(t.due_date)}</span></div>`;
 }
 $('bell-btn').addEventListener('click',e=>{e.stopPropagation();$('bell-dd').classList.toggle('open');loadBellReminders()});
 document.addEventListener('click',e=>{if(!e.target.closest('#bell-wrap'))$('bell-dd').classList.remove('open')});
@@ -2144,7 +2144,7 @@ async function renderDashboard(){
       const ago=t.completed_at?timeAgo(t.completed_at):'';
       h+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;border-bottom:1px solid var(--brd)">
         <span class="material-icons-round" style="font-size:16px;color:var(--ok)">check_circle</span>
-        <span style="flex:1">${esc(t.title)}</span><span style="font-size:10px;color:var(--txd)">${esc(t.goal_title)} \u00b7 ${ago}</span></div>`;
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title)}</span><span style="font-size:10px;color:var(--txd);flex-shrink:0">${esc(t.goal_title)} \u00b7 ${ago}</span></div>`;
     });
   }
   c.innerHTML=h;
@@ -2390,7 +2390,7 @@ function showFocusPlan(){
 function renderPlanSteps(){
   const c=$('ft-plan-steps');
   if(!ftPlanSteps.length){c.innerHTML='<div style="font-size:11px;color:rgba(255,255,255,.3);padding:4px 6px">No steps yet — add some or skip</div>';return}
-  c.innerHTML=ftPlanSteps.map((s,i)=>`<div class="ft-plan-step"><span style="flex:1">${esc(s)}</span><span class="ft-plan-step-rm material-icons-round" data-i="${i}">close</span></div>`).join('');
+  c.innerHTML=ftPlanSteps.map((s,i)=>`<div class="ft-plan-step"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s)}</span><span class="ft-plan-step-rm material-icons-round" data-i="${i}">close</span></div>`).join('');
   c.querySelectorAll('.ft-plan-step-rm').forEach(b=>b.addEventListener('click',()=>{ftPlanSteps.splice(Number(b.dataset.i),1);renderPlanSteps()}));
 }
 
@@ -3018,7 +3018,7 @@ async function renderSettings(){
       h+=`<div class="sa-row" data-aid="${a.id}" draggable="true">
         <span class="material-icons-round sa-grip" style="font-size:16px;color:var(--txd);cursor:grab">drag_indicator</span>
         <span style="font-size:20px">${esc(a.icon)}</span>
-        <span style="flex:1;font-size:13px;font-weight:500">${esc(a.name)}</span>
+        <span style="flex:1;font-size:13px;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</span>
         <span class="sa-color" style="width:16px;height:16px;border-radius:50%;background:${escA(a.color)}"></span>
         <button class="btn-c sa-edit" data-aid="${a.id}" title="Edit"><span class="material-icons-round" style="font-size:16px">edit</span></button>
         <button class="btn-c sa-archive" data-aid="${a.id}" title="Archive"><span class="material-icons-round" style="font-size:16px">archive</span></button>
@@ -3032,7 +3032,7 @@ async function renderSettings(){
       archived.forEach(a=>{
         h+=`<div class="sa-row archived" data-aid="${a.id}">
           <span style="font-size:20px;opacity:.5">${esc(a.icon)}</span>
-          <span style="flex:1;font-size:13px;color:var(--txd)">${esc(a.name)}</span>
+          <span style="flex:1;font-size:13px;color:var(--txd);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</span>
           <button class="btn-c sa-unarchive" data-aid="${a.id}" title="Unarchive"><span class="material-icons-round" style="font-size:16px">unarchive</span></button>
           <button class="btn-c sa-del" data-aid="${a.id}" title="Delete permanently" style="color:var(--dn)"><span class="material-icons-round" style="font-size:16px">delete_forever</span></button>
         </div>`;
@@ -3479,7 +3479,7 @@ async function renderListDetail(){
   const isGrocery=list.type==='grocery',isNotes=list.type==='notes';
   let h=`<div class="list-detail-head">
     <span style="font-size:28px">${esc(list.icon||'📋')}</span>
-    <div style="flex:1"><h2 style="margin:0">${esc(list.name)}</h2><span style="font-size:11px;color:var(--txd)">${list.type==='grocery'?'Grocery List':list.type==='notes'?'Notes':'Checklist'} · ${items.length} item${items.length!==1?'s':''}</span></div>
+    <div style="flex:1;min-width:0;overflow:hidden"><h2 style="margin:0">${esc(list.name)}</h2><span style="font-size:11px;color:var(--txd)">${list.type==='grocery'?'Grocery List':list.type==='notes'?'Notes':'Checklist'} · ${items.length} item${items.length!==1?'s':''}</span></div>
     <div class="list-detail-actions">
       <button class="btn-c" id="ld-edit" title="Edit list"><span class="material-icons-round" style="font-size:16px">edit</span></button>
       <button class="btn-c" id="ld-dup" title="Duplicate list"><span class="material-icons-round" style="font-size:16px">content_copy</span></button>
@@ -3881,7 +3881,7 @@ async function renderPlanner(){
       <div class="planner-hour-tasks" data-hour="${hKey}">`;
     slotTasks.forEach(t=>{
       h+=`<div class="planner-task ${t.status==='done'?'done':''}" draggable="true" data-id="${t.id}" style="border-left-color:${escA(t.goal_color||'var(--brand)')};background:${escA(t.goal_color||'var(--brand)')}15">
-        <span style="flex:1">${esc(t.title)}</span>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title)}</span>
         <span style="font-size:10px;color:var(--txd)">${t.time_block_start}${t.time_block_end?'–'+t.time_block_end:''}</span>
         <span class="material-icons-round" style="font-size:12px;cursor:pointer;color:var(--txd)" data-unblock="${t.id}" title="Remove time block">close</span>
       </div>`;
@@ -3894,7 +3894,7 @@ async function renderPlanner(){
   if(!allUnscheduled.length)h+=`<div style="text-align:center;padding:12px;color:var(--txd);font-size:12px">No tasks for this day</div>`;
   allUnscheduled.forEach(t=>{
     h+=`<div class="planner-task" draggable="true" data-id="${t.id}" style="border-left-color:${escA(t.goal_color||'var(--brand)')};background:${escA(t.goal_color||'var(--brand)')}15;margin-bottom:4px">
-      <span style="flex:1">${esc(t.title)}</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title)}</span>
     </div>`;
   });
   h+=`</div></div>`;
@@ -4070,7 +4070,7 @@ async function renderInbox(){
   let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span style="font-size:13px;color:var(--txd)">${items.length} item${items.length!==1?'s':''} to triage</span>
     <button class="ib-add-btn" style="padding:4px 12px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:12px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:3px">add</span>Capture</button></div>`;
   items.forEach(it=>{
-    h+=`<div class="inbox-item" data-id="${it.id}"><div style="flex:1">
+    h+=`<div class="inbox-item" data-id="${it.id}"><div style="flex:1;min-width:0;overflow:hidden">
       <div class="inbox-title">${esc(it.title)}</div>
       ${it.note?`<div class="inbox-meta">${esc(it.note)}</div>`:''}
       <div class="inbox-meta">${timeAgo(it.created_at)}</div>
@@ -4120,7 +4120,7 @@ async function showLinkToTaskModal(inboxId,item){
       if(!tasks.length){rd.innerHTML='<div style="padding:8px;font-size:12px;color:var(--txd)">No tasks found</div>';return}
       rd.innerHTML=tasks.slice(0,10).map(t=>`<div class="link-task-row" data-tid="${t.id}" style="padding:8px;cursor:pointer;border-radius:var(--rs);font-size:13px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--brd)">
         <span class="material-icons-round" style="font-size:16px;color:var(--txd)">task_alt</span>
-        <div style="flex:1"><div>${esc(t.title)}</div><div style="font-size:11px;color:var(--txd)">${t.area_name?esc(t.area_icon+' '+t.area_name+' → '+t.goal_title):''}</div></div>
+        <div style="flex:1;min-width:0;overflow:hidden"><div>${esc(t.title)}</div><div style="font-size:11px;color:var(--txd)">${t.area_name?esc(t.area_icon+' '+t.area_name+' → '+t.goal_title):''}</div></div>
       </div>`).join('');
       rd.querySelectorAll('.link-task-row').forEach(row=>row.addEventListener('click',async()=>{
         const tid=Number(row.dataset.tid);
@@ -4251,7 +4251,7 @@ async function renderWeeklyReview(){
         const total=a.completed+a.pending;const pct=total?Math.round(a.completed/total*100):0;
         h+=`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--brd)">
           <span style="font-size:20px;width:28px;text-align:center">${esc(a.icon)}</span>
-          <span style="flex:1;font-size:13px;font-weight:500">${esc(a.name)}</span>
+          <span style="flex:1;font-size:13px;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</span>
           <div style="width:120px;height:6px;background:var(--bg-c);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${escA(a.color)};border-radius:3px"></div></div>
           <span style="font-size:11px;color:var(--txd);width:60px;text-align:right">${a.completed}/${total}</span>
         </div>`;
@@ -4274,14 +4274,14 @@ async function renderWeeklyReview(){
     if(data.overdueTasks.length){
       h+=`<h4 style="font-size:13px;margin:12px 0 6px;color:var(--err)">Overdue (${data.overdueTasks.length})</h4><ul class="review-list">`;
       data.overdueTasks.slice(0,15).forEach(t=>{
-        h+=`<li><span class="material-icons-round" style="font-size:14px;color:var(--err)">radio_button_unchecked</span><span style="flex:1">${esc(t.title)}</span><span style="font-size:10px;color:var(--txd)">${t.due_date}</span></li>`;
+        h+=`<li><span class="material-icons-round" style="font-size:14px;color:var(--err)">radio_button_unchecked</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title)}</span><span style="font-size:10px;color:var(--txd);flex-shrink:0">${t.due_date}</span></li>`;
       });
       h+=`</ul>`;
     }
     if(data.completedTasks.length){
       h+=`<h4 style="font-size:13px;margin:16px 0 6px;color:var(--ok)">Completed This Week (${data.completedTasks.length})</h4><ul class="review-list">`;
       data.completedTasks.slice(0,15).forEach(t=>{
-        h+=`<li><span class="material-icons-round" style="font-size:14px;color:var(--ok)">check</span><span style="flex:1">${esc(t.title)}</span><span style="font-size:10px;color:var(--txd)">${t.goal_title?esc(t.goal_title):''}</span></li>`;
+        h+=`<li><span class="material-icons-round" style="font-size:14px;color:var(--ok)">check</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title)}</span><span style="font-size:10px;color:var(--txd);flex-shrink:0">${t.goal_title?esc(t.goal_title):''}</span></li>`;
       });
       h+=`</ul>`;
     }
@@ -4379,7 +4379,7 @@ async function renderTimeAnalytics(target){
     data.byArea.forEach(a=>{
       const est=a.total_estimated||0;const act=a.total_actual||0;
       h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px">
-        <span style="width:20px">${esc(a.icon)}</span><span style="flex:1">${esc(a.name)}</span>
+        <span style="width:20px">${esc(a.icon)}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</span>
         <span style="color:var(--txd)">${act}m actual</span>
         ${est?`<span style="color:var(--brand);font-size:10px">(est: ${est}m)</span>`:''}
         <div style="width:60px;height:6px;background:var(--brd);border-radius:3px;overflow:hidden"><div style="width:${Math.round(act/maxA*100)}%;height:100%;background:${escA(a.color)};border-radius:3px"></div></div>
@@ -4444,7 +4444,7 @@ async function renderRules(){
     const al=actionLabels[r.action_type]||r.action_type;
     h+=`<div class="rule-card">
       <button class="rule-toggle ${r.enabled?'on':'off'}" data-id="${r.id}" data-enabled="${r.enabled}"></button>
-      <div style="flex:1"><div class="rule-name">${esc(r.name)}</div><div class="rule-meta">${tl} → ${al}</div></div>
+      <div style="flex:1;min-width:0;overflow:hidden"><div class="rule-name">${esc(r.name)}</div><div class="rule-meta">${tl} → ${al}</div></div>
       <button class="material-icons-round rule-del" data-id="${r.id}" style="background:none;border:none;cursor:pointer;color:var(--txd);font-size:16px">delete</button>
     </div>`;
   });

@@ -262,4 +262,59 @@ describe('Text overflow protection', () => {
       );
     });
   });
+
+  describe('.planner-task (planner task row)', () => {
+    it('has overflow:hidden', () => {
+      assertCSSProps('.planner-task', ['overflow:hidden'], 'planner task');
+    });
+  });
+
+  describe('.dp-comment (comment row)', () => {
+    it('has overflow:hidden', () => {
+      assertCSSProps('.dp-comment', ['overflow:hidden'], 'comment row');
+    });
+  });
+
+  describe('.review-list li (review list item)', () => {
+    it('has overflow:hidden', () => {
+      assertCSSProps('.review-list li', ['overflow:hidden'], 'review list item');
+    });
+  });
+
+  describe('.sa-row (settings area row)', () => {
+    it('has overflow:hidden', () => {
+      assertCSSProps('.sa-row', ['overflow:hidden'], 'settings area row');
+    });
+  });
+
+  describe('no unprotected flex:1 text spans in app.js', () => {
+    it('every flex:1 span with esc() text has overflow protection', () => {
+      const appJS = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+      // Find all flex:1 inline styles that render esc() text
+      const re = /style="flex:1[^"]*">\$\{esc/g;
+      let match;
+      const unprotected = [];
+      while ((match = re.exec(appJS)) !== null) {
+        const snippet = match[0];
+        if (!snippet.includes('overflow:hidden') && !snippet.includes('text-overflow')) {
+          const line = appJS.substring(0, match.index).split('\n').length;
+          unprotected.push(`line ${line}: ${snippet}`);
+        }
+      }
+      assert.equal(
+        unprotected.length, 0,
+        `Found ${unprotected.length} unprotected flex:1 text span(s):\n${unprotected.join('\n')}`
+      );
+    });
+  });
+
+  describe('bell item uses CSS class not inline style', () => {
+    it('bell item title span has no inline flex:1;font-weight:500', () => {
+      const appJS = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+      assert.ok(
+        !appJS.includes('style="flex:1;font-weight:500">${esc(t.title)}'),
+        'bell item should use CSS class for title span, not inline style'
+      );
+    });
+  });
 });
