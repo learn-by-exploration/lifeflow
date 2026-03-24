@@ -31,7 +31,7 @@ module.exports = function(deps) {
 
   // Configurable grocery categories from settings (falls back to hardcoded)
   router.get('/api/lists/categories/configured', (req, res) => {
-    const row = db.prepare("SELECT value FROM settings WHERE key='groceryCategories'").get();
+    const row = db.prepare("SELECT value FROM settings WHERE key='groceryCategories' AND user_id=?").get(req.userId);
     if (row) { try { return res.json(JSON.parse(row.value)); } catch {} }
     res.json(GROCERY_CATEGORIES);
   });
@@ -44,22 +44,22 @@ module.exports = function(deps) {
     const { template_id } = req.body;
     const tpl = LIST_TEMPLATES.find(t => t.id === template_id);
     if (!tpl) return res.status(404).json({ error: 'Template not found' });
-    const listCount = db.prepare('SELECT COUNT(*) as c FROM lists').get().c;
+    const listCount = db.prepare('SELECT COUNT(*) as c FROM lists WHERE user_id=?').get(req.userId).c;
     if (listCount >= 100) return res.status(400).json({ error: 'Maximum 100 lists reached' });
     const pos = getNextPosition('lists');
-    const r = db.prepare('INSERT INTO lists (name,type,icon,position) VALUES (?,?,?,?)').run(tpl.name, tpl.type, tpl.icon, pos);
+    const r = db.prepare('INSERT INTO lists (name,type,icon,position,user_id) VALUES (?,?,?,?,?)').run(tpl.name, tpl.type, tpl.icon, pos, req.userId);
     const lid = r.lastInsertRowid;
     const insItem = db.prepare('INSERT INTO list_items (list_id,title,position) VALUES (?,?,?)');
     tpl.items.forEach((item, i) => insItem.run(lid, item, i));
     rebuildSearchIndex();
-    const list = db.prepare('SELECT * FROM lists WHERE id=?').get(lid);
+    const list = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(lid, req.userId);
     const items = db.prepare('SELECT * FROM list_items WHERE list_id=? ORDER BY position').all(lid);
     res.status(201).json({ ...list, items });
   });
 
   router.get('/api/lists', (req, res) => {
     const lists = db.prepare(`SELECT l.*, COUNT(li.id) as item_count, SUM(CASE WHEN li.checked=1 THEN 1 ELSE 0 END) as checked_count
-      FROM lists l LEFT JOIN list_items li ON li.list_id=l.id GROUP BY l.id ORDER BY l.position, l.created_at DESC`).all();
+      FROM lists l LEFT JOIN list_items li ON li.list_id=l.id WHERE l.user_id=? GROUP BY l.id ORDER BY l.position, l.created_at DESC`).all(req.userId);
     res.json(lists);
   });
 
@@ -69,7 +69,7 @@ module.exports = function(deps) {
     if (name.length > 100) return res.status(400).json({ error: 'name must be 100 chars or less' });
     const validTypes = ['checklist', 'grocery', 'notes'];
     if (type && !validTypes.includes(type)) return res.status(400).json({ error: 'type must be checklist, grocery, or notes' });
-    const listCount = db.prepare('SELECT COUNT(*) as c FROM lists').get().c;
+    const listCount = db.prepare('SELECT COUNT(*) as c FROM lists WHERE user_id=?').get(req.userId).c;
     if (listCount >= 100) return res.status(400).json({ error: 'Maximum 100 lists reached' });
     if (parent_id) {
       const pid = Number(parent_id);
@@ -80,8 +80,8 @@ module.exports = function(deps) {
       if (parent.parent_id) return res.status(400).json({ error: 'Cannot nest more than one level deep' });
     }
     const pos = getNextPosition('lists');
-    const r = db.prepare('INSERT INTO lists (name,type,icon,color,area_id,parent_id,position) VALUES (?,?,?,?,?,?,?)').run(
-      name.trim(), type || 'checklist', icon || '📋', color || '#2563EB', area_id ? Number(area_id) : null, parent_id ? Number(parent_id) : null, pos
+    const r = db.prepare('INSERT INTO lists (name,type,icon,color,area_id,parent_id,position,user_id) VALUES (?,?,?,?,?,?,?,?)').run(
+      name.trim(), type || 'checklist', icon || '📋', color || '#2563EB', area_id ? Number(area_id) : null, parent_id ? Number(parent_id) : null, pos, req.userId
     );
     res.status(201).json(db.prepare('SELECT * FROM lists WHERE id=?').get(r.lastInsertRowid));
   });
@@ -89,7 +89,7 @@ module.exports = function(deps) {
   router.get('/api/lists/:id/sublists', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-    const ex = db.prepare('SELECT * FROM lists WHERE id=?').get(id);
+    const ex = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(id, req.userId);
     if (!ex) return res.status(404).json({ error: 'List not found' });
     const sublists = db.prepare(`SELECT l.*, COUNT(li.id) as item_count, SUM(CASE WHEN li.checked=1 THEN 1 ELSE 0 END) as checked_count
       FROM lists l LEFT JOIN list_items li ON li.list_id=l.id WHERE l.parent_id=? GROUP BY l.id ORDER BY l.position, l.created_at DESC`).all(id);
@@ -99,7 +99,7 @@ module.exports = function(deps) {
   router.put('/api/lists/:id', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-    const ex = db.prepare('SELECT * FROM lists WHERE id=?').get(id);
+    const ex = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(id, req.userId);
     if (!ex) return res.status(404).json({ error: 'List not found' });
     const { name, icon, color, area_id, position } = req.body;
     if (name !== undefined && (!name || name.length > 100)) return res.status(400).json({ error: 'Invalid name' });
@@ -124,7 +124,7 @@ module.exports = function(deps) {
   router.delete('/api/lists/:id', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-    const ex = db.prepare('SELECT * FROM lists WHERE id=?').get(id);
+    const ex = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(id, req.userId);
     if (!ex) return res.status(404).json({ error: 'List not found' });
     // Also delete child lists
     db.prepare('DELETE FROM lists WHERE parent_id=?').run(id);
@@ -136,7 +136,7 @@ module.exports = function(deps) {
   router.get('/api/lists/:id/items', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-    const ex = db.prepare('SELECT * FROM lists WHERE id=?').get(id);
+    const ex = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(id, req.userId);
     if (!ex) return res.status(404).json({ error: 'List not found' });
     const items = db.prepare('SELECT * FROM list_items WHERE list_id=? ORDER BY position').all(id);
     res.json(items);
@@ -145,7 +145,7 @@ module.exports = function(deps) {
   router.post('/api/lists/:id/items', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-    const ex = db.prepare('SELECT * FROM lists WHERE id=?').get(id);
+    const ex = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(id, req.userId);
     if (!ex) return res.status(404).json({ error: 'List not found' });
     const itemCount = db.prepare('SELECT COUNT(*) as c FROM list_items WHERE list_id=?').get(id).c;
     const items = Array.isArray(req.body) ? req.body : [req.body];
@@ -211,7 +211,7 @@ module.exports = function(deps) {
   router.post('/api/lists/:id/clear-checked', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-    const ex = db.prepare('SELECT * FROM lists WHERE id=?').get(id);
+    const ex = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(id, req.userId);
     if (!ex) return res.status(404).json({ error: 'List not found' });
     const result = db.prepare('DELETE FROM list_items WHERE list_id=? AND checked=1').run(id);
     rebuildSearchIndex();
@@ -222,15 +222,15 @@ module.exports = function(deps) {
   router.post('/api/lists/:id/duplicate', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-    const ex = db.prepare('SELECT * FROM lists WHERE id=?').get(id);
+    const ex = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(id, req.userId);
     if (!ex) return res.status(404).json({ error: 'List not found' });
-    const listCount = db.prepare('SELECT COUNT(*) as c FROM lists').get().c;
+    const listCount = db.prepare('SELECT COUNT(*) as c FROM lists WHERE user_id=?').get(req.userId).c;
     if (listCount >= 100) return res.status(400).json({ error: 'Maximum 100 lists reached' });
     const keepChecked = req.body && req.body.keep_checked;
     const pos = getNextPosition('lists');
     const copyTx = db.transaction(() => {
-      const r = db.prepare('INSERT INTO lists (name,type,icon,color,area_id,parent_id,position) VALUES (?,?,?,?,?,?,?)').run(
-        ex.name + ' (copy)', ex.type, ex.icon, ex.color, ex.area_id, null, pos
+      const r = db.prepare('INSERT INTO lists (name,type,icon,color,area_id,parent_id,position,user_id) VALUES (?,?,?,?,?,?,?,?)').run(
+        ex.name + ' (copy)', ex.type, ex.icon, ex.color, ex.area_id, null, pos, req.userId
       );
       const newId = r.lastInsertRowid;
       const items = db.prepare('SELECT * FROM list_items WHERE list_id=? ORDER BY position').all(id);
@@ -249,7 +249,7 @@ module.exports = function(deps) {
   router.post('/api/lists/:id/uncheck-all', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-    const ex = db.prepare('SELECT * FROM lists WHERE id=?').get(id);
+    const ex = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(id, req.userId);
     if (!ex) return res.status(404).json({ error: 'List not found' });
     const result = db.prepare('UPDATE list_items SET checked=0 WHERE list_id=? AND checked=1').run(id);
     res.json({ unchecked: result.changes });
@@ -259,7 +259,7 @@ module.exports = function(deps) {
   router.post('/api/lists/:id/share', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-    const ex = db.prepare('SELECT * FROM lists WHERE id=?').get(id);
+    const ex = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(id, req.userId);
     if (!ex) return res.status(404).json({ error: 'List not found' });
     if (ex.share_token) return res.json({ token: ex.share_token, url: '/share/' + ex.share_token });
     const token = crypto.randomBytes(12).toString('hex');
@@ -270,7 +270,7 @@ module.exports = function(deps) {
   router.delete('/api/lists/:id/share', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-    const ex = db.prepare('SELECT * FROM lists WHERE id=?').get(id);
+    const ex = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(id, req.userId);
     if (!ex) return res.status(404).json({ error: 'List not found' });
     db.prepare('UPDATE lists SET share_token=NULL WHERE id=?').run(id);
     res.json({ unshared: true });

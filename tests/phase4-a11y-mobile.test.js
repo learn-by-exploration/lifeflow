@@ -72,7 +72,7 @@ describe('Demo mode API', () => {
 
   it('POST /api/demo/reset removes all data', async () => {
     await agent().post('/api/demo/start').send({});
-    await agent().post('/api/demo/reset').send({});
+    await agent().post('/api/demo/reset').send({ password: 'testpassword' });
     const areas = await agent().get('/api/areas');
     assert.equal(areas.body.length, 0, 'Should be empty after reset');
   });

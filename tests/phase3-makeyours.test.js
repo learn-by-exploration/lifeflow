@@ -198,7 +198,7 @@ describe('Demo mode', () => {
 
   it('POST /api/demo/reset clears all data', async () => {
     await agent().post('/api/demo/start').send({});
-    await agent().post('/api/demo/reset').send({});
+    await agent().post('/api/demo/reset').send({ password: 'testpassword' });
     const areasRes = await agent().get('/api/areas');
     assert.equal(areasRes.body.length, 0);
     const allTasks = await agent().get('/api/tasks/all');

@@ -34,27 +34,27 @@ router.get('/api/reminders', (req, res) => {
   const overdue = enrichTasks(db.prepare(`
     SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
-    WHERE t.due_date < date('now') AND t.status != 'done'
+    WHERE t.due_date < date('now') AND t.status != 'done' AND t.user_id=?
     ORDER BY t.due_date, t.priority DESC
-  `).all());
+  `).all(req.userId));
   const today = enrichTasks(db.prepare(`
     SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
-    WHERE t.due_date = date('now') AND t.status != 'done'
+    WHERE t.due_date = date('now') AND t.status != 'done' AND t.user_id=?
     ORDER BY t.priority DESC
-  `).all());
+  `).all(req.userId));
   const upcoming = enrichTasks(db.prepare(`
     SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
-    WHERE t.due_date > date('now') AND t.due_date <= date('now', '+3 days') AND t.status != 'done'
+    WHERE t.due_date > date('now') AND t.due_date <= date('now', '+3 days') AND t.status != 'done' AND t.user_id=?
     ORDER BY t.due_date, t.priority DESC
-  `).all());
+  `).all(req.userId));
   res.json({ overdue, today, upcoming, total: overdue.length + today.length + upcoming.length });
 });
 
 // ─── Task Templates ───
 router.get('/api/templates', (req, res) => {
-  const rows = db.prepare('SELECT * FROM task_templates ORDER BY created_at DESC').all();
+  const rows = db.prepare('SELECT * FROM task_templates WHERE user_id=? ORDER BY created_at DESC').all(req.userId);
   res.json(rows.map(r => { try { return { ...r, tasks: JSON.parse(r.tasks) }; } catch { return { ...r, tasks: [] }; } }));
 });
 
@@ -63,14 +63,14 @@ router.post('/api/templates', (req, res) => {
   if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'Name required' });
   if (!Array.isArray(tasks) || !tasks.length) return res.status(400).json({ error: 'Tasks array required' });
   const safeTasks = tasks.map(t => ({ title: String(t.title || '').slice(0, 500), priority: [0,1,2,3].includes(t.priority) ? t.priority : 0, subtasks: Array.isArray(t.subtasks) ? t.subtasks.map(s => String(s).slice(0, 500)) : [] }));
-  const r = db.prepare('INSERT INTO task_templates (name, description, icon, tasks) VALUES (?, ?, ?, ?)').run(name.trim().slice(0, 200), (description || '').slice(0, 500), (icon || '📋').slice(0, 10), JSON.stringify(safeTasks));
+  const r = db.prepare('INSERT INTO task_templates (name, description, icon, tasks, user_id) VALUES (?, ?, ?, ?, ?)').run(name.trim().slice(0, 200), (description || '').slice(0, 500), (icon || '📋').slice(0, 10), JSON.stringify(safeTasks), req.userId);
   res.json({ id: r.lastInsertRowid, name: name.trim(), description, icon: icon || '📋', tasks: safeTasks });
 });
 
 router.put('/api/templates/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  const ex = db.prepare('SELECT * FROM task_templates WHERE id=?').get(id);
+  const ex = db.prepare('SELECT * FROM task_templates WHERE id=? AND user_id=?').get(id, req.userId);
   if (!ex) return res.status(404).json({ error: 'Template not found' });
   const { name, description, icon, tasks } = req.body;
   const safeTasks = tasks ? (Array.isArray(tasks) ? tasks.map(t => ({ title: String(t.title || '').slice(0, 500), priority: [0,1,2,3].includes(t.priority) ? t.priority : 0, subtasks: Array.isArray(t.subtasks) ? t.subtasks.map(s => String(s).slice(0, 500)) : [] })) : null) : null;
@@ -85,7 +85,7 @@ router.put('/api/templates/:id', (req, res) => {
 router.delete('/api/templates/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  db.prepare('DELETE FROM task_templates WHERE id=?').run(id);
+  db.prepare('DELETE FROM task_templates WHERE id=? AND user_id=?').run(id, req.userId);
   res.json({ ok: true });
 });
 
@@ -94,16 +94,16 @@ router.post('/api/templates/:id/apply', (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const { goalId } = req.body;
   if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'goalId required' });
-  const tmpl = db.prepare('SELECT * FROM task_templates WHERE id=?').get(id);
+  const tmpl = db.prepare('SELECT * FROM task_templates WHERE id=? AND user_id=?').get(id, req.userId);
   if (!tmpl) return res.status(404).json({ error: 'Template not found' });
   let tasks;
   try { tasks = JSON.parse(tmpl.tasks); } catch { return res.status(500).json({ error: 'Corrupted template data' }); }
   const created = [];
-  const insTask = db.prepare('INSERT INTO tasks (goal_id, title, priority, status) VALUES (?, ?, ?, ?)');
+  const insTask = db.prepare('INSERT INTO tasks (goal_id, title, priority, status, user_id) VALUES (?, ?, ?, ?, ?)');
   const insSub = db.prepare('INSERT INTO subtasks (task_id, title, position) VALUES (?, ?, ?)');
   const txn = db.transaction(() => {
     for (const t of tasks) {
-      const r = insTask.run(goalId, t.title, t.priority || 0, 'todo');
+      const r = insTask.run(goalId, t.title, t.priority || 0, 'todo', req.userId);
       if (t.subtasks) t.subtasks.forEach((s, i) => insSub.run(r.lastInsertRowid, s, i));
       created.push({ id: r.lastInsertRowid, title: t.title });
     }
@@ -116,7 +116,7 @@ router.post('/api/templates/:id/apply', (req, res) => {
 router.post('/api/goals/:id/save-as-template', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  const goal = db.prepare('SELECT * FROM goals WHERE id=?').get(id);
+  const goal = db.prepare('SELECT * FROM goals WHERE id=? AND user_id=?').get(id, req.userId);
   if (!goal) return res.status(404).json({ error: 'Goal not found' });
   const tasks = db.prepare('SELECT * FROM tasks WHERE goal_id=? ORDER BY position').all(id);
   const safeTasks = tasks.map(t => {
@@ -124,8 +124,8 @@ router.post('/api/goals/:id/save-as-template', (req, res) => {
     return { title: t.title, priority: t.priority || 0, subtasks: subs.map(s => s.title) };
   });
   const name = (req.body.name || goal.title).trim().slice(0, 200);
-  const r = db.prepare("INSERT INTO task_templates (name, description, icon, tasks, user_created, source_type) VALUES (?,?,?,?,1,'goal')").run(
-    name, goal.description || '', goal.color ? '🎯' : '📋', JSON.stringify(safeTasks)
+  const r = db.prepare("INSERT INTO task_templates (name, description, icon, tasks, user_created, source_type, user_id) VALUES (?,?,?,?,1,'goal',?)").run(
+    name, goal.description || '', goal.color ? '🎯' : '📋', JSON.stringify(safeTasks), req.userId
   );
   res.json({ id: r.lastInsertRowid, name, tasks: safeTasks });
 });
@@ -134,57 +134,57 @@ router.post('/api/goals/:id/save-as-template', (req, res) => {
 router.post('/api/lists/:id/save-as-template', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  const list = db.prepare('SELECT * FROM lists WHERE id=?').get(id);
+  const list = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(id, req.userId);
   if (!list) return res.status(404).json({ error: 'List not found' });
   const items = db.prepare('SELECT * FROM list_items WHERE list_id=? ORDER BY position').all(id);
   const safeTasks = items.map(it => ({ title: it.title, priority: 0, subtasks: [] }));
   const name = (req.body.name || list.name).trim().slice(0, 200);
-  const r = db.prepare("INSERT INTO task_templates (name, description, icon, tasks, user_created, source_type) VALUES (?,?,?,?,1,'list')").run(
-    name, '', list.icon || '📋', JSON.stringify(safeTasks)
+  const r = db.prepare("INSERT INTO task_templates (name, description, icon, tasks, user_created, source_type, user_id) VALUES (?,?,?,?,1,'list',?)").run(
+    name, '', list.icon || '📋', JSON.stringify(safeTasks), req.userId
   );
   res.json({ id: r.lastInsertRowid, name, tasks: safeTasks });
 });
 
 // ─── Badges ───
 router.get('/api/badges', (req, res) => {
-  res.json(db.prepare('SELECT * FROM badges ORDER BY earned_at DESC').all());
+  res.json(db.prepare('SELECT * FROM badges WHERE user_id=? ORDER BY earned_at DESC').all(req.userId));
 });
 
 router.post('/api/badges/check', (req, res) => {
   const earned = [];
-  const has = (type) => db.prepare('SELECT 1 FROM badges WHERE type=?').get(type);
-  const ins = db.prepare('INSERT OR IGNORE INTO badges (type) VALUES (?)');
+  const has = (type) => db.prepare('SELECT 1 FROM badges WHERE type=? AND user_id=?').get(type, req.userId);
+  const ins = db.prepare('INSERT OR IGNORE INTO badges (type, user_id) VALUES (?,?)');
   // First 10 tasks
   if (!has('first-10-tasks')) {
-    const cnt = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='done'").get().c;
-    if (cnt >= 10) { ins.run('first-10-tasks'); earned.push('first-10-tasks'); }
+    const cnt = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='done' AND user_id=?").get(req.userId).c;
+    if (cnt >= 10) { ins.run('first-10-tasks', req.userId); earned.push('first-10-tasks'); }
   }
   // First focus session
   if (!has('first-focus')) {
-    const cnt = db.prepare('SELECT COUNT(*) as c FROM focus_sessions').get().c;
-    if (cnt >= 1) { ins.run('first-focus'); earned.push('first-focus'); }
+    const cnt = db.prepare('SELECT COUNT(*) as c FROM focus_sessions WHERE user_id=?').get(req.userId).c;
+    if (cnt >= 1) { ins.run('first-focus', req.userId); earned.push('first-focus'); }
   }
   // 7-day streak
   if (!has('streak-7')) {
-    const days = db.prepare("SELECT COUNT(DISTINCT date(completed_at)) as c FROM tasks WHERE status='done' AND completed_at >= date('now','-7 days')").get().c;
-    if (days >= 7) { ins.run('streak-7'); earned.push('streak-7'); }
+    const days = db.prepare("SELECT COUNT(DISTINCT date(completed_at)) as c FROM tasks WHERE status='done' AND completed_at >= date('now','-7 days') AND user_id=?").get(req.userId).c;
+    if (days >= 7) { ins.run('streak-7', req.userId); earned.push('streak-7'); }
   }
   // 30-day streak
   if (!has('streak-30')) {
-    const days = db.prepare("SELECT COUNT(DISTINCT date(completed_at)) as c FROM tasks WHERE status='done' AND completed_at >= date('now','-30 days')").get().c;
-    if (days >= 30) { ins.run('streak-30'); earned.push('streak-30'); }
+    const days = db.prepare("SELECT COUNT(DISTINCT date(completed_at)) as c FROM tasks WHERE status='done' AND completed_at >= date('now','-30 days') AND user_id=?").get(req.userId).c;
+    if (days >= 30) { ins.run('streak-30', req.userId); earned.push('streak-30'); }
   }
   // 100 tasks completed
   if (!has('century')) {
-    const cnt = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='done'").get().c;
-    if (cnt >= 100) { ins.run('century'); earned.push('century'); }
+    const cnt = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='done' AND user_id=?").get(req.userId).c;
+    if (cnt >= 100) { ins.run('century', req.userId); earned.push('century'); }
   }
   // All areas active (at least 1 task per area in last 7 days)
   if (!has('all-areas-active')) {
-    const areaCount = db.prepare('SELECT COUNT(*) as c FROM life_areas WHERE archived=0').get().c;
+    const areaCount = db.prepare('SELECT COUNT(*) as c FROM life_areas WHERE archived=0 AND user_id=?').get(req.userId).c;
     if (areaCount > 0) {
-      const activeAreas = db.prepare("SELECT COUNT(DISTINCT a.id) as c FROM life_areas a JOIN goals g ON g.area_id=a.id JOIN tasks t ON t.goal_id=g.id WHERE a.archived=0 AND t.completed_at >= date('now','-7 days')").get().c;
-      if (activeAreas >= areaCount) { ins.run('all-areas-active'); earned.push('all-areas-active'); }
+      const activeAreas = db.prepare("SELECT COUNT(DISTINCT a.id) as c FROM life_areas a JOIN goals g ON g.area_id=a.id JOIN tasks t ON t.goal_id=g.id WHERE a.archived=0 AND t.completed_at >= date('now','-7 days') AND a.user_id=?").get(req.userId).c;
+      if (activeAreas >= areaCount) { ins.run('all-areas-active', req.userId); earned.push('all-areas-active'); }
     }
   }
   res.json({ earned });
@@ -194,46 +194,46 @@ router.post('/api/badges/check', (req, res) => {
 router.post('/api/demo/start', (req, res) => {
   const txn = db.transaction(() => {
     // Create sample areas
-    const aIns = db.prepare('INSERT INTO life_areas (name,icon,color,position) VALUES (?,?,?,?)');
-    const a1 = aIns.run('Work','💼','#3B82F6',0).lastInsertRowid;
-    const a2 = aIns.run('Health','💪','#22C55E',1).lastInsertRowid;
-    const a3 = aIns.run('Personal','🏠','#F59E0B',2).lastInsertRowid;
+    const aIns = db.prepare('INSERT INTO life_areas (name,icon,color,position,user_id) VALUES (?,?,?,?,?)');
+    const a1 = aIns.run('Work','💼','#3B82F6',0,req.userId).lastInsertRowid;
+    const a2 = aIns.run('Health','💪','#22C55E',1,req.userId).lastInsertRowid;
+    const a3 = aIns.run('Personal','🏠','#F59E0B',2,req.userId).lastInsertRowid;
     // Create goals
-    const gIns = db.prepare('INSERT INTO goals (area_id,title,description,status) VALUES (?,?,?,?)');
-    const g1 = gIns.run(a1,'Q2 Launch','Ship the product by June','active').lastInsertRowid;
-    const g2 = gIns.run(a1,'Team Management','Keep the team productive','active').lastInsertRowid;
-    const g3 = gIns.run(a2,'Run a Marathon','Train for a 42K marathon','active').lastInsertRowid;
-    const g4 = gIns.run(a2,'Eat Healthy','Meal prep and nutrition','active').lastInsertRowid;
-    const g5 = gIns.run(a3,'Learn Guitar','Practice 30 min daily','active').lastInsertRowid;
+    const gIns = db.prepare('INSERT INTO goals (area_id,title,description,status,user_id) VALUES (?,?,?,?,?)');
+    const g1 = gIns.run(a1,'Q2 Launch','Ship the product by June','active',req.userId).lastInsertRowid;
+    const g2 = gIns.run(a1,'Team Management','Keep the team productive','active',req.userId).lastInsertRowid;
+    const g3 = gIns.run(a2,'Run a Marathon','Train for a 42K marathon','active',req.userId).lastInsertRowid;
+    const g4 = gIns.run(a2,'Eat Healthy','Meal prep and nutrition','active',req.userId).lastInsertRowid;
+    const g5 = gIns.run(a3,'Learn Guitar','Practice 30 min daily','active',req.userId).lastInsertRowid;
     // Create 20 tasks
-    const tIns = db.prepare('INSERT INTO tasks (goal_id,title,status,priority,due_date,my_day) VALUES (?,?,?,?,?,?)');
+    const tIns = db.prepare('INSERT INTO tasks (goal_id,title,status,priority,due_date,my_day,user_id) VALUES (?,?,?,?,?,?,?)');
     const today = new Date().toISOString().slice(0,10);
     const tomorrow = new Date(Date.now()+864e5).toISOString().slice(0,10);
-    tIns.run(g1,'Design API endpoints','todo',2,today,1);
-    tIns.run(g1,'Write unit tests','todo',1,today,1);
-    tIns.run(g1,'Deploy to staging','todo',2,tomorrow,0);
-    tIns.run(g1,'Code review PR #42','doing',1,today,1);
-    tIns.run(g1,'Update documentation','todo',0,null,0);
-    tIns.run(g2,'1:1 with Alice','todo',1,today,1);
-    tIns.run(g2,'Sprint retrospective','todo',1,tomorrow,0);
-    tIns.run(g2,'Write performance reviews','todo',2,null,0);
-    tIns.run(g3,'Run 5K','done',1,today,0);
-    tIns.run(g3,'Interval training','todo',1,tomorrow,0);
-    tIns.run(g3,'Long run 15K','todo',2,null,0);
-    tIns.run(g3,'Stretch and recovery','todo',0,today,1);
-    tIns.run(g4,'Meal prep Sunday','todo',1,null,0);
-    tIns.run(g4,'Buy groceries','todo',0,tomorrow,0);
-    tIns.run(g4,'Try new recipe','todo',0,null,0);
-    tIns.run(g5,'Practice chords','todo',1,today,1);
-    tIns.run(g5,'Learn Wonderwall','todo',0,null,0);
-    tIns.run(g5,'Watch tutorial','done',0,null,0);
-    tIns.run(g5,'Buy new strings','todo',0,tomorrow,0);
-    tIns.run(g5,'Record a practice session','todo',0,null,0);
+    tIns.run(g1,'Design API endpoints','todo',2,today,1,req.userId);
+    tIns.run(g1,'Write unit tests','todo',1,today,1,req.userId);
+    tIns.run(g1,'Deploy to staging','todo',2,tomorrow,0,req.userId);
+    tIns.run(g1,'Code review PR #42','doing',1,today,1,req.userId);
+    tIns.run(g1,'Update documentation','todo',0,null,0,req.userId);
+    tIns.run(g2,'1:1 with Alice','todo',1,today,1,req.userId);
+    tIns.run(g2,'Sprint retrospective','todo',1,tomorrow,0,req.userId);
+    tIns.run(g2,'Write performance reviews','todo',2,null,0,req.userId);
+    tIns.run(g3,'Run 5K','done',1,today,0,req.userId);
+    tIns.run(g3,'Interval training','todo',1,tomorrow,0,req.userId);
+    tIns.run(g3,'Long run 15K','todo',2,null,0,req.userId);
+    tIns.run(g3,'Stretch and recovery','todo',0,today,1,req.userId);
+    tIns.run(g4,'Meal prep Sunday','todo',1,null,0,req.userId);
+    tIns.run(g4,'Buy groceries','todo',0,tomorrow,0,req.userId);
+    tIns.run(g4,'Try new recipe','todo',0,null,0,req.userId);
+    tIns.run(g5,'Practice chords','todo',1,today,1,req.userId);
+    tIns.run(g5,'Learn Wonderwall','todo',0,null,0,req.userId);
+    tIns.run(g5,'Watch tutorial','done',0,null,0,req.userId);
+    tIns.run(g5,'Buy new strings','todo',0,tomorrow,0,req.userId);
+    tIns.run(g5,'Record a practice session','todo',0,null,0,req.userId);
     // 3 habits
-    const hIns = db.prepare('INSERT INTO habits (name,icon,color,frequency,area_id) VALUES (?,?,?,?,?)');
-    hIns.run('Exercise','🏃','#22C55E','daily',a2);
-    hIns.run('Read 30 min','📚','#3B82F6','daily',a3);
-    hIns.run('Meditate','🧘','#8B5CF6','daily',a2);
+    const hIns = db.prepare('INSERT INTO habits (name,icon,color,frequency,area_id,user_id) VALUES (?,?,?,?,?,?)');
+    hIns.run('Exercise','🏃','#22C55E','daily',a2,req.userId);
+    hIns.run('Read 30 min','📚','#3B82F6','daily',a3,req.userId);
+    hIns.run('Meditate','🧘','#8B5CF6','daily',a2,req.userId);
   });
   txn();
   res.json({ ok: true });
@@ -241,29 +241,29 @@ router.post('/api/demo/start', (req, res) => {
 
 router.post('/api/demo/reset', (req, res) => {
   const txn = db.transaction(() => {
-    db.exec('DELETE FROM focus_steps');
-    db.exec('DELETE FROM focus_session_meta');
-    db.exec('DELETE FROM focus_sessions');
-    db.exec('DELETE FROM task_comments');
-    db.exec('DELETE FROM goal_milestones');
-    db.exec('DELETE FROM inbox');
-    db.exec('DELETE FROM notes');
-    db.exec('DELETE FROM weekly_reviews');
-    db.exec('DELETE FROM automation_rules');
-    db.exec('DELETE FROM task_tags');
-    db.exec('DELETE FROM task_deps');
-    db.exec('DELETE FROM subtasks');
-    db.exec('DELETE FROM tasks');
-    db.exec('DELETE FROM goals');
-    db.exec('DELETE FROM life_areas');
-    db.exec('DELETE FROM tags');
-    db.exec('DELETE FROM settings');
-    db.exec('DELETE FROM habit_logs');
-    db.exec('DELETE FROM habits');
-    db.exec('DELETE FROM saved_filters');
-    db.exec('DELETE FROM list_items');
-    db.exec('DELETE FROM lists');
-    db.exec('DELETE FROM badges');
+    db.prepare('DELETE FROM focus_steps WHERE session_id IN (SELECT id FROM focus_sessions WHERE user_id=?)').run(req.userId);
+    db.prepare('DELETE FROM focus_session_meta WHERE session_id IN (SELECT id FROM focus_sessions WHERE user_id=?)').run(req.userId);
+    db.prepare('DELETE FROM focus_sessions WHERE user_id=?').run(req.userId);
+    db.prepare('DELETE FROM task_comments WHERE task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(req.userId);
+    db.prepare('DELETE FROM goal_milestones WHERE goal_id IN (SELECT id FROM goals WHERE user_id=?)').run(req.userId);
+    db.prepare('DELETE FROM inbox WHERE user_id=?').run(req.userId);
+    db.prepare('DELETE FROM notes WHERE user_id=?').run(req.userId);
+    db.prepare('DELETE FROM weekly_reviews WHERE user_id=?').run(req.userId);
+    db.prepare('DELETE FROM automation_rules WHERE user_id=?').run(req.userId);
+    db.prepare('DELETE FROM task_tags WHERE task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(req.userId);
+    db.prepare('DELETE FROM task_deps WHERE task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(req.userId);
+    db.prepare('DELETE FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(req.userId);
+    db.prepare('DELETE FROM tasks WHERE user_id=?').run(req.userId);
+    db.prepare('DELETE FROM goals WHERE user_id=?').run(req.userId);
+    db.prepare('DELETE FROM life_areas WHERE user_id=?').run(req.userId);
+    db.prepare('DELETE FROM tags WHERE user_id=?').run(req.userId);
+    db.prepare('DELETE FROM settings WHERE user_id=?').run(req.userId);
+    db.prepare('DELETE FROM habit_logs WHERE habit_id IN (SELECT id FROM habits WHERE user_id=?)').run(req.userId);
+    db.prepare('DELETE FROM habits WHERE user_id=?').run(req.userId);
+    db.prepare('DELETE FROM saved_filters WHERE user_id=?').run(req.userId);
+    db.prepare('DELETE FROM list_items WHERE list_id IN (SELECT id FROM lists WHERE user_id=?)').run(req.userId);
+    db.prepare('DELETE FROM lists WHERE user_id=?').run(req.userId);
+    db.prepare('DELETE FROM badges WHERE user_id=?').run(req.userId);
   });
   txn();
   res.json({ ok: true });
@@ -271,7 +271,7 @@ router.post('/api/demo/reset', (req, res) => {
 
 // ─── Settings ───
 router.get('/api/settings', (req, res) => {
-  const rows = db.prepare('SELECT key, value FROM settings').all();
+  const rows = db.prepare('SELECT key, value FROM settings WHERE user_id=?').all(req.userId);
   const settings = { ...SETTINGS_DEFAULTS };
   for (const r of rows) {
     if (SETTINGS_KEYS.has(r.key)) settings[r.key] = r.value;
@@ -282,16 +282,16 @@ router.get('/api/settings', (req, res) => {
 router.put('/api/settings', (req, res) => {
   const updates = req.body;
   if (!updates || typeof updates !== 'object') return res.status(400).json({ error: 'Object required' });
-  const upsert = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value');
+  const upsert = db.prepare('INSERT INTO settings (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value=excluded.value');
   const txn = db.transaction(() => {
     for (const [k, v] of Object.entries(updates)) {
       if (!SETTINGS_KEYS.has(k)) continue;
-      upsert.run(k, String(v));
+      upsert.run(req.userId, k, String(v));
     }
   });
   txn();
   // Return full settings
-  const rows = db.prepare('SELECT key, value FROM settings').all();
+  const rows = db.prepare('SELECT key, value FROM settings WHERE user_id=?').all(req.userId);
   const settings = { ...SETTINGS_DEFAULTS };
   for (const r of rows) {
     if (SETTINGS_KEYS.has(r.key)) settings[r.key] = r.value;
@@ -300,13 +300,13 @@ router.put('/api/settings', (req, res) => {
 });
 
 router.post('/api/settings/reset', (req, res) => {
-  db.prepare('DELETE FROM settings').run();
+  db.prepare('DELETE FROM settings WHERE user_id=?').run(req.userId);
   res.json(SETTINGS_DEFAULTS);
 });
 
 // ─── Habits API ───
 router.get('/api/habits', (req, res) => {
-  const habits = db.prepare('SELECT h.*, la.name as area_name, la.icon as area_icon FROM habits h LEFT JOIN life_areas la ON h.area_id=la.id WHERE h.archived=0 ORDER BY h.position').all();
+  const habits = db.prepare('SELECT h.*, la.name as area_name, la.icon as area_icon FROM habits h LEFT JOIN life_areas la ON h.area_id=la.id WHERE h.archived=0 AND h.user_id=? ORDER BY h.position').all(req.userId);
   if (!habits.length) return res.json(habits);
   const today = new Date().toISOString().slice(0, 10);
   // Batch-load all logs for these habits (last 400 days for streak calc)
@@ -353,33 +353,33 @@ router.post('/api/habits', (req, res) => {
     if (!area) return res.status(400).json({ error: 'Invalid area_id' });
   }
   const pos = getNextPosition('habits');
-  const r = db.prepare('INSERT INTO habits (name,icon,color,frequency,target,position,area_id) VALUES (?,?,?,?,?,?,?)').run(
-    name.trim(), icon || '✅', color || '#22C55E', frequency || 'daily', target || 1, pos, area_id || null
+  const r = db.prepare('INSERT INTO habits (name,icon,color,frequency,target,position,area_id,user_id) VALUES (?,?,?,?,?,?,?,?)').run(
+    name.trim(), icon || '✅', color || '#22C55E', frequency || 'daily', target || 1, pos, area_id || null, req.userId
   );
-  res.status(201).json(db.prepare('SELECT * FROM habits WHERE id=?').get(r.lastInsertRowid));
+  res.status(201).json(db.prepare('SELECT * FROM habits WHERE id=? AND user_id=?').get(r.lastInsertRowid, req.userId));
 });
 router.put('/api/habits/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  const ex = db.prepare('SELECT * FROM habits WHERE id=?').get(id);
+  const ex = db.prepare('SELECT * FROM habits WHERE id=? AND user_id=?').get(id, req.userId);
   if (!ex) return res.status(404).json({ error: 'Not found' });
   const { name, icon, color, frequency, target, archived, area_id } = req.body;
-  db.prepare('UPDATE habits SET name=COALESCE(?,name),icon=COALESCE(?,icon),color=COALESCE(?,color),frequency=COALESCE(?,frequency),target=COALESCE(?,target),archived=COALESCE(?,archived),area_id=? WHERE id=?').run(
-    name||null, icon||null, color||null, frequency||null, target!==undefined?target:null, archived!==undefined?archived:null, area_id!==undefined?area_id:ex.area_id, id
+  db.prepare('UPDATE habits SET name=COALESCE(?,name),icon=COALESCE(?,icon),color=COALESCE(?,color),frequency=COALESCE(?,frequency),target=COALESCE(?,target),archived=COALESCE(?,archived),area_id=? WHERE id=? AND user_id=?').run(
+    name||null, icon||null, color||null, frequency||null, target!==undefined?target:null, archived!==undefined?archived:null, area_id!==undefined?area_id:ex.area_id, id, req.userId
   );
-  res.json(db.prepare('SELECT * FROM habits WHERE id=?').get(id));
+  res.json(db.prepare('SELECT * FROM habits WHERE id=? AND user_id=?').get(id, req.userId));
 });
 router.delete('/api/habits/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  db.prepare('DELETE FROM habits WHERE id=?').run(id);
+  db.prepare('DELETE FROM habits WHERE id=? AND user_id=?').run(id, req.userId);
   res.json({ ok: true });
 });
 // Log a habit completion for a date
 router.post('/api/habits/:id/log', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  const habit = db.prepare('SELECT * FROM habits WHERE id=?').get(id);
+  const habit = db.prepare('SELECT * FROM habits WHERE id=? AND user_id=?').get(id, req.userId);
   if (!habit) return res.status(404).json({ error: 'Not found' });
   const date = req.body.date || new Date().toISOString().slice(0, 10);
   const existing = db.prepare('SELECT * FROM habit_logs WHERE habit_id=? AND date=?').get(id, date);
@@ -395,7 +395,7 @@ router.post('/api/habits/:id/log', (req, res) => {
 router.delete('/api/habits/:id/log', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  const habit = db.prepare('SELECT * FROM habits WHERE id=?').get(id);
+  const habit = db.prepare('SELECT * FROM habits WHERE id=? AND user_id=?').get(id, req.userId);
   if (!habit) return res.status(404).json({ error: 'Not found' });
   const date = (req.body && req.body.date) || new Date().toISOString().slice(0, 10);
   const existing = db.prepare('SELECT * FROM habit_logs WHERE habit_id=? AND date=?').get(id, date);
@@ -410,7 +410,7 @@ router.delete('/api/habits/:id/log', (req, res) => {
 router.get('/api/habits/:id/heatmap', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  const habit = db.prepare('SELECT * FROM habits WHERE id=?').get(id);
+  const habit = db.prepare('SELECT * FROM habits WHERE id=? AND user_id=?').get(id, req.userId);
   if (!habit) return res.status(404).json({ error: 'Not found' });
   const logs = db.prepare("SELECT date, count FROM habit_logs WHERE habit_id=? AND date >= date('now','-90 days') ORDER BY date").all(id);
   res.json(logs);
@@ -424,19 +424,19 @@ router.get('/api/planner/suggest', (req, res) => {
 
   const overdue = enrichTasks(db.prepare(`SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
-    WHERE t.status!='done' AND t.due_date < ? ORDER BY t.due_date LIMIT 20`).all(today));
+    WHERE t.status!='done' AND t.due_date < ? AND t.user_id=? ORDER BY t.due_date LIMIT 20`).all(today, req.userId));
 
   const dueToday = enrichTasks(db.prepare(`SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
-    WHERE t.status!='done' AND t.due_date=? AND t.my_day=0 ORDER BY t.priority DESC LIMIT 20`).all(today));
+    WHERE t.status!='done' AND t.due_date=? AND t.my_day=0 AND t.user_id=? ORDER BY t.priority DESC LIMIT 20`).all(today, req.userId));
 
   const highPriority = enrichTasks(db.prepare(`SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
-    WHERE t.status!='done' AND t.priority>=2 AND t.my_day=0 AND (t.due_date IS NULL OR t.due_date>=?) ORDER BY t.priority DESC LIMIT 10`).all(today));
+    WHERE t.status!='done' AND t.priority>=2 AND t.my_day=0 AND (t.due_date IS NULL OR t.due_date>=?) AND t.user_id=? ORDER BY t.priority DESC LIMIT 10`).all(today, req.userId));
 
   const upcoming = enrichTasks(db.prepare(`SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
-    WHERE t.status!='done' AND t.due_date>? AND t.due_date<=? AND t.my_day=0 ORDER BY t.due_date LIMIT 10`).all(today, in3days));
+    WHERE t.status!='done' AND t.due_date>? AND t.due_date<=? AND t.my_day=0 AND t.user_id=? ORDER BY t.due_date LIMIT 10`).all(today, in3days, req.userId));
 
   res.json({ overdue, dueToday, highPriority, upcoming });
 });
@@ -447,9 +447,9 @@ router.get('/api/planner/smart', (req, res) => {
   const tasks = db.prepare(`
     SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
-    WHERE t.status != 'done' AND t.my_day = 0
+    WHERE t.status != 'done' AND t.my_day = 0 AND t.user_id=?
     ORDER BY t.priority DESC, t.due_date
-  `).all();
+  `).all(req.userId);
   const today = new Date().toISOString().slice(0, 10);
   const scored = tasks.map(t => {
     let score = 0;
@@ -487,9 +487,9 @@ router.get('/api/planner/:date', (req, res) => {
   const tasks = db.prepare(`
     SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
-    WHERE (t.due_date=? OR (t.time_block_start IS NOT NULL AND t.due_date=?)) AND t.status!='done'
+    WHERE (t.due_date=? OR (t.time_block_start IS NOT NULL AND t.due_date=?)) AND t.status!='done' AND t.user_id=?
     ORDER BY t.time_block_start, t.priority DESC
-  `).all(date, date);
+  `).all(date, date, req.userId);
   // Unscheduled = tasks due today but without time blocks
   const scheduled = tasks.filter(t => t.time_block_start);
   const unscheduled = tasks.filter(t => !t.time_block_start);

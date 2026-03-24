@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 /**
  * Initialise the database: open, schema, migrations, seeds, FTS.
@@ -12,6 +13,25 @@ function initDatabase(dbDir) {
   const db = new Database(path.join(dbDir, 'lifeflow.db'));
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
+
+  // ─── Auth tables ───
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      display_name TEXT DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_login DATETIME
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+      sid TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      remember INTEGER DEFAULT 0,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
 
   // ─── Core tables ───
   db.exec(`
@@ -316,6 +336,51 @@ function initDatabase(dbDir) {
     enabled INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  // ─── User-scoping: add user_id to all data tables ───
+  const userIdTables = [
+    'life_areas', 'goals', 'tasks', 'tags', 'habits', 'saved_filters',
+    'inbox', 'notes', 'weekly_reviews', 'lists', 'task_templates',
+    'badges', 'automation_rules', 'focus_sessions', 'settings'
+  ];
+  for (const tbl of userIdTables) {
+    try { db.exec(`ALTER TABLE ${tbl} ADD COLUMN user_id INTEGER DEFAULT 1`); } catch(e) { /* already exists */ }
+  }
+  // Index for fast per-user queries
+  for (const tbl of userIdTables) {
+    try { db.exec(`CREATE INDEX idx_${tbl}_user ON ${tbl}(user_id)`); } catch(e) { /* already exists */ }
+  }
+
+  // ─── Migrate settings to composite PK (user_id, key) for multi-user ───
+  const settingsInfo = db.prepare("PRAGMA table_info(settings)").all();
+  const keyCol = settingsInfo.find(c => c.name === 'key' && c.pk === 1);
+  if (keyCol) {
+    db.exec(`
+      CREATE TABLE settings_v2 (user_id INTEGER NOT NULL DEFAULT 1, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (user_id, key));
+      INSERT OR IGNORE INTO settings_v2 (user_id, key, value) SELECT COALESCE(user_id, 1), key, value FROM settings;
+      DROP TABLE settings;
+      ALTER TABLE settings_v2 RENAME TO settings;
+    `);
+  }
+
+  // ─── Auto-create default user on first boot ───
+  const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get();
+  if (userCount.c === 0) {
+    // Use bcryptjs if available, otherwise store a placeholder hash
+    // (server.js will ensure bcryptjs is loaded before DB init)
+    try {
+      const bcrypt = require('bcryptjs');
+      const hash = bcrypt.hashSync('changeme', 12);
+      db.prepare('INSERT INTO users (email, password_hash, display_name) VALUES (?,?,?)').run(
+        'admin@localhost', hash, 'Admin'
+      );
+    } catch(e) {
+      // bcryptjs not available at init time — will be created on first register
+    }
+  }
+
+  // ─── Session cleanup: remove expired sessions ───
+  db.prepare("DELETE FROM sessions WHERE expires_at < datetime('now')").run();
 
   // ─── Rebuild FTS Search Index ───
   function rebuildSearchIndex() {

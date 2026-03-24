@@ -1,13 +1,40 @@
 const COLORS=['#D50000','#E67C73','#F4511E','#F6BF26','#33B679','#0B8043','#039BE5','#3F51B5','#7986CB','#8E24AA','#616161','#795548'];
 const $=id=>document.getElementById(id);
 const api={
-  async get(u){try{const r=await fetch(u);if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
-  async post(u,d){try{const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
-  async put(u,d){try{const r=await fetch(u,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
-  async del(u){try{const r=await fetch(u,{method:'DELETE'});if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
-  async patch(u,d){try{const r=await fetch(u,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}}
+  async get(u){try{const r=await fetch(u);if(r.status===401){window.location.href='/login';return{}}if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
+  async post(u,d){try{const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(r.status===401){window.location.href='/login';return{}}if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
+  async put(u,d){try{const r=await fetch(u,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(r.status===401){window.location.href='/login';return{}}if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
+  async del(u){try{const r=await fetch(u,{method:'DELETE'});if(r.status===401){window.location.href='/login';return{}}if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
+  async patch(u,d){try{const r=await fetch(u,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(r.status===401){window.location.href='/login';return{}}if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}}
 };
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+
+// ─── AUTH STATE ───
+let currentUser=null;
+async function loadCurrentUser(){
+  try{
+    const data=await api.get('/api/auth/me');
+    if(data&&data.user){
+      currentUser=data.user;
+      const el=document.getElementById('sb-user-name');
+      if(el)el.textContent=data.user.display_name||data.user.email;
+    }
+  }catch(e){
+    // Not authenticated — redirect to login
+    window.location.href='/login';
+  }
+}
+function initLogout(){
+  const btn=document.getElementById('sb-logout-btn');
+  if(btn)btn.addEventListener('click',async()=>{
+    try{await fetch('/api/auth/logout',{method:'POST'})}catch(e){}
+    window.location.href='/login';
+  });
+}
+// Load user info at startup
+loadCurrentUser();
+initLogout();
+
 
 // ─── KEYBOARD SHORTCUT MAP (rebindable) ───
 const DEFAULT_SHORTCUTS={

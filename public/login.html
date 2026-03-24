@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LifeFlow — Sign In</title>
+<meta name="theme-color" content="#1e293b">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%236366f1'/><text x='16' y='23' font-size='18' font-weight='bold' text-anchor='middle' fill='white'>L</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.auth-container{width:100%;max-width:400px;padding:20px}
+.auth-logo{text-align:center;margin-bottom:32px}
+.auth-logo .logo{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;background:#6366f1;border-radius:14px;font-size:28px;font-weight:700;color:#fff;margin-bottom:12px}
+.auth-logo h1{font-size:24px;font-weight:600;color:#f1f5f9}
+.auth-logo p{font-size:14px;color:#94a3b8;margin-top:4px}
+.auth-card{background:#1e293b;border-radius:12px;padding:28px;border:1px solid #334155}
+.auth-tabs{display:flex;margin-bottom:24px;background:#0f172a;border-radius:8px;padding:3px}
+.auth-tab{flex:1;padding:8px;text-align:center;font-size:14px;font-weight:500;color:#94a3b8;cursor:pointer;border-radius:6px;transition:all .2s}
+.auth-tab.active{background:#334155;color:#f1f5f9}
+.auth-field{margin-bottom:16px}
+.auth-field label{display:block;font-size:13px;font-weight:500;color:#94a3b8;margin-bottom:6px}
+.auth-field input{width:100%;padding:10px 12px;background:#0f172a;border:1px solid #334155;border-radius:8px;color:#e2e8f0;font-size:14px;font-family:inherit;outline:none;transition:border-color .2s}
+.auth-field input:focus{border-color:#6366f1}
+.auth-field input::placeholder{color:#475569}
+.auth-remember{display:flex;align-items:center;gap:8px;margin-bottom:20px;font-size:13px;color:#94a3b8;cursor:pointer}
+.auth-remember input[type="checkbox"]{width:16px;height:16px;accent-color:#6366f1;cursor:pointer}
+.auth-btn{width:100%;padding:11px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;transition:background .2s}
+.auth-btn:hover{background:#4f46e5}
+.auth-btn:disabled{opacity:.5;cursor:not-allowed}
+.auth-error{background:#7f1d1d;color:#fca5a5;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:16px;display:none}
+.auth-error.show{display:block}
+.auth-success{background:#14532d;color:#86efac;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:16px;display:none}
+.auth-success.show{display:block}
+.auth-footer{text-align:center;margin-top:24px;font-size:13px;color:#64748b}
+.auth-footer a{color:#818cf8;text-decoration:none}
+.auth-footer a:hover{text-decoration:underline}
+.auth-field .pw-toggle{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:#64748b;cursor:pointer;font-size:18px;line-height:1}
+.pw-wrap{position:relative}
+</style>
+</head>
+<body>
+<div class="auth-container">
+  <div class="auth-logo">
+    <div class="logo">L</div>
+    <h1>LifeFlow</h1>
+    <p>Your life, organized locally</p>
+  </div>
+  <div class="auth-card">
+    <div class="auth-tabs">
+      <div class="auth-tab active" data-tab="login">Sign In</div>
+      <div class="auth-tab" data-tab="register">Create Account</div>
+    </div>
+    <div id="auth-error" class="auth-error"></div>
+    <div id="auth-success" class="auth-success"></div>
+
+    <!-- Login Form -->
+    <form id="login-form">
+      <div class="auth-field">
+        <label for="login-email">Email</label>
+        <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email" required>
+      </div>
+      <div class="auth-field">
+        <label for="login-password">Password</label>
+        <div class="pw-wrap">
+          <input type="password" id="login-password" placeholder="Enter password" autocomplete="current-password" required>
+          <button type="button" class="pw-toggle" tabindex="-1" aria-label="Toggle password visibility"><span class="material-icons-round">visibility_off</span></button>
+        </div>
+      </div>
+      <label class="auth-remember">
+        <input type="checkbox" id="login-remember" checked>
+        Remember me for 30 days
+      </label>
+      <button type="submit" class="auth-btn" id="login-btn">Sign In</button>
+    </form>
+
+    <!-- Register Form (hidden by default) -->
+    <form id="register-form" style="display:none">
+      <div class="auth-field">
+        <label for="reg-name">Display Name</label>
+        <input type="text" id="reg-name" placeholder="Your name" autocomplete="name" maxlength="100">
+      </div>
+      <div class="auth-field">
+        <label for="reg-email">Email</label>
+        <input type="email" id="reg-email" placeholder="you@example.com" autocomplete="email" required>
+      </div>
+      <div class="auth-field">
+        <label for="reg-password">Password</label>
+        <div class="pw-wrap">
+          <input type="password" id="reg-password" placeholder="Min 8 characters" autocomplete="new-password" required minlength="8">
+          <button type="button" class="pw-toggle" tabindex="-1" aria-label="Toggle password visibility"><span class="material-icons-round">visibility_off</span></button>
+        </div>
+      </div>
+      <button type="submit" class="auth-btn" id="reg-btn">Create Account</button>
+    </form>
+  </div>
+  <div class="auth-footer">
+    <p>Your data stays on your machine. Always.</p>
+  </div>
+</div>
+<script>
+(function() {
+  const loginForm = document.getElementById('login-form');
+  const registerForm = document.getElementById('register-form');
+  const tabs = document.querySelectorAll('.auth-tab');
+  const errorEl = document.getElementById('auth-error');
+  const successEl = document.getElementById('auth-success');
+
+  // Tab switching
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const isLogin = tab.dataset.tab === 'login';
+      loginForm.style.display = isLogin ? 'block' : 'none';
+      registerForm.style.display = isLogin ? 'none' : 'block';
+      hideMessages();
+    });
+  });
+
+  // Password visibility toggles
+  document.querySelectorAll('.pw-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = btn.previousElementSibling;
+      const isHidden = input.type === 'password';
+      input.type = isHidden ? 'text' : 'password';
+      btn.querySelector('span').textContent = isHidden ? 'visibility' : 'visibility_off';
+    });
+  });
+
+  function showError(msg) {
+    errorEl.textContent = msg;
+    errorEl.classList.add('show');
+    successEl.classList.remove('show');
+  }
+  function showSuccess(msg) {
+    successEl.textContent = msg;
+    successEl.classList.add('show');
+    errorEl.classList.remove('show');
+  }
+  function hideMessages() {
+    errorEl.classList.remove('show');
+    successEl.classList.remove('show');
+  }
+
+  // Login
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideMessages();
+    const btn = document.getElementById('login-btn');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: document.getElementById('login-email').value,
+          password: document.getElementById('login-password').value,
+          remember: document.getElementById('login-remember').checked
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showError(data.error || 'Login failed');
+        return;
+      }
+      window.location.href = '/';
+    } catch (err) {
+      showError('Network error. Please try again.');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // Register
+  registerForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideMessages();
+    const btn = document.getElementById('reg-btn');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: document.getElementById('reg-email').value,
+          password: document.getElementById('reg-password').value,
+          display_name: document.getElementById('reg-name').value
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showError(data.error || 'Registration failed');
+        return;
+      }
+      window.location.href = '/';
+    } catch (err) {
+      showError('Network error. Please try again.');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // Check if already authenticated
+  fetch('/api/auth/me').then(r => {
+    if (r.ok) window.location.href = '/';
+  }).catch(() => {});
+})();
+</script>
+</body>
+</html>

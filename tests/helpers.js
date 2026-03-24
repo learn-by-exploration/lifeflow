@@ -2,18 +2,43 @@ const { tmpdir } = require('os');
 const { mkdtempSync, rmSync } = require('fs');
 const path = require('path');
 const request = require('supertest');
+const crypto = require('crypto');
 
-let _app, _db, _dir;
+let _app, _db, _dir, _testSessionId, _testUserId;
 
 function setup() {
   if (!_app) {
+    process.env.NODE_ENV = 'test';
     _dir = mkdtempSync(path.join(tmpdir(), 'lifeflow-test-'));
     process.env.DB_DIR = _dir;
     const server = require('../src/server');
     _app = server.app;
     _db = server.db;
+    // Create a default test user + session for auth
+    _ensureTestAuth();
   }
   return { app: _app, db: _db, dir: _dir };
+}
+
+function _ensureTestAuth() {
+  _testUserId = 1; // The default auto-created user
+  const bcrypt = require('bcryptjs');
+  const user = _db.prepare('SELECT id FROM users WHERE id = 1').get();
+  if (!user) {
+    const hash = bcrypt.hashSync('testpassword', 4); // low rounds for speed in tests
+    _db.prepare('INSERT INTO users (email, password_hash, display_name) VALUES (?,?,?)').run(
+      'test@test.com', hash, 'Test User'
+    );
+  } else {
+    // Ensure password is 'testpassword' (DB init may have set 'changeme')
+    const hash = bcrypt.hashSync('testpassword', 4);
+    _db.prepare('UPDATE users SET password_hash=? WHERE id=1').run(hash);
+  }
+  // Create a long-lived test session
+  _testSessionId = 'test-session-' + crypto.randomUUID();
+  _db.prepare(
+    "INSERT OR REPLACE INTO sessions (sid, user_id, remember, expires_at) VALUES (?, ?, 1, datetime('now', '+1 day'))"
+  ).run(_testSessionId, _testUserId);
 }
 
 function cleanDb() {
@@ -126,6 +151,21 @@ function logHabit(habitId, date) {
 
 function agent() {
   const { app } = setup();
+  const base = request(app);
+  // Return a proxy that auto-adds auth cookie to every HTTP method call
+  return new Proxy(base, {
+    get(target, prop) {
+      if (['get', 'post', 'put', 'delete', 'patch', 'head', 'options'].includes(prop)) {
+        return (...args) => target[prop](...args).set('Cookie', `lf_sid=${_testSessionId}`);
+      }
+      return target[prop];
+    }
+  });
+}
+
+// Unauthenticated agent for testing 401 responses
+function rawAgent() {
+  const { app } = setup();
   return request(app);
 }
 
@@ -148,4 +188,4 @@ function serverLocalDate(offsetDays = 0) {
   return d.toISOString().slice(0, 10);
 }
 
-module.exports = { setup, cleanDb, teardown, makeArea, makeGoal, makeTask, makeSubtask, makeTag, linkTag, makeFocus, makeList, makeListItem, makeHabit, logHabit, agent, today, daysFromNow, serverLocalDate };
+module.exports = { setup, cleanDb, teardown, makeArea, makeGoal, makeTask, makeSubtask, makeTag, linkTag, makeFocus, makeList, makeListItem, makeHabit, logHabit, agent, rawAgent, today, daysFromNow, serverLocalDate };

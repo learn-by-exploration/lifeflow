@@ -142,7 +142,7 @@ describe('Bug bash: full regression', () => {
     assert.equal(start.status, 200);
     const areas = await agent().get('/api/areas');
     assert.ok(areas.body.length >= 3, 'Demo should create areas');
-    const reset = await agent().post('/api/demo/reset').send({});
+    const reset = await agent().post('/api/demo/reset').send({ password: 'testpassword' });
     assert.equal(reset.status, 200);
     const areasAfter = await agent().get('/api/areas');
     assert.equal(areasAfter.body.length, 0, 'Reset should clear all');

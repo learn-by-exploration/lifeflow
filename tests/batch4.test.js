@@ -8,6 +8,7 @@ describe('Import API', () => {
   it('imports areas, goals, tasks, and tags', async () => {
     const data = {
       confirm: 'DESTROY_ALL_DATA',
+      password: 'testpassword',
       areas: [{ id: 1, name: 'Health', icon: '💪', color: '#FF0000', position: 0 }],
       goals: [{ id: 1, area_id: 1, title: 'Get Fit', description: 'Lose weight', color: '#6C63FF', status: 'active', position: 0 }],
       tasks: [{ id: 1, goal_id: 1, title: 'Run 5K', notes: '', status: 'todo', priority: 2, due_date: null, my_day: 0, position: 0, recurring: null, completed_at: null, subtasks: [], tags: [] }],
@@ -30,6 +31,7 @@ describe('Import API', () => {
     makeArea({ name: 'Old Area' });
     const data = {
       confirm: 'DESTROY_ALL_DATA',
+      password: 'testpassword',
       areas: [{ id: 1, name: 'New Area', icon: '🌟', color: '#0000FF', position: 0 }],
       goals: [{ id: 1, area_id: 1, title: 'New Goal', color: '#6C63FF', status: 'active', position: 0 }],
       tasks: [{ goal_id: 1, title: 'Placeholder Task' }],
@@ -44,6 +46,7 @@ describe('Import API', () => {
   it('imports tasks with subtasks and tags', async () => {
     const data = {
       confirm: 'DESTROY_ALL_DATA',
+      password: 'testpassword',
       areas: [{ id: 1, name: 'Work', icon: '💼', color: '#2563EB', position: 0 }],
       goals: [{ id: 1, area_id: 1, title: 'Project X', color: '#6C63FF', status: 'active', position: 0 }],
       tasks: [{
@@ -66,13 +69,14 @@ describe('Import API', () => {
   });
 
   it('returns 400/403 for invalid import data', async () => {
-    await agent().post('/api/import').send({ bad: true }).expect(403); // no confirm token
-    await agent().post('/api/import').send({ confirm: 'DESTROY_ALL_DATA', areas: 'bad', goals: [], tasks: [] }).expect(400);
+    await agent().post('/api/import').send({ bad: true, password: 'testpassword' }).expect(403); // no confirm token
+    await agent().post('/api/import').send({ confirm: 'DESTROY_ALL_DATA', password: 'testpassword', areas: 'bad', goals: [], tasks: [] }).expect(400);
   });
 
   it('skips orphan goals/tasks with missing parent IDs', async () => {
     const data = {
       confirm: 'DESTROY_ALL_DATA',
+      password: 'testpassword',
       areas: [{ id: 1, name: 'Area', icon: '📂', color: '#2563EB', position: 0 }],
       goals: [
         { id: 1, area_id: 1, title: 'Valid Goal', color: '#6C63FF', status: 'active', position: 0 },

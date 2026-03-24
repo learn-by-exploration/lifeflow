@@ -10,11 +10,11 @@ module.exports = function(deps) {
   const backupDir = path.join(dbDir, 'backups');
   if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
 
-  function runBackup() {
-    const areas = db.prepare('SELECT * FROM life_areas ORDER BY position').all();
-    const goals = db.prepare('SELECT * FROM goals ORDER BY area_id, position').all();
-    const tasks = enrichTasks(db.prepare('SELECT * FROM tasks ORDER BY goal_id, position').all());
-    const tags = db.prepare('SELECT * FROM tags ORDER BY name').all();
+  function runBackup(userId) {
+    const areas = db.prepare('SELECT * FROM life_areas WHERE user_id=? ORDER BY position').all(userId);
+    const goals = db.prepare('SELECT * FROM goals WHERE user_id=? ORDER BY area_id, position').all(userId);
+    const tasks = enrichTasks(db.prepare('SELECT * FROM tasks WHERE user_id=? ORDER BY goal_id, position').all(userId));
+    const tags = db.prepare('SELECT * FROM tags WHERE user_id=? ORDER BY name').all(userId);
     const data = JSON.stringify({ backupDate: new Date().toISOString(), areas, goals, tasks, tags });
     const fname = `lifeflow-backup-${new Date().toISOString().slice(0, 10)}.json`;
     fs.writeFileSync(path.join(backupDir, fname), data);
@@ -24,13 +24,13 @@ module.exports = function(deps) {
     return fname;
   }
 
-  // Backup on startup
-  try { runBackup(); } catch(e) { console.error('Backup failed:', e.message); }
+  // Backup on startup (for default user)
+  try { runBackup(1); } catch(e) { console.error('Backup failed:', e.message); }
   // Backup every 24h
-  setInterval(() => { try { runBackup(); } catch(e) { console.error('Backup failed:', e.message); } }, 24 * 60 * 60 * 1000);
+  setInterval(() => { try { runBackup(1); } catch(e) { console.error('Backup failed:', e.message); } }, 24 * 60 * 60 * 1000);
 
   router.post('/api/backup', (req, res) => {
-    const fname = runBackup();
+    const fname = runBackup(req.userId);
     res.json({ ok: true, file: fname });
   });
 
@@ -41,10 +41,10 @@ module.exports = function(deps) {
 
   // ─── Export ───
   router.get('/api/export', (req, res) => {
-    const areas = db.prepare('SELECT * FROM life_areas ORDER BY position').all();
-    const goals = db.prepare('SELECT * FROM goals ORDER BY area_id, position').all();
-    const tasks = enrichTasks(db.prepare('SELECT * FROM tasks ORDER BY goal_id, position').all());
-    const tags = db.prepare('SELECT * FROM tags ORDER BY name').all();
+    const areas = db.prepare('SELECT * FROM life_areas WHERE user_id=? ORDER BY position').all(req.userId);
+    const goals = db.prepare('SELECT * FROM goals WHERE user_id=? ORDER BY area_id, position').all(req.userId);
+    const tasks = enrichTasks(db.prepare('SELECT * FROM tasks WHERE user_id=? ORDER BY goal_id, position').all(req.userId));
+    const tags = db.prepare('SELECT * FROM tags WHERE user_id=? ORDER BY name').all(req.userId);
     res.setHeader('Content-Disposition', 'attachment; filename=lifeflow-export.json');
     res.json({ exportDate: new Date().toISOString(), areas, goals, tasks, tags });
   });
@@ -62,50 +62,50 @@ module.exports = function(deps) {
     for (const t of tasks) { if (!t.title || !t.goal_id) return res.status(400).json({ error: 'Each task must have title and goal_id' }); }
     const importTx = db.transaction(() => {
       // Clear existing data in dependency order
-      db.prepare('DELETE FROM focus_sessions').run();
-      db.prepare('DELETE FROM task_tags').run();
-      db.prepare('DELETE FROM subtasks').run();
-      db.prepare('DELETE FROM tasks').run();
-      db.prepare('DELETE FROM goals').run();
-      db.prepare('DELETE FROM life_areas').run();
-      db.prepare('DELETE FROM tags').run();
+      db.prepare('DELETE FROM focus_sessions WHERE user_id=?').run(req.userId);
+      db.prepare('DELETE FROM task_tags WHERE task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(req.userId);
+      db.prepare('DELETE FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(req.userId);
+      db.prepare('DELETE FROM tasks WHERE user_id=?').run(req.userId);
+      db.prepare('DELETE FROM goals WHERE user_id=?').run(req.userId);
+      db.prepare('DELETE FROM life_areas WHERE user_id=?').run(req.userId);
+      db.prepare('DELETE FROM tags WHERE user_id=?').run(req.userId);
 
       // Map old IDs to new IDs
       const areaMap = {}, goalMap = {}, tagMap = {};
 
       // Import tags
       if (Array.isArray(tags)) {
-        const insTag = db.prepare('INSERT INTO tags (name, color) VALUES (?, ?)');
+        const insTag = db.prepare('INSERT INTO tags (name, color, user_id) VALUES (?, ?, ?)');
         tags.forEach(t => {
-          const r = insTag.run(t.name, t.color || '#64748B');
+          const r = insTag.run(t.name, t.color || '#64748B', req.userId);
           tagMap[t.id] = r.lastInsertRowid;
         });
       }
 
       // Import areas
-      const insArea = db.prepare('INSERT INTO life_areas (name, icon, color, position) VALUES (?, ?, ?, ?)');
+      const insArea = db.prepare('INSERT INTO life_areas (name, icon, color, position, user_id) VALUES (?, ?, ?, ?, ?)');
       areas.forEach(a => {
-        const r = insArea.run(a.name, a.icon || '📂', a.color || '#2563EB', a.position || 0);
+        const r = insArea.run(a.name, a.icon || '📂', a.color || '#2563EB', a.position || 0, req.userId);
         areaMap[a.id] = r.lastInsertRowid;
       });
 
       // Import goals
-      const insGoal = db.prepare('INSERT INTO goals (area_id, title, description, due_date, color, status, position) VALUES (?, ?, ?, ?, ?, ?, ?)');
+      const insGoal = db.prepare('INSERT INTO goals (area_id, title, description, due_date, color, status, position, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
       goals.forEach(g => {
         const newAreaId = areaMap[g.area_id];
         if (!newAreaId) return; // skip orphan goals
-        const r = insGoal.run(newAreaId, g.title, g.description || '', g.due_date || null, g.color || '#6C63FF', g.status || 'active', g.position || 0);
+        const r = insGoal.run(newAreaId, g.title, g.description || '', g.due_date || null, g.color || '#6C63FF', g.status || 'active', g.position || 0, req.userId);
         goalMap[g.id] = r.lastInsertRowid;
       });
 
       // Import tasks
-      const insTask = db.prepare('INSERT INTO tasks (goal_id, title, note, status, priority, due_date, my_day, position, recurring, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+      const insTask = db.prepare('INSERT INTO tasks (goal_id, title, note, status, priority, due_date, my_day, position, recurring, completed_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
       const insSubtask = db.prepare('INSERT INTO subtasks (task_id, title, done, position) VALUES (?, ?, ?, ?)');
       const insTaskTag = db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?, ?)');
       tasks.forEach(t => {
         const newGoalId = goalMap[t.goal_id];
         if (!newGoalId) return; // skip orphan tasks
-        const r = insTask.run(newGoalId, t.title, t.notes || t.note || '', t.status || 'todo', t.priority || 0, t.due_date || null, t.my_day ? 1 : 0, t.position || 0, t.recurring || null, t.completed_at || null);
+        const r = insTask.run(newGoalId, t.title, t.notes || t.note || '', t.status || 'todo', t.priority || 0, t.due_date || null, t.my_day ? 1 : 0, t.position || 0, t.recurring || null, t.completed_at || null, req.userId);
         const newTaskId = r.lastInsertRowid;
         // Subtasks
         if (Array.isArray(t.subtasks)) {
@@ -160,9 +160,9 @@ module.exports = function(deps) {
     const tasks = db.prepare(`
       SELECT t.*, g.title as goal_title, a.name as area_name
       FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
-      WHERE t.due_date IS NOT NULL AND t.status != 'done'
+      WHERE t.due_date IS NOT NULL AND t.status != 'done' AND t.user_id=?
       ORDER BY t.due_date
-    `).all();
+    `).all(req.userId);
     const now = new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');
     let ical = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//LifeFlow//EN\r\nX-WR-CALNAME:LifeFlow Tasks\r\n';
     for (const t of tasks) {
