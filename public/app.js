@@ -589,15 +589,57 @@ async function renderFocusHub(){
   c.innerHTML=h;
   const sub=document.getElementById('focus-hub-content');
   if(_focusTab==='timer'){
-    // Quick-start panel that opens the existing focus overlay
-    const [stats]=await Promise.all([api.get('/api/focus/stats')]);
-    sub.innerHTML=`<div style="text-align:center;padding:40px 20px">
-      <span class="material-icons-round" style="font-size:64px;color:var(--brand);margin-bottom:12px">timer</span>
-      <h2 style="margin:0 0 8px;font-size:20px">Focus Timer</h2>
-      <p style="font-size:13px;color:var(--txd);margin-bottom:20px">Today: ${stats.todayMinutes||0} min focused &bull; ${stats.todaySessions||0} sessions</p>
-      <button class="btn-s" id="fh-start" style="padding:12px 32px;font-size:14px"><span class="material-icons-round" style="font-size:18px;vertical-align:middle;margin-right:6px">play_arrow</span>Start Focus Session</button>
+    const [stats,allTasks]=await Promise.all([api.get('/api/focus/stats'),api.get('/api/tasks/all')]);
+    // Sort: priority DESC → due_date ASC (nulls last) → staleness (oldest created first)
+    const pending=allTasks.filter(x=>x.status!=='done').sort((a,b)=>{
+      if((b.priority||0)!==(a.priority||0))return(b.priority||0)-(a.priority||0);
+      if(a.due_date&&b.due_date)return a.due_date.localeCompare(b.due_date);
+      if(a.due_date&&!b.due_date)return-1;
+      if(!a.due_date&&b.due_date)return 1;
+      return(a.created_at||'').localeCompare(b.created_at||'');
+    });
+    const todayMin=stats.todayMinutes||0;
+    const todaySess=stats.todaySessions||0;
+    // Stats bar
+    let h2=`<div class="fh-stats">
+      <div class="fh-stat"><span class="material-icons-round">timer</span><strong>${todayMin}</strong>min</div>
+      <div class="fh-stat"><span class="material-icons-round">bolt</span><strong>${todaySess}</strong>session${todaySess!==1?'s':''}</div>
+      <div class="fh-stat"><span class="material-icons-round">check_circle</span><strong>${stats.todayCompleted||0}</strong>steps</div>
     </div>`;
-    sub.querySelector('#fh-start')?.addEventListener('click',async()=>{let t=tasks.find(x=>x.status!=='done');if(!t){const all=await api.get('/api/tasks/all');t=all.find(x=>x.status!=='done')}if(t)startFocusTimer(t.id)});
+    if(!pending.length){
+      h2+=`<div style="text-align:center;padding:40px 20px;color:var(--txd)"><span class="material-icons-round" style="font-size:48px;display:block;margin-bottom:8px;opacity:.4">celebration</span>All tasks done! Add more tasks to start a focus session.</div>`;
+    } else {
+      const topTask=pending[0];
+      const topIsDue=topTask.due_date&&new Date(topTask.due_date+'T23:59:59')<=new Date(Date.now()+86400000);
+      const topIsStale=topTask.created_at&&(Date.now()-new Date(topTask.created_at).getTime())/(1000*60*60*24)>=3;
+      const nudge=topIsDue?'Your most urgent task is due soon — start now!':topIsStale?'Your top task has been waiting — small progress beats none.':'Pick a task and start a focused session.';
+      h2+=`<div style="font-size:12px;color:var(--brand);margin:12px 0 4px;font-style:italic">${nudge}</div>`;
+      h2+=`<h3 style="font-size:13px;font-weight:600;margin:4px 0 8px;color:var(--tx2)">Pick a task to focus on</h3>`;
+      h2+=`<div class="fh-task-list">`;
+      pending.slice(0,12).forEach(t=>{
+        const stDone=t.subtask_done||0,stTotal=t.subtask_total||0;
+        const stPct=stTotal>0?Math.round(stDone/stTotal*100):0;
+        const hasSubs=stTotal>0;
+        const goalCtx=t.area_icon&&t.goal_title?`${t.area_icon} ${esc(t.goal_title)}`:t.goal_title?esc(t.goal_title):'';
+        h2+=`<div class="fh-task-card" data-tid="${t.id}">
+          <div class="fh-task-main">
+            <div style="flex:1;min-width:0">
+              <span class="fh-task-title">${esc(t.title)}</span>
+              ${goalCtx?`<div class="fh-task-ctx">${goalCtx}</div>`:''}
+            </div>
+            <button class="fh-task-go" title="Start focus"><span class="material-icons-round">play_arrow</span></button>
+          </div>
+          ${hasSubs?`<div class="fh-task-subs"><div class="fh-sub-bar"><div class="fh-sub-fill" style="width:${stPct}%"></div></div><span class="fh-sub-label">${stDone}/${stTotal}</span></div>`:''}
+        </div>`;
+      });
+      h2+=`</div>`;
+      if(pending.length>12)h2+=`<div style="font-size:11px;color:var(--txd);text-align:center;margin-top:8px">+${pending.length-12} more tasks</div>`;
+    }
+    sub.innerHTML=h2;
+    sub.querySelectorAll('.fh-task-card').forEach(card=>{
+      card.querySelector('.fh-task-go')?.addEventListener('click',e=>{e.stopPropagation();startFocusTimer(Number(card.dataset.tid))});
+      card.addEventListener('click',()=>startFocusTimer(Number(card.dataset.tid)));
+    });
   } else if(_focusTab==='history'){
     await renderFocusHistory(sub);
   } else if(_focusTab==='analytics'){
@@ -2184,7 +2226,11 @@ function saveLastTechnique(areaId,tech){
 function startFocusTimer(taskId){
   applySettingsToTimer();
   let tk=tasks.find(t=>t.id===taskId);
-  if(!tk){api.get('/api/tasks/'+taskId).then(t=>{ftTask=t;showTechniquePicker()}).catch(()=>{});return}
+  if(!tk||!tk.subtasks){
+    // Fetch full task with subtasks from individual endpoint
+    api.get('/api/tasks/'+taskId).then(t=>{ftTask=t;showTechniquePicker()}).catch(()=>{});
+    return;
+  }
   ftTask=tk;showTechniquePicker();
 }
 
@@ -2214,9 +2260,38 @@ function showTechniquePicker(){
     </div>`;
   }).join('');
 
-  $('ft-pick-hint').textContent=recommended==='quick'
-    ?'This task has been waiting — try Quick Start!'
-    :'Pick a technique to get started';
+  // Contextual why-suggested hint
+  let pickHint='Pick a technique to get started';
+  const lastTech=getLastTechnique(areaId);
+  if(recommended==='quick'){
+    const age=ftTask.created_at?Math.floor((Date.now()-new Date(ftTask.created_at).getTime())/(1000*60*60*24)):0;
+    pickHint=age>=3?`This task has been waiting ${age} days — a quick 5-min start beats procrastination!`:'This task has been waiting — try Quick Start!';
+  } else if(lastTech&&lastTech===recommended){
+    pickHint=`You used ${FT_TECHNIQUES[lastTech].name} last time for this area.`;
+  }
+  $('ft-pick-hint').textContent=pickHint;
+
+  // Render subtasks if available
+  const subsEl=$('ft-pick-subs');
+  if(ftTask.subtasks&&ftTask.subtasks.length){
+    subsEl.style.display='';
+    subsEl.innerHTML=`<div style="font-size:11px;color:var(--txd);margin-bottom:4px">Subtasks</div>`+ftTask.subtasks.map(s=>
+      `<div class="ft-pick-sub${s.done?' done':''}" data-sid="${s.id}"><div class="ft-pick-sub-chk">${s.done?'✓':''}</div><span class="ft-pick-sub-text">${esc(s.title)}</span></div>`
+    ).join('');
+    subsEl.querySelectorAll('.ft-pick-sub').forEach(el=>el.addEventListener('click',async()=>{
+      const sid=Number(el.dataset.sid);
+      const sub=ftTask.subtasks.find(x=>x.id===sid);
+      if(!sub)return;
+      const newDone=sub.done?0:1;
+      await api.put('/api/subtasks/'+sid,{done:newDone});
+      sub.done=newDone;
+      el.classList.toggle('done',!!newDone);
+      el.querySelector('.ft-pick-sub-chk').textContent=newDone?'✓':'';
+    }));
+  } else {
+    subsEl.style.display='none';
+    subsEl.innerHTML='';
+  }
 
   grid.querySelectorAll('.ft-tech-card').forEach(card=>{
     card.addEventListener('click',()=>{
@@ -2533,12 +2608,21 @@ function showReflection(){
   $('ft-timer').style.display='none';
   $('ft-reflect').style.display='';
   showToast('Focus session complete! '+mins+'m logged');
+  // Gentle reflection nudge — update Done button to hint at rating
+  updateReflectDoneLabel();
+}
+
+function updateReflectDoneLabel(){
+  const btn=$('ft-reflect-done');
+  if(ftRating>0){btn.textContent='Done';btn.style.opacity='1'}
+  else{btn.textContent='Skip Reflection';btn.style.opacity='.7'}
 }
 
 document.querySelectorAll('.ft-rate').forEach(b=>b.addEventListener('click',()=>{
   ftRating=Number(b.dataset.rate);
   document.querySelectorAll('.ft-rate').forEach(x=>x.classList.remove('active'));
   b.classList.add('active');
+  updateReflectDoneLabel();
 }));
 
 $('ft-reflect-done').addEventListener('click',async()=>{
