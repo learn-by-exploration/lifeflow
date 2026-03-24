@@ -2208,7 +2208,7 @@ function showTechniquePicker(){
     const isRec=t.id===recommended;
     return `<div class="ft-tech-card${isRec?' recommended':''}" data-tech="${t.id}">
       <div class="ft-tech-icon">${t.icon}</div>
-      <div class="ft-tech-name">${t.name}${t.dur?' <span style="opacity:.5;font-weight:400;font-size:11px">${t.dur}min</span>':''}</div>
+      <div class="ft-tech-name">${t.name}${t.dur?` <span style="opacity:.5;font-weight:400;font-size:11px">${t.dur}min</span>`:''}</div>
       <div class="ft-tech-desc">${t.desc}</div>
       <span class="ft-tech-tag">${isRec?'✦ Suggested':t.tag}</span>
     </div>`;
