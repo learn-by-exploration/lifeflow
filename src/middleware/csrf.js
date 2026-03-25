@@ -15,10 +15,10 @@ function createCsrfMiddleware() {
     }
 
     // Public shared list endpoints are exempt (no session)
-    if (req.path.startsWith('/api/shared/')) return next();
+    if (req.path.startsWith('/shared/')) return next();
 
     // Auth endpoints exempt from CSRF (login/register use password as proof)
-    if (req.path === '/api/auth/login' || req.path === '/api/auth/register' || req.path === '/api/auth/logout') {
+    if (req.path === '/auth/login' || req.path === '/auth/register' || req.path === '/auth/logout') {
       ensureTokenCookie(req, res);
       return next();
     }
