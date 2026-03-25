@@ -3721,7 +3721,10 @@ async function renderHabits(){
     <div style="display:flex;gap:10px;align-items:end;margin-bottom:14px">
       <div style="flex-shrink:0">
         <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Icon</label>
-        <input type="text" id="hab-icon" value="💪" style="width:48px;padding:8px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:18px;text-align:center;font-family:inherit">
+        <div style="display:flex;gap:4px;align-items:center">
+          <input type="text" id="hab-icon" value="💪" style="width:48px;padding:8px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:18px;text-align:center;font-family:inherit">
+          <div id="hab-emoji-picks" style="display:flex;gap:2px"></div>
+        </div>
       </div>
       <div style="flex:1;min-width:0">
         <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Habit name</label>
@@ -3736,12 +3739,12 @@ async function renderHabits(){
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:16px">
       <div>
-        <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Times per day</label>
-        <input type="number" id="hab-target" value="1" min="1" max="99" style="width:80px;padding:8px 10px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:13px;font-family:inherit">
+        <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Frequency</label>
+        <select id="hab-freq" style="padding:8px 10px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:13px;font-family:inherit;cursor:pointer"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select>
       </div>
       <div>
-        <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Frequency</label>
-        <select id="hab-freq" style="padding:8px 10px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:13px;font-family:inherit;cursor:pointer"><option value="daily">Daily</option><option value="weekly">Weekly</option></select>
+        <label id="hab-target-label" style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Times per day</label>
+        <input type="number" id="hab-target" value="1" min="1" max="99" style="width:80px;padding:8px 10px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:13px;font-family:inherit">
       </div>
       <div>
         <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Area</label>
@@ -3797,6 +3800,16 @@ async function renderHabits(){
   // Event handlers
   document.getElementById('hab-add-btn')?.addEventListener('click',()=>{$('hab-form').style.display='block'});
   document.getElementById('hab-cancel')?.addEventListener('click',()=>{$('hab-form').style.display='none'});
+  // Dynamic target label based on frequency
+  document.getElementById('hab-freq')?.addEventListener('change',(e)=>{
+    const labels={daily:'Times per day',weekly:'Times per week',monthly:'Times per month',yearly:'Times per year'};
+    const tl=document.getElementById('hab-target-label');if(tl)tl.textContent=labels[e.target.value]||'Target';
+  });
+  // Emoji quick-picks
+  const emojiPicks=['💪','🏃','📚','🧘','💧','🎯','✍️','🥗','😴','🎵'];
+  const ep=document.getElementById('hab-emoji-picks');
+  if(ep){ep.innerHTML=emojiPicks.map(e=>`<span class="hab-emoji-pick" style="cursor:pointer;font-size:16px;padding:4px;border-radius:6px;transition:background .1s" title="${e}">${e}</span>`).join('');ep.querySelectorAll('.hab-emoji-pick').forEach(s=>s.addEventListener('click',()=>{$('hab-icon').value=s.textContent.trim()}));}
+  ep?.querySelectorAll('.hab-emoji-pick').forEach(s=>{s.addEventListener('mouseenter',()=>s.style.background='var(--bg-h)');s.addEventListener('mouseleave',()=>s.style.background='none')});
   document.getElementById('hab-save')?.addEventListener('click',async()=>{
     const name=$('hab-name').value.trim();if(!name)return;
     const areaVal=$('hab-area').value;const areaId=areaVal?Number(areaVal):null;
