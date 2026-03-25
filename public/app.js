@@ -3751,6 +3751,15 @@ async function renderHabits(){
         <select id="hab-area" style="padding:8px 10px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:13px;font-family:inherit;cursor:pointer"><option value="">None</option>${areaOpts}</select>
       </div>
     </div>
+    <div id="hab-day-picker" style="display:none;margin-bottom:16px">
+      <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:6px" id="hab-day-label">Select days</label>
+      <div id="hab-weekdays" style="display:none;gap:6px;flex-wrap:wrap">
+        ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`<button type="button" class="hab-day-btn" data-day="${d.toLowerCase()}" style="padding:6px 10px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:12px;cursor:pointer;transition:all .15s;font-family:inherit">${d}</button>`).join('')}
+      </div>
+      <div id="hab-monthdays" style="display:none;grid-template-columns:repeat(7,1fr);gap:4px;max-width:280px">
+        ${Array.from({length:31},(_,i)=>i+1).map(d=>`<button type="button" class="hab-mday-btn" data-day="${d}" style="padding:4px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:11px;cursor:pointer;transition:all .15s;font-family:inherit;text-align:center">${d}</button>`).join('')}
+      </div>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:12px;border-top:1px solid var(--brd)">
       <button class="btn-c" id="hab-cancel">Cancel</button>
       <button class="btn-s" id="hab-save">Create Habit</button>
@@ -3800,20 +3809,32 @@ async function renderHabits(){
   // Event handlers
   document.getElementById('hab-add-btn')?.addEventListener('click',()=>{$('hab-form').style.display='block'});
   document.getElementById('hab-cancel')?.addEventListener('click',()=>{$('hab-form').style.display='none'});
-  // Dynamic target label based on frequency
+  // Dynamic target label based on frequency + show/hide day picker
   document.getElementById('hab-freq')?.addEventListener('change',(e)=>{
     const labels={daily:'Times per day',weekly:'Times per week',monthly:'Times per month',yearly:'Times per year'};
     const tl=document.getElementById('hab-target-label');if(tl)tl.textContent=labels[e.target.value]||'Target';
+    const picker=$('hab-day-picker'),wd=$('hab-weekdays'),md=$('hab-monthdays');
+    if(e.target.value==='weekly'){picker.style.display='block';wd.style.display='flex';md.style.display='none';$('hab-day-label').textContent='Select days of the week';}
+    else if(e.target.value==='monthly'){picker.style.display='block';wd.style.display='none';md.style.display='grid';$('hab-day-label').textContent='Select days of the month';}
+    else{picker.style.display='none';wd.style.display='none';md.style.display='none';}
   });
   // Emoji quick-picks
   const emojiPicks=['💪','🏃','📚','🧘','💧','🎯','✍️','🥗','😴','🎵'];
   const ep=document.getElementById('hab-emoji-picks');
   if(ep){ep.innerHTML=emojiPicks.map(e=>`<span class="hab-emoji-pick" style="cursor:pointer;font-size:16px;padding:4px;border-radius:6px;transition:background .1s" title="${e}">${e}</span>`).join('');ep.querySelectorAll('.hab-emoji-pick').forEach(s=>s.addEventListener('click',()=>{$('hab-icon').value=s.textContent.trim()}));}
   ep?.querySelectorAll('.hab-emoji-pick').forEach(s=>{s.addEventListener('mouseenter',()=>s.style.background='var(--bg-h)');s.addEventListener('mouseleave',()=>s.style.background='none')});
+  // Day picker toggle buttons
+  const toggleDayBtn=(btn,color)=>{const on=btn.dataset.selected==='1';if(on){btn.dataset.selected='0';btn.style.background='var(--bg-s)';btn.style.color='var(--tx)';btn.style.borderColor='var(--brd)';}else{btn.dataset.selected='1';btn.style.background=color||'#6C63FF';btn.style.color='#fff';btn.style.borderColor=color||'#6C63FF';}};
+  document.querySelectorAll('.hab-day-btn').forEach(b=>b.addEventListener('click',()=>toggleDayBtn(b,$('hab-color')?.value)));
+  document.querySelectorAll('.hab-mday-btn').forEach(b=>b.addEventListener('click',()=>toggleDayBtn(b,$('hab-color')?.value)));
+  const getSelectedDays=()=>{const freq=$('hab-freq').value;if(freq==='weekly')return[...document.querySelectorAll('.hab-day-btn[data-selected="1"]')].map(b=>b.dataset.day);if(freq==='monthly')return[...document.querySelectorAll('.hab-mday-btn[data-selected="1"]')].map(b=>Number(b.dataset.day));return null;};
   document.getElementById('hab-save')?.addEventListener('click',async()=>{
     const name=$('hab-name').value.trim();if(!name)return;
     const areaVal=$('hab-area').value;const areaId=areaVal?Number(areaVal):null;
-    await api.post('/api/habits',{name,icon:$('hab-icon').value,color:$('hab-color').value,target:Number($('hab-target').value)||1,frequency:$('hab-freq').value,area_id:areaId});
+    const sd=getSelectedDays();
+    const body={name,icon:$('hab-icon').value,color:$('hab-color').value,target:Number($('hab-target').value)||1,frequency:$('hab-freq').value,area_id:areaId};
+    if(sd&&sd.length)body.schedule_days=sd;
+    await api.post('/api/habits',body);
     showToast('Habit created!');renderHabits();
   });
   // Check buttons (log/unlog)
@@ -3835,12 +3856,21 @@ async function renderHabits(){
     $('hab-name').value=hab.name;$('hab-icon').value=hab.icon||'⭐';
     $('hab-color').value=hab.color||'#6C63FF';$('hab-target').value=hab.target||1;
     $('hab-freq').value=hab.frequency||'daily';$('hab-area').value=hab.area_id||'';
+    // Show day picker and pre-select days for edit
+    const picker=$('hab-day-picker'),wd=$('hab-weekdays'),md=$('hab-monthdays');
+    document.querySelectorAll('.hab-day-btn,.hab-mday-btn').forEach(b=>{b.dataset.selected='0';b.style.background='var(--bg-s)';b.style.color='var(--tx)';b.style.borderColor='var(--brd)';});
+    if(hab.frequency==='weekly'){picker.style.display='block';wd.style.display='flex';md.style.display='none';$('hab-day-label').textContent='Select days of the week';if(Array.isArray(hab.schedule_days))hab.schedule_days.forEach(d=>{const b=document.querySelector(`.hab-day-btn[data-day="${d}"]`);if(b){b.dataset.selected='1';b.style.background=hab.color||'#6C63FF';b.style.color='#fff';b.style.borderColor=hab.color||'#6C63FF';}});}
+    else if(hab.frequency==='monthly'){picker.style.display='block';wd.style.display='none';md.style.display='grid';$('hab-day-label').textContent='Select days of the month';if(Array.isArray(hab.schedule_days))hab.schedule_days.forEach(d=>{const b=document.querySelector(`.hab-mday-btn[data-day="${d}"]`);if(b){b.dataset.selected='1';b.style.background=hab.color||'#6C63FF';b.style.color='#fff';b.style.borderColor=hab.color||'#6C63FF';}});}
+    else{picker.style.display='none';wd.style.display='none';md.style.display='none';}
     // Replace save handler for edit
     const saveBtn=$('hab-save');const newBtn=saveBtn.cloneNode(true);saveBtn.parentNode.replaceChild(newBtn,saveBtn);
     newBtn.textContent='Update';
     newBtn.addEventListener('click',async()=>{
       const eAreaVal=$('hab-area').value;const eAreaId=eAreaVal?Number(eAreaVal):null;
-      await api.put('/api/habits/'+hab.id,{name:$('hab-name').value.trim(),icon:$('hab-icon').value,color:$('hab-color').value,target:Number($('hab-target').value)||1,frequency:$('hab-freq').value,area_id:eAreaId});
+      const sd=getSelectedDays();
+      const body={name:$('hab-name').value.trim(),icon:$('hab-icon').value,color:$('hab-color').value,target:Number($('hab-target').value)||1,frequency:$('hab-freq').value,area_id:eAreaId};
+      if(sd&&sd.length)body.schedule_days=sd;else if($('hab-freq').value==='weekly'||$('hab-freq').value==='monthly')body.schedule_days=[];
+      await api.put('/api/habits/'+hab.id,body);
       showToast('Habit updated');renderHabits();
     });
   }));

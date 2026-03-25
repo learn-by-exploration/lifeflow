@@ -160,6 +160,8 @@ function initDatabase(dbDir) {
 
   // ─── Habits area link ───
   try { db.exec('ALTER TABLE habits ADD COLUMN area_id INTEGER DEFAULT NULL'); } catch(e) { /* already exists */ }
+  // ─── Habits schedule days (JSON array, e.g. ["mon","wed","fri"] or [1,15]) ───
+  try { db.exec('ALTER TABLE habits ADD COLUMN schedule_days TEXT DEFAULT NULL'); } catch(e) { /* already exists */ }
 
   // ─── Time block columns (nullable HH:MM) ───
   try { db.exec('ALTER TABLE tasks ADD COLUMN time_block_start TEXT DEFAULT NULL'); } catch(e) {}
