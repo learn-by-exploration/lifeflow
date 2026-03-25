@@ -146,3 +146,126 @@ describe('Focus visible — keyboard navigation', () => {
     );
   });
 });
+
+// ─── SPRINT 2: HTML Accessibility ───
+
+describe('Label-input association (for= attributes)', () => {
+  const labelForPairs = [
+    ['am-name', 'Area name'],
+    ['am-icon', 'Area icon'],
+    ['gm-title', 'Goal title'],
+    ['gm-desc', 'Goal description'],
+    ['gm-due', 'Goal due date'],
+    ['lm-name', 'List name'],
+    ['lm-icon', 'List icon'],
+    ['lm-area', 'List area'],
+    ['qc-goal', 'Quick capture goal'],
+    ['qc-pri', 'Quick capture priority'],
+    ['qc-due', 'Quick capture due'],
+    ['qc-list', 'Quick capture list'],
+  ];
+  for (const [id, desc] of labelForPairs) {
+    it(`label for="${id}" (${desc})`, () => {
+      assert.ok(
+        html.includes(`for="${id}"`),
+        `label for="${id}" must exist in HTML for ${desc}`
+      );
+    });
+  }
+});
+
+describe('Required attributes on critical inputs', () => {
+  const requiredIds = [
+    ['am-name', 'Area name'],
+    ['gm-title', 'Goal title'],
+    ['lm-name', 'List name'],
+    ['qc-title', 'Quick capture title'],
+  ];
+  for (const [id, desc] of requiredIds) {
+    it(`#${id} has required attribute (${desc})`, () => {
+      // Find the input tag containing this id and check it has required
+      const re = new RegExp(`id="${id}"[^>]*required`);
+      assert.ok(re.test(html), `#${id} (${desc}) must have required attribute`);
+    });
+    it(`#${id} has aria-required="true" (${desc})`, () => {
+      const re = new RegExp(`id="${id}"[^>]*aria-required="true"`);
+      assert.ok(re.test(html), `#${id} (${desc}) must have aria-required="true"`);
+    });
+  }
+});
+
+describe('Maxlength on text inputs', () => {
+  const maxlengthInputs = [
+    ['am-name', '100', 'Area name'],
+    ['gm-title', '200', 'Goal title'],
+    ['gm-desc', '2000', 'Goal description'],
+    ['lm-name', '100', 'List name'],
+    ['qc-title', '200', 'Quick capture title'],
+    ['onb-area-input', '100', 'Onboarding area'],
+    ['onb-goal-input', '200', 'Onboarding goal'],
+    ['onb-task-input', '200', 'Onboarding task'],
+  ];
+  for (const [id, len, desc] of maxlengthInputs) {
+    it(`#${id} has maxlength="${len}" (${desc})`, () => {
+      const re = new RegExp(`id="${id}"[^>]*maxlength="${len}"`);
+      assert.ok(re.test(html), `#${id} (${desc}) must have maxlength="${len}"`);
+    });
+  }
+});
+
+describe('Autocomplete attributes', () => {
+  const offInputs = [
+    ['am-name', 'Area name'],
+    ['gm-title', 'Goal title'],
+    ['lm-name', 'List name'],
+    ['qc-title', 'Quick capture title'],
+    ['sr-inp', 'Search'],
+    ['onb-area-input', 'Onboarding area'],
+    ['onb-goal-input', 'Onboarding goal'],
+    ['onb-task-input', 'Onboarding task'],
+  ];
+  for (const [id, desc] of offInputs) {
+    it(`#${id} has autocomplete="off" (${desc})`, () => {
+      const re = new RegExp(`id="${id}"[^>]*autocomplete="off"`);
+      assert.ok(re.test(html), `#${id} (${desc}) must have autocomplete="off"`);
+    });
+  }
+});
+
+describe('ARIA dialog attributes on modals', () => {
+  const modals = [
+    ['am', 'Area modal'],
+    ['gm', 'Goal modal'],
+    ['lm', 'List modal'],
+    ['sr-ov', 'Search overlay'],
+    ['qc-ov', 'Quick capture'],
+    ['ft-ov', 'Focus timer'],
+    ['kb-ov', 'Keyboard shortcuts'],
+    ['onb-ov', 'Onboarding wizard'],
+    ['dr-ov', 'Daily review'],
+    ['dp', 'Task detail panel'],
+  ];
+  for (const [id, desc] of modals) {
+    it(`#${id} has role="dialog" (${desc})`, () => {
+      const re = new RegExp(`id="${id}"[^>]*role="dialog"`);
+      assert.ok(re.test(html), `#${id} (${desc}) must have role="dialog"`);
+    });
+    it(`#${id} has aria-modal="true" (${desc})`, () => {
+      const re = new RegExp(`id="${id}"[^>]*aria-modal="true"`);
+      assert.ok(re.test(html), `#${id} (${desc}) must have aria-modal="true"`);
+    });
+    it(`#${id} has aria-label (${desc})`, () => {
+      const re = new RegExp(`id="${id}"[^>]*aria-label="`);
+      assert.ok(re.test(html), `#${id} (${desc}) must have aria-label`);
+    });
+  }
+});
+
+describe('Skip-to-content link exists', () => {
+  it('skip link is present', () => {
+    assert.ok(html.includes('class="skip-link"'), 'skip-link must exist');
+  });
+  it('skip link targets #ct', () => {
+    assert.ok(html.includes('href="#ct"'), 'skip link must target #ct');
+  });
+});

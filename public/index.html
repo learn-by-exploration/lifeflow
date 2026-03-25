@@ -116,8 +116,8 @@
 <!-- Area modal -->
 <div class="mo" id="am" role="dialog" aria-modal="true" aria-label="Life Area"><div class="md">
   <h3 id="am-t">New Life Area</h3>
-  <label>Name</label><input type="text" id="am-name" placeholder="e.g. Health, Career...">
-  <div class="md-row"><div><label>Icon</label><input type="text" id="am-icon" placeholder="💪" maxlength="4"></div><div><label>Color</label><div class="swatches" id="am-sw"></div></div></div>
+  <label for="am-name">Name</label><input type="text" id="am-name" placeholder="e.g. Health, Career..." required aria-required="true" maxlength="100" autocomplete="off">
+  <div class="md-row"><div><label for="am-icon">Icon</label><input type="text" id="am-icon" placeholder="💪" maxlength="4" autocomplete="off"></div><div><label>Color</label><div class="swatches" id="am-sw"></div></div></div>
   <input type="hidden" id="am-color" value="#2563EB">
   <div class="md-actions"><button class="btn-c" id="am-cancel">Cancel</button><button class="btn-s" id="am-save">Create</button></div>
 </div></div>
@@ -125,9 +125,9 @@
 <!-- Goal modal -->
 <div class="mo" id="gm" role="dialog" aria-modal="true" aria-label="Goal"><div class="md">
   <h3 id="gm-t">New Goal</h3>
-  <label>What do you want to achieve?</label><input type="text" id="gm-title" placeholder="e.g. Get fit by June">
-  <label>Description</label><textarea id="gm-desc" placeholder="Optional details..."></textarea>
-  <div class="md-row"><div><label>Target Date</label><input type="date" id="gm-due"></div><div><label>Color</label><div class="swatches" id="gm-sw"></div></div></div>
+  <label for="gm-title">What do you want to achieve?</label><input type="text" id="gm-title" placeholder="e.g. Get fit by June" required aria-required="true" maxlength="200" autocomplete="off">
+  <label for="gm-desc">Description</label><textarea id="gm-desc" placeholder="Optional details..." maxlength="2000"></textarea>
+  <div class="md-row"><div><label for="gm-due">Target Date</label><input type="date" id="gm-due"></div><div><label>Color</label><div class="swatches" id="gm-sw"></div></div></div>
   <input type="hidden" id="gm-color" value="#6C63FF">
   <div class="md-actions"><button class="btn-c" id="gm-cancel">Cancel</button><button class="btn-s" id="gm-save">Save</button></div>
 </div></div>
@@ -135,16 +135,16 @@
 <!-- List modal -->
 <div class="mo" id="lm" role="dialog" aria-modal="true" aria-label="List"><div class="md">
   <h3 id="lm-t">New List</h3>
-  <label>Name</label><input type="text" id="lm-name" placeholder="e.g. Weekly Groceries" maxlength="100">
+  <label for="lm-name">Name</label><input type="text" id="lm-name" placeholder="e.g. Weekly Groceries" maxlength="100" required aria-required="true" autocomplete="off">
   <label>Type</label>
   <div id="lm-types" style="display:flex;gap:8px;margin-bottom:12px">
     <label class="lm-type sel" data-type="checklist" style="flex:1;text-align:center;padding:10px;border:2px solid var(--brand);border-radius:var(--rs);cursor:pointer"><span style="font-size:22px;display:block">✅</span><span style="font-size:11px">Checklist</span></label>
     <label class="lm-type" data-type="grocery" style="flex:1;text-align:center;padding:10px;border:2px solid var(--brd);border-radius:var(--rs);cursor:pointer"><span style="font-size:22px;display:block">🛒</span><span style="font-size:11px">Grocery</span></label>
     <label class="lm-type" data-type="notes" style="flex:1;text-align:center;padding:10px;border:2px solid var(--brd);border-radius:var(--rs);cursor:pointer"><span style="font-size:22px;display:block">📝</span><span style="font-size:11px">Notes</span></label>
   </div>
-  <div class="md-row"><div><label>Icon</label><input type="text" id="lm-icon" value="📋" maxlength="4" style="width:50px"></div><div><label>Color</label><div class="swatches" id="lm-sw"></div></div></div>
+  <div class="md-row"><div><label for="lm-icon">Icon</label><input type="text" id="lm-icon" value="📋" maxlength="4" style="width:50px" autocomplete="off"></div><div><label>Color</label><div class="swatches" id="lm-sw"></div></div></div>
   <input type="hidden" id="lm-color" value="#2563EB">
-  <label>Area (optional)</label><select id="lm-area"><option value="">None</option></select>
+  <label for="lm-area">Area (optional)</label><select id="lm-area"><option value="">None</option></select>
   <div id="lm-tpl" style="margin-top:8px">
     <label style="font-size:11px;color:var(--txd)">Or start from a template:</label>
     <div id="lm-tpl-list" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px"></div>
@@ -172,17 +172,17 @@
 <div class="qc-ov" id="qc-ov" role="dialog" aria-modal="true" aria-label="Quick Capture">
   <div class="qc-box">
     <h3><span class="material-icons-round" style="font-size:18px;color:var(--brand)">bolt</span>Quick Capture</h3>
-    <input type="text" id="qc-title" placeholder="Buy groceries tomorrow p2 #errands">
+    <input type="text" id="qc-title" placeholder="Buy groceries tomorrow p2 #errands" required aria-required="true" maxlength="200" autocomplete="off">
     <div style="font-size:10px;color:var(--txd);margin:-6px 0 4px;padding:0 2px">Tip: use dates (<b>tomorrow</b>, <b>monday</b>), priority (<b>p1</b>-<b>p3</b>), and tags (<b>#tag</b>) inline</div>
     <div id="qc-nlp-preview" style="font-size:11px;color:var(--tx2);margin:0 0 8px;padding:0 2px;min-height:16px"></div>
-    <label style="display:block;font-size:11px;color:var(--txd);margin-bottom:3px;font-weight:500">Goal</label>
+    <label for="qc-goal" style="display:block;font-size:11px;color:var(--txd);margin-bottom:3px;font-weight:500">Goal</label>
     <select id="qc-goal"></select>
     <div class="qc-row">
-      <div><label style="display:block;font-size:11px;color:var(--txd);margin-bottom:3px;font-weight:500">Priority</label><select id="qc-pri"><option value="0">None</option><option value="1">Normal</option><option value="2">High</option><option value="3">Critical</option></select></div>
-      <div><label style="display:block;font-size:11px;color:var(--txd);margin-bottom:3px;font-weight:500">Due Date</label><input type="date" id="qc-due"></div>
+      <div><label for="qc-pri" style="display:block;font-size:11px;color:var(--txd);margin-bottom:3px;font-weight:500">Priority</label><select id="qc-pri"><option value="0">None</option><option value="1">Normal</option><option value="2">High</option><option value="3">Critical</option></select></div>
+      <div><label for="qc-due" style="display:block;font-size:11px;color:var(--txd);margin-bottom:3px;font-weight:500">Due Date</label><input type="date" id="qc-due"></div>
     </div>
     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;margin-top:4px"><input type="checkbox" id="qc-myday" style="width:auto;margin:0">Add to My Day</label>
-    <label style="display:block;font-size:11px;color:var(--txd);margin-bottom:3px;margin-top:8px;font-weight:500">Link to List <span style="font-weight:400;color:var(--tx2)">(optional)</span></label>
+    <label for="qc-list" style="display:block;font-size:11px;color:var(--txd);margin-bottom:3px;margin-top:8px;font-weight:500">Link to List <span style="font-weight:400;color:var(--tx2)">(optional)</span></label>
     <select id="qc-list"><option value="">None</option></select>
     <div class="qc-actions"><button class="btn-c" id="qc-cancel">Cancel</button><button class="btn-s" id="qc-save">Add Task</button></div>
   </div>
@@ -347,7 +347,7 @@
       <h2>Step 1: Create a Life Area</h2>
       <p style="color:var(--tx2);font-size:13px;margin-bottom:12px">Areas organize your life into categories. Example: <strong>Work</strong>, <strong>Health</strong>, <strong>Finances</strong></p>
       <div style="display:flex;gap:8px;margin-bottom:12px">
-        <input type="text" id="onb-area-input" placeholder="e.g., Work" style="flex:1;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px">
+        <input type="text" id="onb-area-input" placeholder="e.g., Work" maxlength="100" autocomplete="off" style="flex:1;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px">
         <select id="onb-area-icon" style="padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px;cursor:pointer">
           <option value="💼">💼 Work</option>
           <option value="💪">💪 Health</option>
@@ -365,7 +365,7 @@
     <div class="onb-step-3 onb-step" style="display:none">
       <h2>Step 2: Add a Goal</h2>
       <p style="color:var(--tx2);font-size:13px;margin-bottom:12px">Goals are what you want to achieve. Example: <strong>Complete Q1 project</strong>, <strong>Run 3x per week</strong></p>
-      <input type="text" id="onb-goal-input" placeholder="What do you want to achieve?" style="width:100%;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px;margin-bottom:12px;box-sizing:border-box">
+      <input type="text" id="onb-goal-input" placeholder="What do you want to achieve?" maxlength="200" autocomplete="off" style="width:100%;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px;margin-bottom:12px;box-sizing:border-box">
       <button class="onb-btn-next" id="onb-next-3">Add Goal →</button>
       <button class="onb-btn-skip" id="onb-skip-3">Skip Step</button>
     </div>
@@ -373,7 +373,7 @@
     <div class="onb-step-4 onb-step" style="display:none">
       <h2>Step 3: Create Your First Task</h2>
       <p style="color:var(--tx2);font-size:13px;margin-bottom:12px">Tasks are concrete actions. Example: <strong>Email client proposal</strong>, <strong>Buy groceries</strong></p>
-      <input type="text" id="onb-task-input" placeholder="What's your first action?" style="width:100%;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px;margin-bottom:12px;box-sizing:border-box">
+      <input type="text" id="onb-task-input" placeholder="What's your first action?" maxlength="200" autocomplete="off" style="width:100%;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px;margin-bottom:12px;box-sizing:border-box">
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <select id="onb-task-priority" style="flex:1;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px">
           <option value="1">Normal Priority</option>
