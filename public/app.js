@@ -3758,7 +3758,7 @@ async function renderHabits(){
       </div>
       <div style="flex:1;min-width:0">
         <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Habit name</label>
-        <input type="text" id="hab-name" placeholder="e.g. Exercise, Read, Meditate..." style="width:100%;padding:8px 12px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:13px;font-family:inherit">
+        <input type="text" id="hab-name" placeholder="e.g. Exercise, Read, Meditate..." maxlength="100" autocomplete="off" style="width:100%;padding:8px 12px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:13px;font-family:inherit">
       </div>
       <div style="flex-shrink:0">
         <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Color</label>
@@ -3808,6 +3808,7 @@ async function renderHabits(){
       h+=`<div class="habit-card" data-hid="${hab.id}">
         <div class="hc-head"><span style="font-size:24px">${esc(hab.icon||'⭐')}</span><span class="hc-name">${esc(hab.name)}</span>${hab.preferred_time?`<span style="font-size:10px;color:var(--txd);margin-left:auto;white-space:nowrap">⏰ ${hab.preferred_time.replace(/^0/,'').replace(/^(\d+):(\d+)$/,(m,h,mi)=>Number(h)>=12?(Number(h)===12?12:Number(h)-12)+':'+mi+' PM':((Number(h)||12)+':'+mi+' AM'))}</span>`:''}
           <span class="hc-streak" style="background:${escA(hab.color||'#6C63FF')}20;color:${escA(hab.color||'#6C63FF')}">${streakEmoji(hab.streak||0)} ${hab.streak||0}${hab.total_completions?' · '+hab.total_completions+' total':''}</span></div>
+        ${Array.isArray(hab.schedule_days)&&hab.schedule_days.length?`<div style="display:flex;gap:3px;flex-wrap:wrap;margin:4px 0">${hab.schedule_days.map(d=>`<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:${escA(hab.color||'#6C63FF')}15;color:${escA(hab.color||'#6C63FF')};border:1px solid ${escA(hab.color||'#6C63FF')}30">${esc(String(d))}</span>`).join('')}</div>`:''}
         <div style="display:flex;align-items:center;gap:10px;margin:8px 0">
           <div class="habit-bar" style="flex:1"><div class="habit-bar-fill" style="width:${pct}%;background:${escA(hab.color||'#6C63FF')}"></div></div>
           <span style="font-size:11px;color:var(--txd)">${hab.todayCount||0}/${hab.target}</span>
@@ -3864,7 +3865,10 @@ async function renderHabits(){
   document.querySelectorAll('.hab-mday-btn').forEach(b=>b.addEventListener('click',()=>toggleDayBtn(b,$('hab-color')?.value)));
   const getSelectedDays=()=>{const freq=$('hab-freq').value;if(freq==='weekly')return[...document.querySelectorAll('.hab-day-btn[data-selected="1"]')].map(b=>b.dataset.day);if(freq==='monthly')return[...document.querySelectorAll('.hab-mday-btn[data-selected="1"]')].map(b=>Number(b.dataset.day));return null;};
   document.getElementById('hab-save')?.addEventListener('click',async()=>{
-    const name=$('hab-name').value.trim();if(!name)return;
+    const name=$('hab-name').value.trim();
+    if(!name){$('hab-name').classList.add('inp-err');$('hab-name').focus();showToast('Please enter a habit name');return;}
+    if(name.length>100){$('hab-name').classList.add('inp-err');$('hab-name').focus();showToast('Habit name too long (max 100 characters)');return;}
+    $('hab-name').classList.remove('inp-err');
     const areaVal=$('hab-area').value;const areaId=areaVal?Number(areaVal):null;
     const sd=getSelectedDays();
     const body={name,icon:$('hab-icon').value,color:$('hab-color').value,target:Number($('hab-target').value)||1,frequency:$('hab-freq').value,area_id:areaId};
@@ -3903,6 +3907,10 @@ async function renderHabits(){
     const saveBtn=$('hab-save');const newBtn=saveBtn.cloneNode(true);saveBtn.parentNode.replaceChild(newBtn,saveBtn);
     newBtn.textContent='Update';
     newBtn.addEventListener('click',async()=>{
+      const editName=$('hab-name').value.trim();
+      if(!editName){$('hab-name').classList.add('inp-err');$('hab-name').focus();showToast('Please enter a habit name');return;}
+      if(editName.length>100){$('hab-name').classList.add('inp-err');$('hab-name').focus();showToast('Habit name too long (max 100)');return;}
+      $('hab-name').classList.remove('inp-err');
       const eAreaVal=$('hab-area').value;const eAreaId=eAreaVal?Number(eAreaVal):null;
       const sd=getSelectedDays();
       const body={name:$('hab-name').value.trim(),icon:$('hab-icon').value,color:$('hab-color').value,target:Number($('hab-target').value)||1,frequency:$('hab-freq').value,area_id:eAreaId};

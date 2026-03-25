@@ -383,3 +383,72 @@ describe('Backend maxlength validation', () => {
     assert.ok(areasJS.includes('Name too long'), 'areas.js must validate area name maxlength');
   });
 });
+
+// ─── SPRINT 4: Habits Form Inputs ───
+
+describe('Habit form — input attributes', () => {
+  const appJS = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+
+  it('hab-name has maxlength="100"', () => {
+    assert.ok(appJS.includes('id="hab-name"') && appJS.includes('maxlength="100"'), 'hab-name must have maxlength 100');
+  });
+
+  it('hab-name has autocomplete="off"', () => {
+    const re = /id="hab-name"[^>]*autocomplete="off"/;
+    assert.ok(re.test(appJS), 'hab-name must have autocomplete off');
+  });
+});
+
+describe('Habit form — validation', () => {
+  const appJS = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+
+  it('save handler validates empty name', () => {
+    assert.ok(
+      appJS.includes("'hab-name'") && appJS.includes('Please enter a habit name'),
+      'habit save must show error for empty name'
+    );
+  });
+
+  it('save handler validates name length', () => {
+    assert.ok(
+      appJS.includes('Habit name too long'),
+      'habit save must reject name > 100 chars'
+    );
+  });
+
+  it('edit handler also validates name', () => {
+    // There should be TWO occurrences of 'Please enter a habit name' — create + edit
+    const matches = appJS.match(/Please enter a habit name/g);
+    assert.ok(matches && matches.length >= 2, 'both create and edit handlers must validate habit name');
+  });
+
+  it('adds inp-err class on invalid habit name', () => {
+    // Should reference hab-name with inp-err
+    assert.ok(
+      appJS.includes("$('hab-name').classList.add('inp-err')"),
+      'habit validation must add inp-err to hab-name'
+    );
+  });
+});
+
+describe('Habit cards — schedule_days display', () => {
+  const appJS = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+
+  it('renders schedule_days on habit cards', () => {
+    assert.ok(
+      appJS.includes('hab.schedule_days') && appJS.includes('schedule_days.map'),
+      'habit card must show schedule_days when present'
+    );
+  });
+});
+
+describe('Habit backend — maxlength', () => {
+  const featJS = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'features.js'), 'utf8');
+
+  it('habits POST validates name maxlength', () => {
+    assert.ok(
+      featJS.includes('Name too long'),
+      'features.js habits POST must validate name maxlength'
+    );
+  });
+});
