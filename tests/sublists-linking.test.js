@@ -196,11 +196,9 @@ describe('Sub-lists & Task-to-List Linking', () => {
   // ─── HEALTH ENDPOINT ───
 
   describe('GET /health', () => {
-    it('returns ok status with version and dbOk', async () => {
+    it('returns ok status with dbOk', async () => {
       const res = await agent().get('/health').expect(200);
       assert.equal(res.body.status, 'ok');
-      assert.ok(typeof res.body.uptime === 'number');
-      assert.ok(typeof res.body.version === 'string');
       assert.equal(res.body.dbOk, true);
     });
   });

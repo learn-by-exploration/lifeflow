@@ -1,11 +1,13 @@
 const COLORS=['#D50000','#E67C73','#F4511E','#F6BF26','#33B679','#0B8043','#039BE5','#3F51B5','#7986CB','#8E24AA','#616161','#795548'];
 const $=id=>document.getElementById(id);
 const api={
+  _csrfToken:null,
+  _getCsrf(){if(this._csrfToken)return this._csrfToken;const m=document.cookie.match(/csrf_token=([a-f0-9]{64})/);return m?m[1]:''},
   async get(u){try{const r=await fetch(u);if(r.status===401){window.location.href='/login';return{}}if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
-  async post(u,d){try{const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(r.status===401){window.location.href='/login';return{}}if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
-  async put(u,d){try{const r=await fetch(u,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(r.status===401){window.location.href='/login';return{}}if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
-  async del(u){try{const r=await fetch(u,{method:'DELETE'});if(r.status===401){window.location.href='/login';return{}}if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
-  async patch(u,d){try{const r=await fetch(u,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});if(r.status===401){window.location.href='/login';return{}}if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}}
+  async post(u,d){try{const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':this._getCsrf()},body:JSON.stringify(d)});if(r.status===401){window.location.href='/login';return{}}if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
+  async put(u,d){try{const r=await fetch(u,{method:'PUT',headers:{'Content-Type':'application/json','X-CSRF-Token':this._getCsrf()},body:JSON.stringify(d)});if(r.status===401){window.location.href='/login';return{}}if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
+  async del(u){try{const r=await fetch(u,{method:'DELETE',headers:{'X-CSRF-Token':this._getCsrf()}});if(r.status===401){window.location.href='/login';return{}}if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}},
+  async patch(u,d){try{const r=await fetch(u,{method:'PATCH',headers:{'Content-Type':'application/json','X-CSRF-Token':this._getCsrf()},body:JSON.stringify(d)});if(r.status===401){window.location.href='/login';return{}}if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}}
 };
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 
@@ -2717,7 +2719,9 @@ function renderMd(text){
   h=h.replace(/`([^`]+)`/g,'<code>$1</code>');
   h=h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
   h=h.replace(/\*(.+?)\*/g,'<em>$1</em>');
-  h=h.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  h=h.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,(m,label,url)=>{
+    try{const u=new URL(url);if(u.protocol!=='http:'&&u.protocol!=='https:')return esc(label);return'<a href="'+escA(url)+'" target="_blank" rel="noopener">'+label+'</a>'}catch(e){return esc(label)}
+  });
   h=h.replace(/^### (.+)$/gm,'<h3>$1</h3>');
   h=h.replace(/^## (.+)$/gm,'<h2>$1</h2>');
   h=h.replace(/^# (.+)$/gm,'<h1>$1</h1>');

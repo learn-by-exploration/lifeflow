@@ -268,6 +268,18 @@ function initDatabase(dbDir) {
   try { db.exec('CREATE INDEX idx_tasks_my_day ON tasks(my_day) WHERE my_day=1'); } catch(e) {}
   try { db.exec('CREATE INDEX idx_tasks_due ON tasks(due_date) WHERE due_date IS NOT NULL'); } catch(e) {}
 
+  // ─── Security: Additional performance indexes (S4) ───
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_goals_status ON goals(user_id, status)'); } catch(e) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority)'); } catch(e) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_task_tags_tag ON task_tags(tag_id)'); } catch(e) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_task_comments_task ON task_comments(task_id)'); } catch(e) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_goal_milestones_goal ON goal_milestones(goal_id)'); } catch(e) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_focus_sessions_task ON focus_sessions(task_id)'); } catch(e) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_lists_area ON lists(area_id)'); } catch(e) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_notes_goal ON notes(goal_id)'); } catch(e) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_weekly_reviews_week ON weekly_reviews(week_start)'); } catch(e) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_habit_logs_composite ON habit_logs(habit_id, log_date)'); } catch(e) {}
+
   // ─── FTS5 Virtual Table for Global Search ───
   db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
     type, source_id UNINDEXED, title, body, context,
@@ -355,12 +367,15 @@ function initDatabase(dbDir) {
   const settingsInfo = db.prepare("PRAGMA table_info(settings)").all();
   const keyCol = settingsInfo.find(c => c.name === 'key' && c.pk === 1);
   if (keyCol) {
-    db.exec(`
-      CREATE TABLE settings_v2 (user_id INTEGER NOT NULL DEFAULT 1, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (user_id, key));
-      INSERT OR IGNORE INTO settings_v2 (user_id, key, value) SELECT COALESCE(user_id, 1), key, value FROM settings;
-      DROP TABLE settings;
-      ALTER TABLE settings_v2 RENAME TO settings;
-    `);
+    const migrateTx = db.transaction(() => {
+      db.exec(`
+        CREATE TABLE settings_v2 (user_id INTEGER NOT NULL DEFAULT 1, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (user_id, key));
+        INSERT OR IGNORE INTO settings_v2 (user_id, key, value) SELECT COALESCE(user_id, 1), key, value FROM settings;
+        DROP TABLE settings;
+        ALTER TABLE settings_v2 RENAME TO settings;
+      `);
+    });
+    try { migrateTx(); } catch(e) { /* migration may have already run */ }
   }
 
   // ─── Auto-create default user on first boot ───

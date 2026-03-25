@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 module.exports = function(deps) {
-  const { db, enrichTasks, dbDir } = deps;
+  const { db, enrichTasks, dbDir, audit } = deps;
   const router = Router();
 
   // ─── Auto Backup ───
@@ -46,6 +46,7 @@ module.exports = function(deps) {
     const tasks = enrichTasks(db.prepare('SELECT * FROM tasks WHERE user_id=? ORDER BY goal_id, position').all(req.userId));
     const tags = db.prepare('SELECT * FROM tags WHERE user_id=? ORDER BY name').all(req.userId);
     res.setHeader('Content-Disposition', 'attachment; filename=lifeflow-export.json');
+    if (audit) audit.log(req.userId, 'data_export', 'export', null, req);
     res.json({ exportDate: new Date().toISOString(), areas, goals, tasks, tags });
   });
 
@@ -122,6 +123,7 @@ module.exports = function(deps) {
     });
     try {
       importTx();
+      if (audit) audit.log(req.userId, 'data_import', 'import', null, req);
       res.json({ ok: true, message: 'Import successful' });
     } catch (e) {
       console.error('Import failed:', e.message);

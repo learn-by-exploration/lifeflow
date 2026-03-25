@@ -69,13 +69,18 @@ function createAuthMiddleware(db) {
  * Must be used AFTER requireAuth (needs req.userId).
  */
 function createRequirePassword(db, bcrypt) {
+  // Dummy hash for timing-attack mitigation
+  const DUMMY_HASH = bcrypt.hashSync('__dummy_timing_pad__', 12);
   return function requirePassword(req, res, next) {
     const { password } = req.body;
     if (!password) {
       return res.status(403).json({ error: 'Password confirmation required for this action' });
     }
     const user = db.prepare('SELECT password_hash FROM users WHERE id=?').get(req.userId);
-    if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    // Always call bcrypt to prevent timing attacks
+    const hashToCompare = user ? user.password_hash : DUMMY_HASH;
+    const valid = bcrypt.compareSync(password, hashToCompare);
+    if (!user || !valid) {
       return res.status(403).json({ error: 'Incorrect password' });
     }
     next();

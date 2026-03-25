@@ -1,4 +1,5 @@
 const { Router } = require('express');
+const { isValidColor } = require('../middleware/validate');
 module.exports = function(deps) {
   const { db, getNextPosition } = deps;
   const router = Router();
@@ -20,6 +21,7 @@ router.post('/api/areas', (req, res) => {
   const { name, icon, color } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
   if (name.trim().length > 100) return res.status(400).json({ error: 'Name too long (max 100 characters)' });
+  if (!isValidColor(color)) return res.status(400).json({ error: 'Invalid color format (hex required)' });
   const pos = getNextPosition('life_areas');
   const r = db.prepare('INSERT INTO life_areas (name,icon,color,position,user_id) VALUES (?,?,?,?,?)').run(name.trim(), icon||'📋', color||'#2563EB', pos, req.userId);
   res.status(201).json(db.prepare('SELECT * FROM life_areas WHERE id=? AND user_id=?').get(r.lastInsertRowid, req.userId));
@@ -48,6 +50,7 @@ router.put('/api/areas/:id', (req, res) => {
   const { name, icon, color, position, default_view } = req.body;
   if (name !== undefined && (!name || !name.trim())) return res.status(400).json({ error: 'Name cannot be empty' });
   if (name && name.trim().length > 100) return res.status(400).json({ error: 'Name too long (max 100 characters)' });
+  if (!isValidColor(color)) return res.status(400).json({ error: 'Invalid color format (hex required)' });
   if (default_view !== undefined) {
     db.prepare('UPDATE life_areas SET name=COALESCE(?,name),icon=COALESCE(?,icon),color=COALESCE(?,color),position=COALESCE(?,position),default_view=? WHERE id=? AND user_id=?').run(
       name ? name.trim() : null, icon||null, color||null, position!==undefined?position:null, default_view||null, id, req.userId
@@ -101,6 +104,7 @@ router.post('/api/areas/:areaId/goals', (req, res) => {
   if (!Number.isInteger(areaId)) return res.status(400).json({ error: 'Invalid ID' });
   const { title, description, color, due_date } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
+  if (!isValidColor(color)) return res.status(400).json({ error: 'Invalid color format (hex required)' });
   const pos = getNextPosition('goals', 'area_id', areaId);
   const r = db.prepare('INSERT INTO goals (area_id,title,description,color,due_date,position,user_id) VALUES (?,?,?,?,?,?,?)').run(areaId,title.trim(),description||'',color||'#6C63FF',due_date||null,pos,req.userId);
   res.status(201).json(db.prepare('SELECT * FROM goals WHERE id=? AND user_id=?').get(r.lastInsertRowid, req.userId));

@@ -64,6 +64,8 @@ router.post('/api/inbox/:id/triage', (req, res) => {
   const { goal_id, due_date, priority } = req.body;
   if (!goal_id || !Number.isInteger(Number(goal_id))) return res.status(400).json({ error: 'goal_id required' });
   const gid = Number(goal_id);
+  const goalOwned = db.prepare('SELECT id FROM goals WHERE id=? AND user_id=?').get(gid, req.userId);
+  if (!goalOwned) return res.status(403).json({ error: 'Goal not found or not owned by you' });
   const pos = getNextPosition('tasks', 'goal_id', gid);
   const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,position,user_id) VALUES (?,?,?,?,?,?,?)').run(
     gid, item.title, item.note, priority !== undefined ? priority : item.priority, due_date || null, pos, req.userId

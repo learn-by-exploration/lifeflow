@@ -1,4 +1,8 @@
 module.exports = function createHelpers(db) {
+  function verifyGoalOwnership(goalId, userId) {
+    const goal = db.prepare('SELECT id FROM goals WHERE id=? AND user_id=?').get(goalId, userId);
+    return !!goal;
+  }
   function getTaskTags(taskId) {
     return db.prepare('SELECT t.* FROM tags t JOIN task_tags tt ON t.id=tt.tag_id WHERE tt.task_id=?').all(taskId);
   }
@@ -63,16 +67,26 @@ module.exports = function createHelpers(db) {
       if (p === 'daily') d.setDate(d.getDate() + n);
       else if (p === 'weekly') d.setDate(d.getDate() + 7 * n);
       else if (p === 'biweekly') d.setDate(d.getDate() + 14);
-      else if (p === 'monthly') { for (let i = 0; i < n; i++) d.setMonth(d.getMonth() + 1); }
+      else if (p === 'monthly') {
+        const origDay = d.getDate();
+        for (let i = 0; i < n; i++) {
+          d.setDate(1); // avoid month-end overflow
+          d.setMonth(d.getMonth() + 1);
+          const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+          d.setDate(Math.min(origDay, maxDay));
+        }
+      }
       else if (p === 'yearly') d.setFullYear(d.getFullYear() + n);
       else if (p === 'weekdays') {
         do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
       } else if (p === 'specific-days' && Array.isArray(cfg.days)) {
-        // days = [0-6] (Sun-Sat). Find next matching day.
-        for (let i = 0; i < 7; i++) {
+        // days = [0-6] (Sun-Sat). Find next matching day. Guard: max 8 iterations.
+        let found = false;
+        for (let i = 0; i < 8; i++) {
           d.setDate(d.getDate() + 1);
-          if (cfg.days.includes(d.getDay())) break;
+          if (cfg.days.includes(d.getDay())) { found = true; break; }
         }
+        if (!found) return null;
       } else return null;
       // Check end conditions
       const nextDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -83,7 +97,13 @@ module.exports = function createHelpers(db) {
       if (recurrence === 'daily') d.setDate(d.getDate() + 1);
       else if (recurrence === 'weekly') d.setDate(d.getDate() + 7);
       else if (recurrence === 'biweekly') d.setDate(d.getDate() + 14);
-      else if (recurrence === 'monthly') d.setMonth(d.getMonth() + 1);
+      else if (recurrence === 'monthly') {
+        const origDay = d.getDate();
+        d.setDate(1);
+        d.setMonth(d.getMonth() + 1);
+        const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+        d.setDate(Math.min(origDay, maxDay));
+      }
       else if (recurrence === 'yearly') d.setFullYear(d.getFullYear() + 1);
       else {
         const evDays = recurrence.match(/^every-(\d+)-days$/);
@@ -122,5 +142,5 @@ module.exports = function createHelpers(db) {
       }
     });
   }
-  return { getTaskTags, getSubtasks, getBlockedBy, getNextPosition, enrichTask, enrichTasks, nextDueDate, executeRules };
+  return { getTaskTags, getSubtasks, getBlockedBy, getNextPosition, enrichTask, enrichTasks, nextDueDate, executeRules, verifyGoalOwnership };
 };

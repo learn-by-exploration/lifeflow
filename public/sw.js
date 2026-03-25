@@ -1,7 +1,7 @@
 // Service Worker for LifeFlow push notifications
 // Handles background notifications + offline support
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2-' + '20250327';
 const CACHE_NAME = `lifeflow-${CACHE_VERSION}`;
 
 const urlsToCache = [
@@ -17,7 +17,12 @@ self.addEventListener('install', event => {
       return cache.addAll(urlsToCache).catch(err => {
         console.log('Cache addAll error:', err);
       });
-    }).then(() => self.skipWaiting())
+    }).then(() => {
+      // Notify clients that an update is available instead of forcing skipWaiting
+      self.clients.matchAll().then(clients => {
+        clients.forEach(c => c.postMessage({ type: 'sw-update-available' }));
+      });
+    })
   );
 });
 
@@ -40,15 +45,17 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const { request } = event;
   
-  // API calls: network-first
+  // API calls: network-first — only cache successful responses
   if (request.url.includes('/api/')) {
     event.respondWith(
       fetch(request)
         .then(response => {
-          const clonedResponse = response.clone();
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(request, clonedResponse);
-          });
+          if (response.ok) {
+            const clonedResponse = response.clone();
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(request, clonedResponse);
+            });
+          }
           return response;
         })
         .catch(() => caches.match(request))
@@ -81,7 +88,7 @@ self.addEventListener('push', event => {
       badge: '/favicon.ico',
       tag: data.tag || 'lifeflow-notification',
       requireInteraction: data.requireInteraction || false,
-      data: { taskId: data.taskId, url: data.url || '/' }
+      data: { taskId: data.taskId, url: sanitizePushUrl(data.url) }
     };
     
     event.waitUntil(self.registration.showNotification(data.title, options));
@@ -90,11 +97,23 @@ self.addEventListener('push', event => {
   }
 });
 
+// Validate push notification URLs — only allow relative paths or same-origin
+function sanitizePushUrl(url) {
+  if (!url || typeof url !== 'string') return '/';
+  // Only allow relative paths starting with /
+  if (url.startsWith('/') && !url.startsWith('//')) return url;
+  try {
+    const parsed = new URL(url, self.location.origin);
+    if (parsed.origin === self.location.origin) return parsed.pathname + parsed.search;
+  } catch(e) {}
+  return '/';
+}
+
 // Handle notification clicks
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   
-  const url = event.notification.data?.url || '/';
+  const url = sanitizePushUrl(event.notification.data?.url);
   const taskId = event.notification.data?.taskId;
   
   // Focus existing window or open new one
@@ -149,7 +168,9 @@ async function syncReminders() {
 
 // Handle messages from main app (e.g., request to show notification)
 self.addEventListener('message', event => {
-  if (event.data?.type === 'show-notification') {
+  if (event.data?.type === 'skip-waiting') {
+    self.skipWaiting();
+  } else if (event.data?.type === 'show-notification') {
     const { notification } = event.data;
     if (notification) {
       self.registration.showNotification(notification.title, {

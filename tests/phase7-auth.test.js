@@ -17,7 +17,7 @@ describe('Phase 7 - Authentication & Security', () => {
   describe('POST /api/auth/register', () => {
     it('registers a new user and returns user data', async () => {
       const res = await rawAgent().post('/api/auth/register')
-        .send({ email: 'new@example.com', password: 'password123', display_name: 'New User' });
+        .send({ email: 'new@example.com', password: 'Password123@x', display_name: 'New User' });
       assert.equal(res.status, 201);
       assert.ok(res.body.user);
       assert.equal(res.body.user.email, 'new@example.com');
@@ -27,7 +27,7 @@ describe('Phase 7 - Authentication & Security', () => {
 
     it('sets a session cookie on registration', async () => {
       const res = await rawAgent().post('/api/auth/register')
-        .send({ email: 'cookie@example.com', password: 'password123' });
+        .send({ email: 'cookie@example.com', password: 'Password123@x' });
       assert.equal(res.status, 201);
       const cookie = res.headers['set-cookie'];
       assert.ok(cookie, 'Should set cookie header');
@@ -38,7 +38,7 @@ describe('Phase 7 - Authentication & Security', () => {
 
     it('rejects registration without email', async () => {
       const res = await rawAgent().post('/api/auth/register')
-        .send({ password: 'password123' });
+        .send({ password: 'Password123@x' });
       assert.equal(res.status, 400);
     });
 
@@ -48,30 +48,30 @@ describe('Phase 7 - Authentication & Security', () => {
       assert.equal(res.status, 400);
     });
 
-    it('rejects password shorter than 8 characters', async () => {
+    it('rejects password shorter than 12 characters', async () => {
       const res = await rawAgent().post('/api/auth/register')
         .send({ email: 'short@example.com', password: 'short' });
       assert.equal(res.status, 400);
-      assert.ok(res.body.error.includes('8 characters'));
+      assert.ok(res.body.error.includes('12 characters'));
     });
 
     it('rejects invalid email format', async () => {
       const res = await rawAgent().post('/api/auth/register')
-        .send({ email: 'not-an-email', password: 'password123' });
+        .send({ email: 'not-an-email', password: 'Password123@x' });
       assert.equal(res.status, 400);
     });
 
-    it('rejects duplicate email', async () => {
+    it('returns 201 for duplicate email (anti-enumeration)', async () => {
       await rawAgent().post('/api/auth/register')
-        .send({ email: 'dup@example.com', password: 'password123' });
+        .send({ email: 'dup@example.com', password: 'Password123@x' });
       const res = await rawAgent().post('/api/auth/register')
-        .send({ email: 'dup@example.com', password: 'password456' });
-      assert.equal(res.status, 409);
+        .send({ email: 'dup@example.com', password: 'Password456@x' });
+      assert.equal(res.status, 201);
     });
 
     it('normalizes email to lowercase', async () => {
       const res = await rawAgent().post('/api/auth/register')
-        .send({ email: 'UPPER@EXAMPLE.COM', password: 'password123' });
+        .send({ email: 'UPPER@EXAMPLE.COM', password: 'Password123@x' });
       assert.equal(res.status, 201);
       assert.equal(res.body.user.email, 'upper@example.com');
     });
@@ -82,9 +82,9 @@ describe('Phase 7 - Authentication & Security', () => {
     it('logs in with valid credentials', async () => {
       // Register first
       await rawAgent().post('/api/auth/register')
-        .send({ email: 'login@example.com', password: 'password123' });
+        .send({ email: 'login@example.com', password: 'Password123@x' });
       const res = await rawAgent().post('/api/auth/login')
-        .send({ email: 'login@example.com', password: 'password123' });
+        .send({ email: 'login@example.com', password: 'Password123@x' });
       assert.equal(res.status, 200);
       assert.ok(res.body.user);
       assert.equal(res.body.user.email, 'login@example.com');
@@ -92,9 +92,9 @@ describe('Phase 7 - Authentication & Security', () => {
 
     it('sets session cookie on login', async () => {
       await rawAgent().post('/api/auth/register')
-        .send({ email: 'logincookie@example.com', password: 'password123' });
+        .send({ email: 'logincookie@example.com', password: 'Password123@x' });
       const res = await rawAgent().post('/api/auth/login')
-        .send({ email: 'logincookie@example.com', password: 'password123' });
+        .send({ email: 'logincookie@example.com', password: 'Password123@x' });
       const cookie = res.headers['set-cookie'];
       assert.ok(cookie);
       assert.ok(String(cookie).includes('lf_sid='));
@@ -102,15 +102,15 @@ describe('Phase 7 - Authentication & Security', () => {
 
     it('rejects wrong password', async () => {
       await rawAgent().post('/api/auth/register')
-        .send({ email: 'wrong@example.com', password: 'password123' });
+        .send({ email: 'wrong@example.com', password: 'Password123@x' });
       const res = await rawAgent().post('/api/auth/login')
-        .send({ email: 'wrong@example.com', password: 'wrongpassword' });
+        .send({ email: 'wrong@example.com', password: 'WrongPassword@x' });
       assert.equal(res.status, 401);
     });
 
     it('rejects non-existent email', async () => {
       const res = await rawAgent().post('/api/auth/login')
-        .send({ email: 'nobody@example.com', password: 'password123' });
+        .send({ email: 'nobody@example.com', password: 'Password123@x' });
       assert.equal(res.status, 401);
     });
 
@@ -121,9 +121,9 @@ describe('Phase 7 - Authentication & Security', () => {
 
     it('updates last_login timestamp', async () => {
       await rawAgent().post('/api/auth/register')
-        .send({ email: 'lastlogin@example.com', password: 'password123' });
+        .send({ email: 'lastlogin@example.com', password: 'Password123@x' });
       await rawAgent().post('/api/auth/login')
-        .send({ email: 'lastlogin@example.com', password: 'password123' });
+        .send({ email: 'lastlogin@example.com', password: 'Password123@x' });
       const { db } = setup();
       const user = db.prepare('SELECT last_login FROM users WHERE email = ?').get('lastlogin@example.com');
       assert.ok(user.last_login);
@@ -131,9 +131,9 @@ describe('Phase 7 - Authentication & Security', () => {
 
     it('remember=true sets long maxAge cookie', async () => {
       await rawAgent().post('/api/auth/register')
-        .send({ email: 'remember@example.com', password: 'password123' });
+        .send({ email: 'remember@example.com', password: 'Password123@x' });
       const res = await rawAgent().post('/api/auth/login')
-        .send({ email: 'remember@example.com', password: 'password123', remember: true });
+        .send({ email: 'remember@example.com', password: 'Password123@x', remember: true });
       const cookie = String(res.headers['set-cookie']);
       // 30 days = 2592000 seconds
       assert.ok(cookie.includes('Max-Age=2592000'));
@@ -141,9 +141,9 @@ describe('Phase 7 - Authentication & Security', () => {
 
     it('remember=false sets short maxAge cookie', async () => {
       await rawAgent().post('/api/auth/register')
-        .send({ email: 'norem@example.com', password: 'password123' });
+        .send({ email: 'norem@example.com', password: 'Password123@x' });
       const res = await rawAgent().post('/api/auth/login')
-        .send({ email: 'norem@example.com', password: 'password123', remember: false });
+        .send({ email: 'norem@example.com', password: 'Password123@x', remember: false });
       const cookie = String(res.headers['set-cookie']);
       // 24 hours = 86400 seconds
       assert.ok(cookie.includes('Max-Age=86400'));
@@ -161,7 +161,7 @@ describe('Phase 7 - Authentication & Security', () => {
     it('destroys session in database', async () => {
       // Register and get cookie
       const regRes = await rawAgent().post('/api/auth/register')
-        .send({ email: 'logout@example.com', password: 'password123' });
+        .send({ email: 'logout@example.com', password: 'Password123@x' });
       const cookie = String(regRes.headers['set-cookie']);
       const sidMatch = cookie.match(/lf_sid=([^;]+)/);
       assert.ok(sidMatch);
@@ -197,46 +197,46 @@ describe('Phase 7 - Authentication & Security', () => {
     it('changes password with valid current password', async () => {
       // Register a user
       const regRes = await rawAgent().post('/api/auth/register')
-        .send({ email: 'changepw@example.com', password: 'oldpassword1' });
+        .send({ email: 'changepw@example.com', password: 'OldPassword1@x' });
       const cookie = String(regRes.headers['set-cookie']).match(/lf_sid=([^;]+)/)[1];
 
       const res = await rawAgent().post('/api/auth/change-password')
         .set('Cookie', `lf_sid=${cookie}`)
-        .send({ current_password: 'oldpassword1', new_password: 'newpassword1' });
+        .send({ current_password: 'OldPassword1@x', new_password: 'NewPassword1@x' });
       assert.equal(res.status, 200);
       assert.ok(res.body.ok);
 
       // Verify new password works
       const loginRes = await rawAgent().post('/api/auth/login')
-        .send({ email: 'changepw@example.com', password: 'newpassword1' });
+        .send({ email: 'changepw@example.com', password: 'NewPassword1@x' });
       assert.equal(loginRes.status, 200);
     });
 
     it('rejects wrong current password', async () => {
       const regRes = await rawAgent().post('/api/auth/register')
-        .send({ email: 'wrongcur@example.com', password: 'correctpw1' });
+        .send({ email: 'wrongcur@example.com', password: 'CorrectPw1!@x' });
       const cookie = String(regRes.headers['set-cookie']).match(/lf_sid=([^;]+)/)[1];
 
       const res = await rawAgent().post('/api/auth/change-password')
         .set('Cookie', `lf_sid=${cookie}`)
-        .send({ current_password: 'wrongpassword', new_password: 'newpassword1' });
+        .send({ current_password: 'WrongPassword@x', new_password: 'NewPassword1@x' });
       assert.equal(res.status, 401);
     });
 
     it('rejects short new password', async () => {
       const regRes = await rawAgent().post('/api/auth/register')
-        .send({ email: 'shortpw@example.com', password: 'password123' });
+        .send({ email: 'shortpw@example.com', password: 'Password123@x' });
       const cookie = String(regRes.headers['set-cookie']).match(/lf_sid=([^;]+)/)[1];
 
       const res = await rawAgent().post('/api/auth/change-password')
         .set('Cookie', `lf_sid=${cookie}`)
-        .send({ current_password: 'password123', new_password: 'short' });
+        .send({ current_password: 'Password123@x', new_password: 'short' });
       assert.equal(res.status, 400);
     });
 
     it('returns 401 when not authenticated', async () => {
       const res = await rawAgent().post('/api/auth/change-password')
-        .send({ current_password: 'old', new_password: 'newpassword1' });
+        .send({ current_password: 'old', new_password: 'NewPassword1@x' });
       assert.equal(res.status, 401);
     });
   });

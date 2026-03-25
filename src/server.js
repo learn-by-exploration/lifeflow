@@ -9,6 +9,8 @@ const createHelpers = require('./helpers');
 const createAuthMiddleware = require('./middleware/auth');
 const { createRequirePassword } = require('./middleware/auth');
 const errorHandler = require('./middleware/errors');
+const createCsrfMiddleware = require('./middleware/csrf');
+const createAuditLogger = require('./services/audit');
 const pkg = require('../package.json');
 
 const app = express();
@@ -18,6 +20,13 @@ const dbDir = process.env.DB_DIR || path.join(__dirname, '..');
 const { db, rebuildSearchIndex } = initDatabase(dbDir);
 const helpers = createHelpers(db);
 const deps = { db, dbDir, rebuildSearchIndex, ...helpers };
+
+// ─── Audit logger ───
+const audit = createAuditLogger(db);
+deps.audit = audit;
+// Purge old audit records daily
+setInterval(() => audit.purge(), 24 * 60 * 60 * 1000);
+
 const { requireAuth, optionalAuth } = createAuthMiddleware(db);
 const bcrypt = require('bcryptjs');
 const requirePassword = createRequirePassword(db, bcrypt);
@@ -35,6 +44,10 @@ app.use(helmet({
       objectSrc: ["'none'"],
       frameAncestors: ["'none'"]
     }
+  },
+  strictTransportSecurity: {
+    maxAge: 31536000,
+    includeSubDomains: true
   }
 }));
 
@@ -65,6 +78,12 @@ const authLimiter = isTest ? (req, res, next) => next() : rateLimit({
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// ─── CSRF Protection ───
+const csrfProtection = createCsrfMiddleware();
+if (!isTest) {
+  app.use('/api', csrfProtection);
+}
+
 // ─── Apply auth middleware to all /api/* routes ───
 app.use('/api', (req, res, next) => {
   // Auth endpoints use optionalAuth (sets req.userId if session exists, but doesn't require it)
@@ -75,9 +94,11 @@ app.use('/api', (req, res, next) => {
 // ─── Auth routes ───
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/change-password', authLimiter);
 app.use(require('./routes/auth')(deps));
 
 // ─── Destructive endpoint protection (require password re-entry) ───
+app.use('/api/import', express.json({ limit: '10mb' }));
 app.use('/api/import', requirePassword);
 app.use('/api/demo/reset', requirePassword);
 
@@ -105,7 +126,7 @@ app.get('/health', (req, res) => {
   try { db.prepare('SELECT 1').get(); dbOk = true; } catch {}
   const status = dbOk ? 'ok' : 'error';
   const code = dbOk ? 200 : 503;
-  res.status(code).json({ status, version: pkg.version, uptime: process.uptime(), dbOk });
+  res.status(code).json({ status, dbOk });
 });
 
 // ─── Login page (accessible without auth) ───

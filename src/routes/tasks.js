@@ -1,6 +1,6 @@
 const { Router } = require('express');
 module.exports = function(deps) {
-  const { db, rebuildSearchIndex, enrichTask, enrichTasks, getNextPosition, nextDueDate, executeRules } = deps;
+  const { db, rebuildSearchIndex, enrichTask, enrichTasks, getNextPosition, nextDueDate, executeRules, verifyGoalOwnership } = deps;
   const router = Router();
 
 // ─── Tasks ───
@@ -166,7 +166,10 @@ router.put('/api/tasks/bulk', (req, res) => {
       if (changes.priority !== undefined) { sets.push('priority=?'); vals.push(changes.priority); }
       if (changes.due_date !== undefined) { sets.push('due_date=?'); vals.push(changes.due_date); }
       if (changes.my_day !== undefined) { sets.push('my_day=?'); vals.push(changes.my_day ? 1 : 0); }
-      if (changes.goal_id !== undefined) { sets.push('goal_id=?'); vals.push(changes.goal_id); }
+      if (changes.goal_id !== undefined) {
+        if (!verifyGoalOwnership(Number(changes.goal_id), req.userId)) continue;
+        sets.push('goal_id=?'); vals.push(changes.goal_id);
+      }
       if (changes.status !== undefined) {
         sets.push('status=?'); vals.push(changes.status);
         if (changes.status === 'done' && ex.status !== 'done') {
@@ -222,8 +225,8 @@ router.put('/api/tasks/:id', (req, res) => {
     if (nd) {
       const recurTx = db.transaction(() => {
         const rpos = getNextPosition('tasks', 'goal_id', ex.goal_id);
-        const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(
-          ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.due_time, ex.recurring, ex.assigned_to, 0, rpos, req.userId
+        const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,time_block_start,time_block_end,estimated_minutes,list_id,user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
+          ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.due_time, ex.recurring, ex.assigned_to, 0, rpos, ex.time_block_start, ex.time_block_end, ex.estimated_minutes, ex.list_id, req.userId
         );
         // Copy tags to new task
         const oldTags = db.prepare('SELECT tag_id FROM task_tags WHERE task_id=?').all(id);
@@ -256,6 +259,7 @@ router.delete('/api/tasks/:id', (req, res) => {
 router.post('/api/tasks/parse', (req, res) => {
   const { text } = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: 'Text required' });
+  if (String(text).length > 500) return res.status(400).json({ error: 'Input too long (max 500 characters)' });
   let input = text.trim();
   let priority = 0, due_date = null, tags = [], my_day = false;
   // Extract priority: p1 p2 p3 or !1 !2 !3
@@ -404,6 +408,7 @@ router.post('/api/tasks/:id/skip', (req, res) => {
   db.prepare("UPDATE tasks SET status='done', completed_at=? WHERE id=?").run(new Date().toISOString(), id);
   // Spawn next occurrence
   const nd = nextDueDate(ex.due_date, ex.recurring);
+  if (!nd) return res.json({ skipped: id, next: null });
   const spos = getNextPosition('tasks', 'goal_id', ex.goal_id);
   const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(
     ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.due_time, ex.recurring, ex.assigned_to, 0, spos, req.userId
@@ -421,8 +426,7 @@ router.post('/api/tasks/:id/move', (req, res) => {
   if (!goal_id) return res.status(400).json({ error: 'goal_id required' });
   const ex = db.prepare('SELECT * FROM tasks WHERE id=? AND user_id=?').get(id, req.userId);
   if (!ex) return res.status(404).json({ error: 'Not found' });
-  const goal = db.prepare('SELECT * FROM goals WHERE id=?').get(Number(goal_id));
-  if (!goal) return res.status(404).json({ error: 'Goal not found' });
+  if (!verifyGoalOwnership(Number(goal_id), req.userId)) return res.status(404).json({ error: 'Goal not found or not owned by you' });
   db.prepare('UPDATE tasks SET goal_id=? WHERE id=?').run(Number(goal_id), id);
   res.json(enrichTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(id)));
 });

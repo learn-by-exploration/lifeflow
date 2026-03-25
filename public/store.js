@@ -12,7 +12,9 @@ const Store=(()=>{
     _state[key]=value;
     if(old!==value)emit('change:'+key,{key,value,old});
   }
-  function getAll(){return{..._state}}
+  function getAll(){
+    try{return JSON.parse(JSON.stringify(_state))}catch(e){return{..._state}}
+  }
 
   // Event system
   function on(event,fn){
@@ -23,6 +25,7 @@ const Store=(()=>{
   function off(event,fn){
     if(!_listeners[event])return;
     _listeners[event]=_listeners[event].filter(f=>f!==fn);
+    if(_listeners[event].length===0)delete _listeners[event];
   }
   function emit(event,data){
     if(_listeners[event])_listeners[event].forEach(fn=>fn(data));

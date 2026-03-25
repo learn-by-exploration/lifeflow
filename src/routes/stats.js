@@ -38,6 +38,9 @@ router.get('/api/stats', (req, res) => {
 router.post('/api/focus', (req, res) => {
   const { task_id, duration_sec, type, scheduled_at } = req.body;
   if (!task_id || !Number.isInteger(Number(task_id))) return res.status(400).json({ error: 'task_id required' });
+  // Verify task exists and belongs to user
+  const taskOwner = db.prepare('SELECT id FROM tasks WHERE id=? AND user_id=?').get(Number(task_id), req.userId);
+  if (!taskOwner) return res.status(404).json({ error: 'Task not found' });
   const r = db.prepare('INSERT INTO focus_sessions (task_id, duration_sec, type, scheduled_at, user_id) VALUES (?,?,?,?,?)').run(
     Number(task_id), duration_sec || 0, type || 'pomodoro', scheduled_at || null, req.userId
   );
@@ -88,7 +91,7 @@ router.get('/api/focus/insights', (req, res) => {
   const peakHours = db.prepare(`
     SELECT CAST(strftime('%H', started_at) AS INTEGER) as hour,
       COUNT(*) as sessions, AVG(duration_sec) as avg_duration
-    FROM focus_sessions WHERE user_id=? GROUP BY hour ORDER BY sessions DESC
+    FROM focus_sessions WHERE user_id=? AND started_at >= date('now', '-365 days') GROUP BY hour ORDER BY sessions DESC
   `).all(req.userId);
   const byStrategy = db.prepare(`
     SELECT COALESCE(m.strategy, 'pomodoro') as strategy, COUNT(*) as sessions,

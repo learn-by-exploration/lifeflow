@@ -94,6 +94,8 @@ router.post('/api/templates/:id/apply', (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const { goalId } = req.body;
   if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'goalId required' });
+  const goalOwned = db.prepare('SELECT id FROM goals WHERE id=? AND user_id=?').get(goalId, req.userId);
+  if (!goalOwned) return res.status(403).json({ error: 'Goal not found or not owned by you' });
   const tmpl = db.prepare('SELECT * FROM task_templates WHERE id=? AND user_id=?').get(id, req.userId);
   if (!tmpl) return res.status(404).json({ error: 'Template not found' });
   let tasks;
