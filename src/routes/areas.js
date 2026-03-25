@@ -104,6 +104,8 @@ router.post('/api/areas/:areaId/goals', (req, res) => {
   if (!Number.isInteger(areaId)) return res.status(400).json({ error: 'Invalid ID' });
   const { title, description, color, due_date } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
+  if (title.trim().length > 200) return res.status(400).json({ error: 'Title too long (max 200 characters)' });
+  if (description && description.length > 2000) return res.status(400).json({ error: 'Description too long (max 2000 characters)' });
   if (!isValidColor(color)) return res.status(400).json({ error: 'Invalid color format (hex required)' });
   const pos = getNextPosition('goals', 'area_id', areaId);
   const r = db.prepare('INSERT INTO goals (area_id,title,description,color,due_date,position,user_id) VALUES (?,?,?,?,?,?,?)').run(areaId,title.trim(),description||'',color||'#6C63FF',due_date||null,pos,req.userId);

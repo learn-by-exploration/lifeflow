@@ -116,7 +116,7 @@
 <!-- Area modal -->
 <div class="mo" id="am" role="dialog" aria-modal="true" aria-label="Life Area"><div class="md">
   <h3 id="am-t">New Life Area</h3>
-  <label for="am-name">Name</label><input type="text" id="am-name" placeholder="e.g. Health, Career..." required aria-required="true" maxlength="100" autocomplete="off">
+  <label for="am-name">Name</label><input type="text" id="am-name" placeholder="e.g. Health, Career..." required aria-required="true" maxlength="100" autocomplete="off"><span class="field-err" id="am-name-err" role="alert"></span>
   <div class="md-row"><div><label for="am-icon">Icon</label><input type="text" id="am-icon" placeholder="💪" maxlength="4" autocomplete="off"></div><div><label>Color</label><div class="swatches" id="am-sw"></div></div></div>
   <input type="hidden" id="am-color" value="#2563EB">
   <div class="md-actions"><button class="btn-c" id="am-cancel">Cancel</button><button class="btn-s" id="am-save">Create</button></div>
@@ -125,7 +125,7 @@
 <!-- Goal modal -->
 <div class="mo" id="gm" role="dialog" aria-modal="true" aria-label="Goal"><div class="md">
   <h3 id="gm-t">New Goal</h3>
-  <label for="gm-title">What do you want to achieve?</label><input type="text" id="gm-title" placeholder="e.g. Get fit by June" required aria-required="true" maxlength="200" autocomplete="off">
+  <label for="gm-title">What do you want to achieve?</label><input type="text" id="gm-title" placeholder="e.g. Get fit by June" required aria-required="true" maxlength="200" autocomplete="off"><span class="field-err" id="gm-title-err" role="alert"></span>
   <label for="gm-desc">Description</label><textarea id="gm-desc" placeholder="Optional details..." maxlength="2000"></textarea>
   <div class="md-row"><div><label for="gm-due">Target Date</label><input type="date" id="gm-due"></div><div><label>Color</label><div class="swatches" id="gm-sw"></div></div></div>
   <input type="hidden" id="gm-color" value="#6C63FF">
@@ -135,7 +135,7 @@
 <!-- List modal -->
 <div class="mo" id="lm" role="dialog" aria-modal="true" aria-label="List"><div class="md">
   <h3 id="lm-t">New List</h3>
-  <label for="lm-name">Name</label><input type="text" id="lm-name" placeholder="e.g. Weekly Groceries" maxlength="100" required aria-required="true" autocomplete="off">
+  <label for="lm-name">Name</label><input type="text" id="lm-name" placeholder="e.g. Weekly Groceries" maxlength="100" required aria-required="true" autocomplete="off"><span class="field-err" id="lm-name-err" role="alert"></span>
   <label>Type</label>
   <div id="lm-types" style="display:flex;gap:8px;margin-bottom:12px">
     <label class="lm-type sel" data-type="checklist" style="flex:1;text-align:center;padding:10px;border:2px solid var(--brand);border-radius:var(--rs);cursor:pointer"><span style="font-size:22px;display:block">✅</span><span style="font-size:11px">Checklist</span></label>
@@ -172,7 +172,7 @@
 <div class="qc-ov" id="qc-ov" role="dialog" aria-modal="true" aria-label="Quick Capture">
   <div class="qc-box">
     <h3><span class="material-icons-round" style="font-size:18px;color:var(--brand)">bolt</span>Quick Capture</h3>
-    <input type="text" id="qc-title" placeholder="Buy groceries tomorrow p2 #errands" required aria-required="true" maxlength="200" autocomplete="off">
+    <input type="text" id="qc-title" placeholder="Buy groceries tomorrow p2 #errands" required aria-required="true" maxlength="200" autocomplete="off"><span class="field-err" id="qc-title-err" role="alert"></span>
     <div style="font-size:10px;color:var(--txd);margin:-6px 0 4px;padding:0 2px">Tip: use dates (<b>tomorrow</b>, <b>monday</b>), priority (<b>p1</b>-<b>p3</b>), and tags (<b>#tag</b>) inline</div>
     <div id="qc-nlp-preview" style="font-size:11px;color:var(--tx2);margin:0 0 8px;padding:0 2px;min-height:16px"></div>
     <label for="qc-goal" style="display:block;font-size:11px;color:var(--txd);margin-bottom:3px;font-weight:500">Goal</label>

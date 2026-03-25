@@ -56,6 +56,8 @@ router.post('/api/goals/:goalId/tasks', (req, res) => {
   if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'Invalid ID' });
   const { title, note, priority, due_date, due_time, recurring, assigned_to, my_day, tagIds, time_block_start, time_block_end, estimated_minutes, list_id } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
+  if (title.trim().length > 500) return res.status(400).json({ error: 'Title too long (max 500 characters)' });
+  if (note && note.length > 5000) return res.status(400).json({ error: 'Note too long (max 5000 characters)' });
   if (due_date !== undefined && due_date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(due_date)) return res.status(400).json({ error: 'Invalid due_date format (YYYY-MM-DD)' });
   if (priority !== undefined && priority !== null && ![0,1,2,3].includes(Number(priority))) return res.status(400).json({ error: 'Priority must be 0-3' });
   if (estimated_minutes !== undefined && estimated_minutes !== null && (typeof estimated_minutes !== 'number' || estimated_minutes < 0)) return res.status(400).json({ error: 'estimated_minutes must be a non-negative number' });

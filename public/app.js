@@ -11,6 +11,32 @@ const api={
 };
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 
+// ─── FORM VALIDATION HELPER ───
+function validateField(inputId, rules) {
+  const el = $(inputId); if (!el) return true;
+  const v = el.value.trim();
+  const errEl = document.getElementById(inputId + '-err');
+  let msg = '';
+  if (rules.required && !v) msg = rules.requiredMsg || 'This field is required';
+  else if (rules.maxlength && v.length > rules.maxlength) msg = `Max ${rules.maxlength} characters`;
+  else if (rules.pattern && !rules.pattern.test(v)) msg = rules.patternMsg || 'Invalid format';
+  if (msg) {
+    el.classList.add('inp-err');
+    if (errEl) { errEl.textContent = msg; errEl.classList.add('visible'); }
+    el.focus();
+    return false;
+  }
+  el.classList.remove('inp-err');
+  if (errEl) { errEl.textContent = ''; errEl.classList.remove('visible'); }
+  return true;
+}
+function clearFieldError(inputId) {
+  const el = $(inputId); if (!el) return;
+  el.classList.remove('inp-err');
+  const errEl = document.getElementById(inputId + '-err');
+  if (errEl) { errEl.textContent = ''; errEl.classList.remove('visible'); }
+}
+
 // ─── OVERLAY LIFECYCLE (scroll-lock, focus save/restore) ───
 let _overlayStack=[];
 function _lockBody(){document.body.style.overflow='hidden'}
@@ -1484,6 +1510,9 @@ async function renderDeps(){
 $('dp-close').addEventListener('click',()=>$('dp').classList.remove('open'));
 $('dp-cancel').addEventListener('click',()=>$('dp').classList.remove('open'));
 $('dp-save').addEventListener('click',async()=>{
+  const dpTitleVal=$('dp-ttl').value.trim();
+  if(!dpTitleVal){showToast('Task title cannot be empty');$('dp-ttl').classList.add('inp-err');$('dp-ttl').focus();return;}
+  $('dp-ttl').classList.remove('inp-err');
   let rec=$('dp-rec').value||null;
   if(rec==='custom'){const n=parseInt($('dp-rec-n').value)||3;const u=$('dp-rec-unit').value;rec='every-'+n+'-'+u}
   await api.put('/api/tasks/'+dpTask.id,{
@@ -1512,12 +1541,13 @@ function openAreaModal(area){
     buildSwatches('am-sw','am-color','#2563EB');
     $('am-save').textContent='Create';
   }
-  $('am').classList.add('active');$('am-name').focus();
+  $('am').classList.add('active');$('am-name').focus();clearFieldError('am-name');
 }
 $('add-area-btn').addEventListener('click',(e)=>{e.stopPropagation();openAreaModal()});
 $('am-cancel').addEventListener('click',()=>$('am').classList.remove('active'));
 $('am-save').addEventListener('click',async()=>{
-  const n=$('am-name').value.trim();if(!n){showToast('Please enter an area name');return;}
+  if(!validateField('am-name',{required:true,maxlength:100,requiredMsg:'Please enter an area name'}))return;
+  const n=$('am-name').value.trim();
   const data={name:n,icon:$('am-icon').value||'📋',color:$('am-color').value};
   if(_editAreaId){await api.put('/api/areas/'+_editAreaId,data)}
   else{await api.post('/api/areas',data)}
@@ -1530,7 +1560,7 @@ function openGM(id){
   $('gm').classList.add('active');$('gm-title').focus();
 }
 $('gm-cancel').addEventListener('click',()=>$('gm').classList.remove('active'));
-$('gm-save').addEventListener('click',async()=>{const t=$('gm-title').value.trim();if(!t){showToast('Please enter a goal title');return;}
+$('gm-save').addEventListener('click',async()=>{if(!validateField('gm-title',{required:true,maxlength:200,requiredMsg:'Please enter a goal title'}))return;const t=$('gm-title').value.trim();
   const d={title:t,description:$('gm-desc').value,due_date:$('gm-due').value||null,color:$('gm-color').value};
   if(editingId)await api.put('/api/goals/'+editingId,d);else await api.post('/api/areas/'+activeAreaId+'/goals',d);
   $('gm').classList.remove('active');await loadAreas();render()});
@@ -2076,8 +2106,8 @@ $('qc-title').addEventListener('input',()=>{
 async function saveQC(){
   const goalId=Number($('qc-goal').value);
   if(!goalId)return;
+  if(!validateField('qc-title',{required:true,maxlength:200,requiredMsg:'Please enter a task title'}))return;
   let title=$('qc-title').value.trim();
-  if(!title)return;
   // Use NLP parsed values as defaults, allow manual overrides
   let pri=Number($('qc-pri').value), due=$('qc-due').value||null, myday=$('qc-myday').checked;
   let tagIds=[];
@@ -3430,8 +3460,8 @@ document.querySelectorAll('.lm-type').forEach(t=>t.addEventListener('click',()=>
 }));
 $('lm-cancel').addEventListener('click',()=>$('lm').classList.remove('active'));
 $('lm-save').addEventListener('click',async()=>{
+  if(!validateField('lm-name',{required:true,maxlength:100,requiredMsg:'Please enter a list name'}))return;
   const name=$('lm-name').value.trim();
-  if(!name){showToast('Please enter a list name');return;}
   const type=document.querySelector('.lm-type.sel')?.dataset.type||'checklist';
   const icon=$('lm-icon').value||'📋';
   const color=$('lm-color').value;

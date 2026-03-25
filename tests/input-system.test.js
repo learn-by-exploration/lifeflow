@@ -269,3 +269,117 @@ describe('Skip-to-content link exists', () => {
     assert.ok(html.includes('href="#ct"'), 'skip link must target #ct');
   });
 });
+
+// ─── SPRINT 3: Validation Engine ───
+
+describe('validateField() helper exists in app.js', () => {
+  const appJS = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+
+  it('defines validateField function', () => {
+    assert.ok(appJS.includes('function validateField('), 'validateField must be defined');
+  });
+
+  it('defines clearFieldError function', () => {
+    assert.ok(appJS.includes('function clearFieldError('), 'clearFieldError must be defined');
+  });
+
+  it('validateField adds inp-err class on error', () => {
+    assert.ok(appJS.includes("classList.add('inp-err')"), 'should add inp-err on invalid');
+  });
+
+  it('validateField removes inp-err class on success', () => {
+    assert.ok(appJS.includes("classList.remove('inp-err')"), 'should remove inp-err on valid');
+  });
+
+  it('validateField checks required', () => {
+    assert.ok(appJS.includes('rules.required'), 'must check required rule');
+  });
+
+  it('validateField checks maxlength', () => {
+    assert.ok(appJS.includes('rules.maxlength'), 'must check maxlength rule');
+  });
+
+  it('validateField checks pattern', () => {
+    assert.ok(appJS.includes('rules.pattern'), 'must check pattern rule');
+  });
+
+  it('validateField shows error message', () => {
+    assert.ok(appJS.includes("classList.add('visible')"), 'must show .field-err.visible');
+  });
+});
+
+describe('Save handlers use validateField', () => {
+  const appJS = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+
+  it('area save validates am-name', () => {
+    assert.ok(appJS.includes("validateField('am-name'"), 'area save must call validateField for am-name');
+  });
+
+  it('goal save validates gm-title', () => {
+    assert.ok(appJS.includes("validateField('gm-title'"), 'goal save must call validateField for gm-title');
+  });
+
+  it('list save validates lm-name', () => {
+    assert.ok(appJS.includes("validateField('lm-name'"), 'list save must call validateField for lm-name');
+  });
+
+  it('quick capture save validates qc-title', () => {
+    assert.ok(appJS.includes("validateField('qc-title'"), 'QC save must call validateField for qc-title');
+  });
+
+  it('detail panel save validates title', () => {
+    assert.ok(
+      appJS.includes("dp-ttl") && appJS.includes("Task title cannot be empty"),
+      'DP save must validate title not empty'
+    );
+  });
+});
+
+describe('Inline error spans exist in HTML', () => {
+  const errSpans = [
+    ['am-name-err', 'Area name error'],
+    ['gm-title-err', 'Goal title error'],
+    ['lm-name-err', 'List name error'],
+    ['qc-title-err', 'Quick capture title error'],
+  ];
+  for (const [id, desc] of errSpans) {
+    it(`#${id} error span exists (${desc})`, () => {
+      assert.ok(html.includes(`id="${id}"`), `Error span #${id} must exist for ${desc}`);
+    });
+    it(`#${id} has role="alert" (${desc})`, () => {
+      assert.ok(
+        html.includes(`id="${id}" role="alert"`),
+        `Error span #${id} must have role="alert" for screen readers`
+      );
+    });
+    it(`#${id} has field-err class (${desc})`, () => {
+      const re = new RegExp(`class="field-err"[^>]*id="${id}"`);
+      assert.ok(re.test(html), `#${id} must have class="field-err"`);
+    });
+  }
+});
+
+describe('Backend maxlength validation', () => {
+  const tasksJS = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'tasks.js'), 'utf8');
+  const areasJS = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'areas.js'), 'utf8');
+
+  it('tasks route validates title maxlength', () => {
+    assert.ok(tasksJS.includes('Title too long'), 'tasks.js must validate title maxlength');
+  });
+
+  it('tasks route validates note maxlength', () => {
+    assert.ok(tasksJS.includes('Note too long'), 'tasks.js must validate note maxlength');
+  });
+
+  it('goals route validates title maxlength', () => {
+    assert.ok(areasJS.includes('Title too long'), 'areas.js must validate goal title maxlength');
+  });
+
+  it('goals route validates description maxlength', () => {
+    assert.ok(areasJS.includes('Description too long'), 'areas.js must validate description maxlength');
+  });
+
+  it('areas route validates area name maxlength', () => {
+    assert.ok(areasJS.includes('Name too long'), 'areas.js must validate area name maxlength');
+  });
+});
