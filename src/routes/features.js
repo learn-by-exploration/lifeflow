@@ -346,8 +346,9 @@ router.get('/api/habits', (req, res) => {
   res.json(habits);
 });
 router.post('/api/habits', (req, res) => {
-  const { name, icon, color, frequency, target, area_id, schedule_days } = req.body;
+  const { name, icon, color, frequency, target, area_id, schedule_days, preferred_time } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  if (preferred_time !== undefined && preferred_time !== null && preferred_time !== '' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(preferred_time)) return res.status(400).json({ error: 'preferred_time must be HH:MM format' });
   const validFreqs = ['daily','weekly','monthly','yearly'];
   if (frequency && !validFreqs.includes(frequency)) return res.status(400).json({ error: 'Invalid frequency (must be daily, weekly, monthly, or yearly)' });
   if (target !== undefined && target !== null && (typeof target !== 'number' || target < 1 || !Number.isInteger(target))) return res.status(400).json({ error: 'Target must be a positive integer' });
@@ -368,8 +369,9 @@ router.post('/api/habits', (req, res) => {
     sdJson = JSON.stringify(schedule_days);
   }
   const pos = getNextPosition('habits');
-  const r = db.prepare('INSERT INTO habits (name,icon,color,frequency,target,position,area_id,schedule_days,user_id) VALUES (?,?,?,?,?,?,?,?,?)').run(
-    name.trim(), icon || '✅', color || '#22C55E', frequency || 'daily', target || 1, pos, area_id || null, sdJson, req.userId
+  const ptVal = (preferred_time && /^([01]\d|2[0-3]):[0-5]\d$/.test(preferred_time)) ? preferred_time : null;
+  const r = db.prepare('INSERT INTO habits (name,icon,color,frequency,target,position,area_id,schedule_days,preferred_time,user_id) VALUES (?,?,?,?,?,?,?,?,?,?)').run(
+    name.trim(), icon || '✅', color || '#22C55E', frequency || 'daily', target || 1, pos, area_id || null, sdJson, ptVal, req.userId
   );
   const created = db.prepare('SELECT * FROM habits WHERE id=? AND user_id=?').get(r.lastInsertRowid, req.userId);
   if (created && created.schedule_days) try { created.schedule_days = JSON.parse(created.schedule_days); } catch(e) {}
@@ -380,13 +382,17 @@ router.put('/api/habits/:id', (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const ex = db.prepare('SELECT * FROM habits WHERE id=? AND user_id=?').get(id, req.userId);
   if (!ex) return res.status(404).json({ error: 'Not found' });
-  const { name, icon, color, frequency, target, archived, area_id, schedule_days } = req.body;
+  const { name, icon, color, frequency, target, archived, area_id, schedule_days, preferred_time } = req.body;
   let sdVal = undefined;
   if (schedule_days !== undefined) {
     sdVal = (schedule_days && Array.isArray(schedule_days) && schedule_days.length > 0) ? JSON.stringify(schedule_days) : null;
   }
-  db.prepare('UPDATE habits SET name=COALESCE(?,name),icon=COALESCE(?,icon),color=COALESCE(?,color),frequency=COALESCE(?,frequency),target=COALESCE(?,target),archived=COALESCE(?,archived),area_id=?,schedule_days=COALESCE(?,schedule_days) WHERE id=? AND user_id=?').run(
-    name||null, icon||null, color||null, frequency||null, target!==undefined?target:null, archived!==undefined?archived:null, area_id!==undefined?area_id:ex.area_id, sdVal!==undefined?sdVal:null, id, req.userId
+  let ptVal = undefined;
+  if (preferred_time !== undefined) {
+    ptVal = (preferred_time && /^([01]\d|2[0-3]):[0-5]\d$/.test(preferred_time)) ? preferred_time : null;
+  }
+  db.prepare('UPDATE habits SET name=COALESCE(?,name),icon=COALESCE(?,icon),color=COALESCE(?,color),frequency=COALESCE(?,frequency),target=COALESCE(?,target),archived=COALESCE(?,archived),area_id=?,schedule_days=COALESCE(?,schedule_days),preferred_time=COALESCE(?,preferred_time) WHERE id=? AND user_id=?').run(
+    name||null, icon||null, color||null, frequency||null, target!==undefined?target:null, archived!==undefined?archived:null, area_id!==undefined?area_id:ex.area_id, sdVal!==undefined?sdVal:null, ptVal!==undefined?ptVal:null, id, req.userId
   );
   const updated = db.prepare('SELECT * FROM habits WHERE id=? AND user_id=?').get(id, req.userId);
   if (updated && updated.schedule_days) try { updated.schedule_days = JSON.parse(updated.schedule_days); } catch(e) {}

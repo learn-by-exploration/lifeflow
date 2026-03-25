@@ -3750,6 +3750,10 @@ async function renderHabits(){
         <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Area</label>
         <select id="hab-area" style="padding:8px 10px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:13px;font-family:inherit;cursor:pointer"><option value="">None</option>${areaOpts}</select>
       </div>
+      <div id="hab-time-wrap">
+        <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Preferred time</label>
+        <input type="time" id="hab-time" style="padding:8px 10px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:13px;font-family:inherit">
+      </div>
     </div>
     <div id="hab-day-picker" style="display:none;margin-bottom:16px">
       <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:6px" id="hab-day-label">Select days</label>
@@ -3772,7 +3776,7 @@ async function renderHabits(){
     for(const hab of habits){
       const pct=hab.target>0?Math.min(100,Math.round((hab.todayCount||0)/hab.target*100)):0;
       h+=`<div class="habit-card" data-hid="${hab.id}">
-        <div class="hc-head"><span style="font-size:24px">${esc(hab.icon||'⭐')}</span><span class="hc-name">${esc(hab.name)}</span>
+        <div class="hc-head"><span style="font-size:24px">${esc(hab.icon||'⭐')}</span><span class="hc-name">${esc(hab.name)}</span>${hab.preferred_time?`<span style="font-size:10px;color:var(--txd);margin-left:auto;white-space:nowrap">⏰ ${hab.preferred_time.replace(/^0/,'').replace(/^(\d+):(\d+)$/,(m,h,mi)=>Number(h)>=12?(Number(h)===12?12:Number(h)-12)+':'+mi+' PM':((Number(h)||12)+':'+mi+' AM'))}</span>`:''}
           <span class="hc-streak" style="background:${escA(hab.color||'#6C63FF')}20;color:${escA(hab.color||'#6C63FF')}">${streakEmoji(hab.streak||0)} ${hab.streak||0}${hab.total_completions?' · '+hab.total_completions+' total':''}</span></div>
         <div style="display:flex;align-items:center;gap:10px;margin:8px 0">
           <div class="habit-bar" style="flex:1"><div class="habit-bar-fill" style="width:${pct}%;background:${escA(hab.color||'#6C63FF')}"></div></div>
@@ -3817,6 +3821,7 @@ async function renderHabits(){
     if(e.target.value==='weekly'){picker.style.display='block';wd.style.display='flex';md.style.display='none';$('hab-day-label').textContent='Select days of the week';}
     else if(e.target.value==='monthly'){picker.style.display='block';wd.style.display='none';md.style.display='grid';$('hab-day-label').textContent='Select days of the month';}
     else{picker.style.display='none';wd.style.display='none';md.style.display='none';}
+    const tw=$('hab-time-wrap');if(tw)tw.style.display=e.target.value==='yearly'?'none':'block';
   });
   // Emoji quick-picks
   const emojiPicks=['💪','🏃','📚','🧘','💧','🎯','✍️','🥗','😴','🎵'];
@@ -3834,6 +3839,7 @@ async function renderHabits(){
     const sd=getSelectedDays();
     const body={name,icon:$('hab-icon').value,color:$('hab-color').value,target:Number($('hab-target').value)||1,frequency:$('hab-freq').value,area_id:areaId};
     if(sd&&sd.length)body.schedule_days=sd;
+    const timeVal=$('hab-time').value;if(timeVal)body.preferred_time=timeVal;
     await api.post('/api/habits',body);
     showToast('Habit created!');renderHabits();
   });
@@ -3856,6 +3862,7 @@ async function renderHabits(){
     $('hab-name').value=hab.name;$('hab-icon').value=hab.icon||'⭐';
     $('hab-color').value=hab.color||'#6C63FF';$('hab-target').value=hab.target||1;
     $('hab-freq').value=hab.frequency||'daily';$('hab-area').value=hab.area_id||'';
+    $('hab-time').value=hab.preferred_time||'';
     // Show day picker and pre-select days for edit
     const picker=$('hab-day-picker'),wd=$('hab-weekdays'),md=$('hab-monthdays');
     document.querySelectorAll('.hab-day-btn,.hab-mday-btn').forEach(b=>{b.dataset.selected='0';b.style.background='var(--bg-s)';b.style.color='var(--tx)';b.style.borderColor='var(--brd)';});
@@ -3870,6 +3877,7 @@ async function renderHabits(){
       const sd=getSelectedDays();
       const body={name:$('hab-name').value.trim(),icon:$('hab-icon').value,color:$('hab-color').value,target:Number($('hab-target').value)||1,frequency:$('hab-freq').value,area_id:eAreaId};
       if(sd&&sd.length)body.schedule_days=sd;else if($('hab-freq').value==='weekly'||$('hab-freq').value==='monthly')body.schedule_days=[];
+      const eTimeVal=$('hab-time').value;body.preferred_time=eTimeVal||null;
       await api.put('/api/habits/'+hab.id,body);
       showToast('Habit updated');renderHabits();
     });
