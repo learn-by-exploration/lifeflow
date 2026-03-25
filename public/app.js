@@ -10,6 +10,8 @@ const api={
   async patch(u,d){try{const r=await fetch(u,{method:'PATCH',headers:{'Content-Type':'application/json','X-CSRF-Token':this._getCsrf()},body:JSON.stringify(d)});if(r.status===401){window.location.href='/login';return{}}if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}}
 };
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}}
+const renderNav=debounce(()=>render(),150);
 
 // ─── FORM VALIDATION HELPER ───
 function validateField(inputId, rules) {
@@ -148,7 +150,7 @@ function renderSFList(){
     activeFilterId=f.id;activeFilterName=f.name;activeFilterParams=JSON.parse(f.filters);
     currentView='filter';
     document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));
-    el.classList.add('active');closeMobileSb();render();
+    el.classList.add('active');closeMobileSb();renderNav();
   }));
   // Load badge counts for saved filters
   api.get('/api/filters/counts').then(counts=>{
@@ -182,7 +184,7 @@ function renderSBLists(){
     const lst=userLists.find(x=>x.id===lid);activeListName=lst?lst.name:'List';
     currentView='listdetail';
     document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));
-    it.classList.add('active');closeMobileSb();render();
+    it.classList.add('active');closeMobileSb();renderNav();
   }));
   // List context menus in sidebar
   el.querySelectorAll('.sf-menu').forEach(btn=>btn.addEventListener('click',e=>{
@@ -224,7 +226,7 @@ document.querySelectorAll('#smart-list .sf-item').forEach(el=>el.addEventListene
   activeSmartFilter=el.dataset.smart;
   currentView='smartlist';activeAreaId=null;activeGoalId=null;
   document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));
-  el.classList.add('active');closeMobileSb();render();
+  el.classList.add('active');closeMobileSb();renderNav();
 }));
 async function loadSmartCounts(){
   try{
@@ -243,7 +245,7 @@ async function loadSmartCounts(){
 document.querySelectorAll('.ni').forEach(el=>el.addEventListener('click',()=>{
   currentView=el.dataset.view;activeAreaId=null;activeGoalId=null;
   document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));
-  el.classList.add('active');closeMobileSb();render();
+  el.classList.add('active');closeMobileSb();renderNav();
 }));
 // Collapsible sidebar sections
 document.querySelectorAll('.sb-toggle').forEach(tgl=>{
@@ -275,7 +277,7 @@ function renderAreas(){
   el.querySelectorAll('.ai').forEach(item=>item.addEventListener('click',e=>{
     if(e.target.classList.contains('ai-menu'))return;
     activeAreaId=Number(item.dataset.id);activeGoalId=null;currentView='area';
-    document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));item.classList.add('active');closeMobileSb();render();
+    document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));item.classList.add('active');closeMobileSb();renderNav();
   }));
   // Three-dot context menu on each area
   el.querySelectorAll('.ai-menu').forEach(btn=>btn.addEventListener('click',e=>{

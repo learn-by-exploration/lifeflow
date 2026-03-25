@@ -4,8 +4,5 @@ services:
     ports:
       - "3456:3456"
     volumes:
-      - lifeflow-data:/app/data
+      - .:/app/data
     restart: unless-stopped
-
-volumes:
-  lifeflow-data:

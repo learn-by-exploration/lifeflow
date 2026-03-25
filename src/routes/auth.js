@@ -175,8 +175,8 @@ function buildCookie(sid, ttlSeconds, req) {
     'Path=/',
     `Max-Age=${ttlSeconds}`
   ];
-  // Add Secure flag only in production (HTTPS)
-  if (process.env.NODE_ENV === 'production') {
+  // Add Secure flag only when the connection is actually HTTPS
+  if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
     parts.push('Secure');
   }
   return parts.join('; ');

@@ -1,13 +1,11 @@
 // Service Worker for LifeFlow push notifications
 // Handles background notifications + offline support
 
-const CACHE_VERSION = 'v2-' + '20250327';
+const CACHE_VERSION = 'v4-' + '20260325';
 const CACHE_NAME = `lifeflow-${CACHE_VERSION}`;
 
 const urlsToCache = [
-  '/',
-  '/public/index.html',
-  '/favicon.ico'
+  '/'
 ];
 
 // Install: Cache critical assets
@@ -44,9 +42,21 @@ self.addEventListener('activate', event => {
 // Fetch: Network-first with cache fallback
 self.addEventListener('fetch', event => {
   const { request } = event;
-  
-  // API calls: network-first — only cache successful responses
+
+  // Skip cross-origin requests (Google Fonts, CDN) — never cache externally-hosted fonts
+  // because Google Fonts CSS contains time-limited font binary URLs that expire.
+  if (!request.url.startsWith(self.location.origin)) {
+    return; // let browser handle it normally
+  }
+
+  // API calls: always go straight to the network — never cache dynamic data
   if (request.url.includes('/api/')) {
+    return; // let browser handle it, no SW involvement
+  }
+
+  // Local static assets: network-first so updates are always picked up,
+  // fall back to cache only when offline
+  else {
     event.respondWith(
       fetch(request)
         .then(response => {
@@ -58,19 +68,13 @@ self.addEventListener('fetch', event => {
           }
           return response;
         })
-        .catch(() => caches.match(request))
-    );
-  }
-  
-  // Static assets: cache-first
-  else {
-    event.respondWith(
-      caches.match(request)
-        .then(response => response || fetch(request))
         .catch(() => {
-          if (request.destination === 'document') {
-            return caches.match('/public/index.html');
-          }
+          return caches.match(request).then(cached => {
+            if (cached) return cached;
+            if (request.destination === 'document') {
+              return caches.match('/');
+            }
+          });
         })
     );
   }
