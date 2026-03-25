@@ -3713,16 +3713,44 @@ async function renderHabits(){
   let h=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><h2 style="margin:0">Habits</h2><button class="btn-s" id="hab-add-btn">+ New Habit</button></div>`;
   // Add form (hidden initially)
   const areaOpts=areas.map(a=>`<option value="${a.id}">${esc(a.icon||'')} ${esc(a.name)}</option>`).join('');
-  h+=`<div id="hab-form" style="display:none;padding:12px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin-bottom:16px">
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
-      <div><label style="font-size:11px">Icon</label><input type="text" id="hab-icon" value="💪" style="width:50px"></div>
-      <div style="flex:1"><label style="font-size:11px">Name</label><input type="text" id="hab-name" placeholder="e.g. Exercise"></div>
-      <div><label style="font-size:11px">Target/day</label><input type="number" id="hab-target" value="1" min="1" max="99" style="width:60px"></div>
-      <div><label style="font-size:11px">Frequency</label><select id="hab-freq"><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
-      <div><label style="font-size:11px">Area</label><select id="hab-area"><option value="">None</option>${areaOpts}</select></div>
-      <div><label style="font-size:11px">Color</label><input type="color" id="hab-color" value="#6C63FF" style="width:40px;height:32px;padding:0;border:none"></div>
-      <button class="btn-s" id="hab-save">Save</button>
+  h+=`<div id="hab-form" style="display:none;padding:20px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--r);margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+      <span class="material-icons-round" style="font-size:18px;color:var(--brand)">add_circle</span>
+      <span style="font-size:14px;font-weight:600">New Habit</span>
+    </div>
+    <div style="display:flex;gap:10px;align-items:end;margin-bottom:14px">
+      <div style="flex-shrink:0">
+        <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Icon</label>
+        <input type="text" id="hab-icon" value="💪" style="width:48px;padding:8px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:18px;text-align:center;font-family:inherit">
+      </div>
+      <div style="flex:1;min-width:0">
+        <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Habit name</label>
+        <input type="text" id="hab-name" placeholder="e.g. Exercise, Read, Meditate..." style="width:100%;padding:8px 12px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:13px;font-family:inherit">
+      </div>
+      <div style="flex-shrink:0">
+        <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Color</label>
+        <div style="width:36px;height:36px;border-radius:var(--rs);overflow:hidden;border:1px solid var(--brd);position:relative">
+          <input type="color" id="hab-color" value="#6C63FF" style="position:absolute;inset:-4px;width:calc(100% + 8px);height:calc(100% + 8px);border:none;cursor:pointer;background:none">
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:16px">
+      <div>
+        <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Times per day</label>
+        <input type="number" id="hab-target" value="1" min="1" max="99" style="width:80px;padding:8px 10px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:13px;font-family:inherit">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Frequency</label>
+        <select id="hab-freq" style="padding:8px 10px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:13px;font-family:inherit;cursor:pointer"><option value="daily">Daily</option><option value="weekly">Weekly</option></select>
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Area</label>
+        <select id="hab-area" style="padding:8px 10px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-size:13px;font-family:inherit;cursor:pointer"><option value="">None</option>${areaOpts}</select>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:12px;border-top:1px solid var(--brd)">
       <button class="btn-c" id="hab-cancel">Cancel</button>
+      <button class="btn-s" id="hab-save">Create Habit</button>
     </div>
   </div>`;
   if(!habits.length){
