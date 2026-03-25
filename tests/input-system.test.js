@@ -452,3 +452,151 @@ describe('Habit backend — maxlength', () => {
     );
   });
 });
+
+// ─── SPRINT 5: Consistency Polish ───
+
+describe('Sprint 5 — Modal input focus transitions', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+
+  it('.md input has transition on border-color and box-shadow', () => {
+    assert.ok(
+      css.includes('transition:border-color') && css.includes('box-shadow'),
+      '.md input must transition border-color and box-shadow'
+    );
+  });
+
+  it('.md input:focus has box-shadow focus ring', () => {
+    assert.ok(
+      css.includes('.md input:focus') && css.includes('box-shadow:0 0 0 3px'),
+      '.md input:focus must include box-shadow focus ring'
+    );
+  });
+
+  it('.md select:focus is styled', () => {
+    assert.ok(
+      css.includes('.md select:focus'),
+      '.md select:focus must be styled for focus ring'
+    );
+  });
+});
+
+describe('Sprint 5 — Mobile touch targets for modal inputs', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+
+  it('modal inputs have min-height:44px on mobile', () => {
+    const mobileBlock = css.substring(css.indexOf('@media(max-width:768px)'));
+    assert.ok(
+      mobileBlock.includes('.md input') && mobileBlock.includes('min-height:44px'),
+      '.md input must have min-height:44px in mobile media query'
+    );
+  });
+
+  it('modal action buttons have min-height:44px on mobile', () => {
+    const mobileBlock = css.substring(css.indexOf('@media(max-width:768px)'));
+    assert.ok(
+      mobileBlock.includes('.md-actions button') && mobileBlock.includes('min-height:44px'),
+      '.md-actions button must have min-height:44px in mobile media query'
+    );
+  });
+});
+
+describe('Sprint 5 — Color swatch keyboard navigation', () => {
+  const appJS = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+
+  it('theme dots have tabindex="0"', () => {
+    assert.ok(
+      appJS.includes('tp-dot') && appJS.includes('tabindex="0"'),
+      'theme dots must have tabindex="0" for keyboard focus'
+    );
+  });
+
+  it('theme dots have role="button"', () => {
+    assert.ok(
+      appJS.includes('tp-dot') && appJS.includes('role="button"'),
+      'theme dots must have role="button" for assistive tech'
+    );
+  });
+
+  it('theme dots have aria-label', () => {
+    assert.ok(
+      appJS.includes('aria-label="Theme:'),
+      'theme dots must have descriptive aria-label'
+    );
+  });
+
+  it('theme dots respond to Enter/Space keydown', () => {
+    assert.ok(
+      appJS.includes("e.key==='Enter'") && appJS.includes("e.key===' '"),
+      'theme dots must handle Enter and Space key activation'
+    );
+  });
+
+  it('tag color swatches have tabindex="0"', () => {
+    assert.ok(
+      appJS.includes('tcp-sw') && appJS.includes('tabindex="0"'),
+      'tag color swatches must have tabindex="0"'
+    );
+  });
+
+  it('tag color swatches have role="button"', () => {
+    assert.ok(
+      appJS.includes('tcp-sw"') && appJS.includes('role="button"'),
+      'tag color swatches must have role="button"'
+    );
+  });
+
+  it('tag color swatches have aria-label', () => {
+    assert.ok(
+      appJS.includes('aria-label="Color'),
+      'tag color swatches must have aria-label'
+    );
+  });
+
+  it('tag color swatches respond to Enter/Space keydown', () => {
+    assert.ok(
+      appJS.includes('pickColor') && appJS.includes('keydown'),
+      'tag color swatches must handle keyboard activation'
+    );
+  });
+});
+
+describe('Sprint 5 — Focus-visible on color swatches', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+
+  it('.tp-dot has focus-visible style', () => {
+    assert.ok(
+      css.includes('.tp-dot:focus-visible'),
+      '.tp-dot must have :focus-visible outline style'
+    );
+  });
+});
+
+describe('Sprint 5 — Reduced motion respects transitions', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+
+  it('prefers-reduced-motion sets transition-duration to near-zero', () => {
+    assert.ok(
+      css.includes('prefers-reduced-motion') && css.includes('transition-duration:0.01ms'),
+      'reduced motion media query must reduce transition-duration'
+    );
+  });
+});
+
+describe('Sprint 5 — Input design system transitions', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+
+  it('.inp has transition property', () => {
+    const m = css.match(/\.inp\{[^}]*transition:[^}]+\}/);
+    assert.ok(m, '.inp must include transition property');
+  });
+
+  it('.sel has transition property', () => {
+    const m = css.match(/\.sel\{[^}]*transition:[^}]+\}/);
+    assert.ok(m, '.sel must include transition property');
+  });
+
+  it('.ta-inp has transition property', () => {
+    const m = css.match(/\.ta-inp\{[^}]*transition:[^}]+\}/);
+    assert.ok(m, '.ta-inp must include transition property');
+  });
+});

@@ -78,6 +78,9 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
   .qc-box .qc-input button{min-height:44px}
   /* KB shortcuts hide on mobile */
   .kb-wrap{display:none}
+  /* Modal inputs touch-friendly on mobile */
+  .md input,.md textarea,.md select{min-height:44px;padding:12px;font-size:14px}
+  .md-actions button{min-height:44px;padding:12px 20px;font-size:14px}
   /* Mobile touch-friendly dropdown items */
   .snooze-dd .snz-opt{padding:12px 14px;min-height:44px}
   .qa-dd .qa-opt{padding:12px 14px;min-height:44px}
@@ -343,8 +346,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .md{background:var(--bg-c);border-radius:var(--r);padding:22px;width:400px;max-width:92vw;box-shadow:var(--shd)}
 .md h3{font-size:15px;margin-bottom:14px;font-weight:600}
 .md label{display:block;font-size:11px;color:var(--txd);margin-bottom:3px;font-weight:500}
-.md input,.md textarea,.md select{width:100%;padding:9px 11px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-family:inherit;font-size:12px;outline:none;margin-bottom:10px}
-.md input:focus,.md textarea:focus{border-color:var(--brand)}
+.md input,.md textarea,.md select{width:100%;padding:9px 11px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-s);color:var(--tx);font-family:inherit;font-size:12px;outline:none;margin-bottom:10px;transition:border-color .15s,box-shadow .15s}
+.md input:focus,.md textarea:focus,.md select:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
 .md textarea{resize:vertical;min-height:50px}
 .md-row{display:flex;gap:8px}.md-row>*{flex:1}
 .md-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
@@ -354,6 +357,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .tp{display:flex;flex-wrap:wrap;gap:5px;padding:8px 11px}
 .tp-dot{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all .15s}
 .tp-dot:hover,.tp-dot.active{border-color:var(--tx);transform:scale(1.2)}
+.tp-dot:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 
 /* Empty */
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:50px 0;color:var(--txd)}

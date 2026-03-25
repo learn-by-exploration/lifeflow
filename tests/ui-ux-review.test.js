@@ -168,16 +168,16 @@ describe('UI/UX Review Fixes', () => {
   // ─── BATCH 5: UX HINTS & VALIDATION ───
 
   describe('UX hints and form validation', () => {
-    it('area modal shows validation toast', () => {
-      assert.ok(js.includes("showToast('Please enter an area name')"), 'area modal validation feedback');
+    it('area modal shows inline validation', () => {
+      assert.ok(js.includes("validateField('am-name'"), 'area modal uses inline validation');
     });
 
-    it('goal modal shows validation toast', () => {
-      assert.ok(js.includes("showToast('Please enter a goal title')"), 'goal modal validation feedback');
+    it('goal modal shows inline validation', () => {
+      assert.ok(js.includes("validateField('gm-title'"), 'goal modal uses inline validation');
     });
 
-    it('list modal shows validation toast', () => {
-      assert.ok(js.includes("showToast('Please enter a list name')"), 'list modal validation feedback');
+    it('list modal shows inline validation', () => {
+      assert.ok(js.includes("validateField('lm-name'"), 'list modal uses inline validation');
     });
 
     it('quick capture has NLP syntax hint', () => {

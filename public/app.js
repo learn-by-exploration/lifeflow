@@ -1596,12 +1596,16 @@ function initThemes(){
   document.documentElement.setAttribute('data-theme',saved);
   const tp=$('tp');
   if(!tp)return;
-  tp.innerHTML=THEMES.map(t=>`<div class="tp-dot ${t.id===saved?'active':''}" data-t="${t.id}" title="${t.label}" style="background:${t.dot}${t.id==='light'?';border:1px solid #CBD5E1':''}"></div>`).join('');
-  tp.querySelectorAll('.tp-dot').forEach(d=>d.addEventListener('click',()=>{
+  tp.innerHTML=THEMES.map(t=>`<div class="tp-dot ${t.id===saved?'active':''}" data-t="${t.id}" title="${t.label}" tabindex="0" role="button" aria-label="Theme: ${t.label}" style="background:${t.dot}${t.id==='light'?';border:1px solid #CBD5E1':''}"></div>`).join('');
+  tp.querySelectorAll('.tp-dot').forEach(d=>{
+    function activate(){
     const tid=d.dataset.t;localStorage.setItem('lf-theme',tid);
     document.documentElement.setAttribute('data-theme',tid);
     tp.querySelectorAll('.tp-dot').forEach(x=>x.classList.remove('active'));d.classList.add('active');
-  }));
+    }
+    d.addEventListener('click',activate);
+    d.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();activate()}});
+  });
 }
 initThemes();
 
@@ -2804,7 +2808,7 @@ async function renderTags(){
   h+=`</div>`;
   // Color picker popover
   h+=`<div id="tag-color-picker" style="display:none;position:fixed;z-index:200;background:var(--crd);border:1px solid var(--bd);border-radius:8px;padding:8px;box-shadow:0 4px 12px rgba(0,0,0,.15)">
-    <div style="display:flex;gap:4px;flex-wrap:wrap;max-width:160px">${COLORS.map(cl=>`<div class="sw tcp-sw" data-c="${cl}" style="background:${cl};cursor:pointer"></div>`).join('')}</div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;max-width:160px">${COLORS.map(cl=>`<div class="sw tcp-sw" data-c="${cl}" tabindex="0" role="button" aria-label="Color ${cl}" style="background:${cl};cursor:pointer"></div>`).join('')}</div>
   </div>`;
   c.innerHTML=h;
   attachNewTag();
@@ -2817,11 +2821,15 @@ async function renderTags(){
     const rect=sw.getBoundingClientRect();
     picker.style.left=rect.right+8+'px';picker.style.top=rect.top+'px';picker.style.display='block';
   }));
-  document.querySelectorAll('.tcp-sw').forEach(sw=>sw.addEventListener('click',async()=>{
+  document.querySelectorAll('.tcp-sw').forEach(sw=>{
+    async function pickColor(){
     if(!pickingTagId)return;
     await api.put('/api/tags/'+pickingTagId,{color:sw.dataset.c});
     $('tag-color-picker').style.display='none';pickingTagId=null;renderTags();
-  }));
+    }
+    sw.addEventListener('click',pickColor);
+    sw.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pickColor()}});
+  });
   document.addEventListener('click',e=>{if(!e.target.closest('#tag-color-picker')&&!e.target.classList.contains('swatch-pick'))$('tag-color-picker').style.display='none'},{once:false});
   // Save name
   c.querySelectorAll('.tag-save').forEach(btn=>btn.addEventListener('click',async()=>{
