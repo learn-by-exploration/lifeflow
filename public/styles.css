@@ -109,7 +109,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .sb-sec{overflow:hidden;transition:max-height .25s ease}
 .sb-sec.collapsed{max-height:0!important;overflow:hidden}
 /* Quick Reschedule Dropdown */
-.snooze-dd{position:absolute;right:0;top:100%;z-index:50;background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--rs);box-shadow:var(--shd);padding:4px 0;min-width:140px;font-size:12px}
+.snooze-dd{position:absolute;right:0;top:100%;z-index:50;background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--rs);box-shadow:var(--shd);padding:4px 0;min-width:140px;font-size:12px;overflow:hidden}
 .snooze-dd .snz-opt{padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:6px}
 .snooze-dd .snz-opt:hover{background:var(--bg-h)}
 /* My Day quick toggle */
@@ -307,8 +307,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .dp-row{display:flex;gap:8px}.dp-row>*{flex:1}
 .dp-foot{padding:12px 20px;border-top:1px solid var(--brd);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
 .dp-foot button{padding:10px 20px;border-radius:var(--rs);border:none;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;letter-spacing:.01em}
-.btn-c{background:var(--bg-c);color:var(--tx);border:1px solid var(--brd);border-radius:var(--rs);transition:all .15s}.btn-c:hover{background:var(--bg-h);border-color:var(--tx2)}
-.btn-s{background:var(--brand);color:#fff;border-radius:var(--rs);box-shadow:0 2px 8px rgba(37,99,235,.2);transition:all .18s}.btn-s:hover{background:var(--brand-h);box-shadow:0 4px 14px rgba(37,99,235,.3);transform:translateY(-1px)}
+.btn-c{background:var(--bg-c);color:var(--tx);border:1px solid var(--brd);border-radius:var(--rs);padding:8px 16px;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;transition:all .15s}.btn-c:hover{background:var(--bg-h);border-color:var(--tx2)}
+.btn-s{background:var(--brand);color:#fff;border:none;border-radius:var(--rs);padding:8px 16px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(37,99,235,.2);transition:all .18s}.btn-s:hover{background:var(--brand-h);box-shadow:0 4px 14px rgba(37,99,235,.3);transform:translateY(-1px)}
 
 /* Subtask list in detail panel */
 .stl{margin-bottom:10px}
@@ -927,7 +927,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 @media(max-width:768px){.list-grid{grid-template-columns:1fr}.li-item{padding:14px;min-height:48px}.li-check{width:28px;height:28px}.li-del{opacity:1}}
 
 /* Context menus */
-.ctx-menu{position:fixed;z-index:9999;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);box-shadow:var(--shd);min-width:160px;padding:4px 0;animation:ctxFade .12s ease}
+.ctx-menu{position:fixed;z-index:9999;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);box-shadow:var(--shd);min-width:160px;padding:4px 0;overflow:hidden;animation:ctxFade .12s ease}
 @keyframes ctxFade{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 .ctx-item{display:flex;align-items:center;gap:8px;padding:8px 14px;font-size:13px;color:var(--tx);cursor:pointer;transition:background .1s}
 .ctx-item:hover{background:var(--bg-s)}
