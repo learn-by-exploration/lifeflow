@@ -256,11 +256,14 @@ document.querySelectorAll('.sb-toggle').forEach(tgl=>{
   const el=document.getElementById('sb-'+sec);
   const arrow=tgl.querySelector('.sb-arrow');
   const key='lf-sb-'+sec;
-  if(localStorage.getItem(key)==='0'){el.classList.add('collapsed');arrow.style.transform='rotate(-90deg)'}
+  const collapsed=localStorage.getItem(key)==='0';
+  if(collapsed){el.classList.add('collapsed');arrow.style.transform='rotate(-90deg)';}
+  tgl.setAttribute('aria-expanded',collapsed?'false':'true');
   tgl.addEventListener('click',()=>{
     const isOpen=!el.classList.contains('collapsed');
     el.classList.toggle('collapsed');
     arrow.style.transform=isOpen?'rotate(-90deg)':'';
+    tgl.setAttribute('aria-expanded',isOpen?'false':'true');
     localStorage.setItem(key,isOpen?'0':'1');
   });
 });
@@ -327,7 +330,7 @@ function renderAreas(){
           const g=aGoals[i];
           const rg=await api.post('/api/areas/'+ra.id+'/goals',{title:g.title,description:g.description||'',due_date:g.due_date||null,color:g.color||'#6C63FF'});
           for(const t of aTaskSets[i]){
-            await api.post('/api/goals/'+rg.id+'/tasks',{title:t.title,notes:t.notes||'',status:t.status,priority:t.priority,due_date:t.due_date||null,my_day:t.my_day?1:0,recurring:t.recurring||null});
+            await api.post('/api/goals/'+rg.id+'/tasks',{title:t.title,note:t.note||'',status:t.status,priority:t.priority,due_date:t.due_date||null,my_day:t.my_day?1:0,recurring:t.recurring||null});
           }
         }
         await loadAreas();render();
@@ -811,10 +814,12 @@ async function renderArea(){
     const gTasks=await api.get('/api/goals/'+gid+'/tasks');
     await api.del('/api/goals/'+gid);
     await loadAreas();render();
+    const snapAreaId=g.area_id;
     showToast('Goal deleted — "'+g.title+'"', async()=>{
-      const rg=await api.post('/api/areas/'+activeAreaId+'/goals',{title:g.title,description:g.description||'',due_date:g.due_date||null,color:g.color||'#6C63FF'});
+      if(!snapAreaId)return;
+      const rg=await api.post('/api/areas/'+snapAreaId+'/goals',{title:g.title,description:g.description||'',due_date:g.due_date||null,color:g.color||'#6C63FF'});
       for(const t of gTasks){
-        await api.post('/api/goals/'+rg.id+'/tasks',{title:t.title,notes:t.notes||'',status:t.status,priority:t.priority,due_date:t.due_date||null,my_day:t.my_day?1:0,recurring:t.recurring||null});
+        await api.post('/api/goals/'+rg.id+'/tasks',{title:t.title,note:t.note||'',status:t.status,priority:t.priority,due_date:t.due_date||null,my_day:t.my_day?1:0,recurring:t.recurring||null});
       }
       await loadAreas();render();
     });
@@ -943,7 +948,7 @@ function tcHtml(t,ctx){
     <div class="ms-chk" data-id="${t.id}"></div>
     <div class="tk" data-id="${t.id}"><span class="material-icons-round">check</span></div>
     <div class="tb2"><div class="tt">${esc(t.title)}</div>${meta?`<div class="tm">${meta}</div>`:''}${stBar}${stList}</div>
-    <div class="ta" style="position:relative">${currentView!=='myday'?`<span class="material-icons-round myday-toggle ${t.my_day?'active':''}" data-id="${t.id}" title="${t.my_day?'Remove from My Day':'Add to My Day'}">${t.my_day?'wb_sunny':'light_mode'}</span>`:''}<button class="material-icons-round snz-btn" data-id="${t.id}" title="Reschedule">schedule</button><button class="material-icons-round ft-start" data-id="${t.id}" title="Focus timer">timer</button><button class="material-icons-round et" data-id="${t.id}">edit</button><button class="material-icons-round dt" data-id="${t.id}">delete_outline</button></div>
+    <div class="ta" style="position:relative">${currentView!=='myday'?`<span class="material-icons-round myday-toggle ${t.my_day?'active':''}" data-id="${t.id}" title="${t.my_day?'Remove from My Day':'Add to My Day'}" role="button" tabindex="0" aria-label="${t.my_day?'Remove from My Day':'Add to My Day'}" aria-pressed="${t.my_day?'true':'false'}">${t.my_day?'wb_sunny':'light_mode'}</span>`:''}<button class="material-icons-round snz-btn" data-id="${t.id}" title="Reschedule" aria-label="Reschedule task">schedule</button><button class="material-icons-round ft-start" data-id="${t.id}" title="Focus timer" aria-label="Start focus timer">timer</button><button class="material-icons-round et" data-id="${t.id}" title="Edit task" aria-label="Edit task">edit</button><button class="material-icons-round dt" data-id="${t.id}" title="Delete task" aria-label="Delete task">delete_outline</button></div>
     <div class="qa-row"><button class="qa-btn qa-pri pri-${t.priority}" data-id="${t.id}" data-next="${nextPri}" title="Cycle priority (${PL[t.priority]||'None'}→${PL[nextPri]||'None'})"><span class="material-icons-round">flag</span></button><button class="qa-btn qa-date" data-id="${t.id}" title="Set due date"><span class="material-icons-round">event</span></button><button class="qa-btn qa-myday" data-id="${t.id}" title="${t.my_day?'Remove from':'Add to'} My Day"><span class="material-icons-round">${t.my_day?'wb_sunny':'light_mode'}</span></button>${t.recurring?`<button class="qa-btn qa-skip" data-id="${t.id}" title="Skip occurrence"><span class="material-icons-round">skip_next</span></button>`:''}<button class="qa-btn qa-edit" data-id="${t.id}" title="Edit"><span class="material-icons-round">edit</span></button></div>
   </div>`;
 }
@@ -995,13 +1000,16 @@ function attachTE(){
     await loadAreas();render();loadOverdueBadge();
   }));
   // My Day quick toggle
-  document.querySelectorAll('.myday-toggle').forEach(el=>el.addEventListener('click',async e=>{
-    e.stopPropagation();const id=Number(el.dataset.id);
-    const isActive=el.classList.contains('active');
-    await api.put('/api/tasks/'+id,{my_day:isActive?0:1});
-    showToast(isActive?'Removed from My Day':'Added to My Day');
-    await loadAreas();render();loadOverdueBadge();
-  }));
+  document.querySelectorAll('.myday-toggle').forEach(el=>{
+    el.addEventListener('click',async e=>{
+      e.stopPropagation();const id=Number(el.dataset.id);
+      const isActive=el.classList.contains('active');
+      await api.put('/api/tasks/'+id,{my_day:isActive?0:1});
+      showToast(isActive?'Removed from My Day':'Added to My Day');
+      await loadAreas();render();loadOverdueBadge();
+    });
+    el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}});
+  });
   // Quick Reschedule (snooze)
   document.querySelectorAll('.snz-btn').forEach(el=>el.addEventListener('click',e=>{
     e.stopPropagation();
@@ -1498,8 +1506,9 @@ function renderSubtasks(){
     if(!sub)return;
     await api.del('/api/subtasks/'+sid);
     dpSubtasks=dpSubtasks.filter(s=>s.id!==sid);renderSubtasks();
+    const taskIdSnap=dpTask.id;
     showToast(`Subtask deleted — "${sub.title}"`,async()=>{
-      const r=await api.post('/api/tasks/'+dpTask.id+'/subtasks',{title:sub.title,note:sub.note||''});
+      const r=await api.post('/api/tasks/'+taskIdSnap+'/subtasks',{title:sub.title,note:sub.note||'',done:sub.done?1:0});
       if(r&&r.id){dpSubtasks.push(r);renderSubtasks();}
     });
   }));

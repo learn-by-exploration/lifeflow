@@ -275,7 +275,7 @@ module.exports = function(deps) {
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
     const ex = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(id, req.userId);
     if (!ex) return res.status(404).json({ error: 'List not found' });
-    db.prepare('UPDATE lists SET share_token=NULL WHERE id=?').run(id);
+    db.prepare('UPDATE lists SET share_token=NULL WHERE id=? AND user_id=?').run(id, req.userId);
     res.json({ unshared: true });
   });
 

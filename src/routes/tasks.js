@@ -75,7 +75,7 @@ router.post('/api/goals/:goalId/tasks', (req, res) => {
   if (!isValidHHMM(due_time)) return res.status(400).json({ error: 'Invalid due_time format (HH:MM)' });
   if (priority !== undefined && priority !== null && ![0,1,2,3].includes(Number(priority))) return res.status(400).json({ error: 'Priority must be 0-3' });
   if (estimated_minutes !== undefined && estimated_minutes !== null && (typeof estimated_minutes !== 'number' || estimated_minutes < 0)) return res.status(400).json({ error: 'estimated_minutes must be a non-negative number' });
-  if (list_id) { const lid = Number(list_id); if (!Number.isInteger(lid) || !db.prepare('SELECT id FROM lists WHERE id=?').get(lid)) return res.status(400).json({ error: 'Invalid list_id' }); }
+  if (list_id) { const lid = Number(list_id); if (!Number.isInteger(lid) || !db.prepare('SELECT id FROM lists WHERE id=? AND user_id=?').get(lid, req.userId)) return res.status(400).json({ error: 'Invalid list_id' }); }
   const createTaskTx = db.transaction(() => {
     const pos = getNextPosition('tasks', 'goal_id', goalId);
     const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,time_block_start,time_block_end,estimated_minutes,list_id,user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
@@ -231,7 +231,7 @@ router.put('/api/tasks/:id', (req, res) => {
   if (due_date !== undefined && due_date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(due_date)) return res.status(400).json({ error: 'Invalid due_date format (YYYY-MM-DD)' });
   if (due_time !== undefined && !isValidHHMM(due_time)) return res.status(400).json({ error: 'Invalid due_time format (HH:MM)' });
   if (estimated_minutes !== undefined && estimated_minutes !== null && (typeof estimated_minutes !== 'number' || estimated_minutes < 0)) return res.status(400).json({ error: 'estimated_minutes must be a non-negative number' });
-  if (list_id !== undefined && list_id !== null) { const lid = Number(list_id); if (!Number.isInteger(lid) || !db.prepare('SELECT id FROM lists WHERE id=?').get(lid)) return res.status(400).json({ error: 'Invalid list_id' }); }
+  if (list_id !== undefined && list_id !== null) { const lid = Number(list_id); if (!Number.isInteger(lid) || !db.prepare('SELECT id FROM lists WHERE id=? AND user_id=?').get(lid, req.userId)) return res.status(400).json({ error: 'Invalid list_id' }); }
   const completedAt = status==='done' && ex.status!=='done' ? new Date().toISOString() : (status && status!=='done' ? null : ex.completed_at);
   db.prepare(`UPDATE tasks SET title=COALESCE(?,title),note=COALESCE(?,note),status=COALESCE(?,status),
     priority=COALESCE(?,priority),due_date=?,due_time=?,recurring=?,assigned_to=COALESCE(?,assigned_to),

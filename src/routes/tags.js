@@ -40,10 +40,10 @@ router.put('/api/tags/:id', (req, res) => {
     if (!clean) return res.status(400).json({ error: 'Name required' });
     const dup = db.prepare('SELECT * FROM tags WHERE name=? AND id!=? AND user_id=?').get(clean, id, req.userId);
     if (dup) return res.status(409).json({ error: 'Tag name already exists' });
-    db.prepare('UPDATE tags SET name=? WHERE id=?').run(clean, id);
+    db.prepare('UPDATE tags SET name=? WHERE id=? AND user_id=?').run(clean, id, req.userId);
   }
   if (color !== undefined) {
-    db.prepare('UPDATE tags SET color=? WHERE id=?').run(color, id);
+    db.prepare('UPDATE tags SET color=? WHERE id=? AND user_id=?').run(color, id, req.userId);
   }
   res.json(db.prepare('SELECT * FROM tags WHERE id=? AND user_id=?').get(id, req.userId));
 });
@@ -82,20 +82,20 @@ router.post('/api/tasks/:taskId/subtasks', (req, res) => {
   if (!Number.isInteger(taskId)) return res.status(400).json({ error: 'Invalid ID' });
   const tOwner2 = db.prepare('SELECT id FROM tasks WHERE id=? AND user_id=?').get(taskId, req.userId);
   if (!tOwner2) return res.status(404).json({ error: 'Not found' });
-  const { title } = req.body;
+  const { title, note, done } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
   const pos = getNextPosition('subtasks', 'task_id', taskId);
-  const r = db.prepare('INSERT INTO subtasks (task_id,title,position) VALUES (?,?,?)').run(taskId, title.trim(), pos);
+  const r = db.prepare('INSERT INTO subtasks (task_id,title,note,done,position) VALUES (?,?,?,?,?)').run(taskId, title.trim(), note || '', done ? 1 : 0, pos);
   res.status(201).json(db.prepare('SELECT * FROM subtasks WHERE id=?').get(r.lastInsertRowid));
 });
 // Subtask reorder (must be before :id route)
 router.put('/api/subtasks/reorder', (req, res) => {
   const { items } = req.body;
   if (!Array.isArray(items)) return res.status(400).json({ error: 'items array required' });
-  const upd = db.prepare('UPDATE subtasks SET position=? WHERE id=?');
+  const upd = db.prepare('UPDATE subtasks SET position=? WHERE id=? AND task_id IN (SELECT id FROM tasks WHERE user_id=?)');
   const tx = db.transaction(() => {
     items.forEach(({ id, position }) => {
-      if (Number.isInteger(id) && Number.isInteger(position)) upd.run(position, id);
+      if (Number.isInteger(id) && Number.isInteger(position)) upd.run(position, id, req.userId);
     });
   });
   tx();

@@ -100,12 +100,12 @@ router.get('/api/focus/insights', (req, res) => {
     WHERE f.user_id=?
     GROUP BY strategy
   `).all(req.userId);
-  const avgRating = db.prepare(`SELECT AVG(focus_rating) as avg FROM focus_session_meta WHERE focus_rating > 0`).get();
+  const avgRating = db.prepare(`SELECT AVG(m.focus_rating) as avg FROM focus_session_meta m JOIN focus_sessions f ON m.session_id=f.id WHERE m.focus_rating > 0 AND f.user_id=?`).get(req.userId);
   const completionRate = db.prepare(`
     SELECT COUNT(*) as total,
-      SUM(CASE WHEN steps_completed >= steps_planned AND steps_planned > 0 THEN 1 ELSE 0 END) as completed
-    FROM focus_session_meta WHERE steps_planned > 0
-  `).get();
+      SUM(CASE WHEN m.steps_completed >= m.steps_planned AND m.steps_planned > 0 THEN 1 ELSE 0 END) as completed
+    FROM focus_session_meta m JOIN focus_sessions f ON m.session_id=f.id WHERE m.steps_planned > 0 AND f.user_id=?
+  `).get(req.userId);
   res.json({ peakHours, byStrategy, avgRating: avgRating?.avg || 0, completionRate });
 });
 
@@ -199,6 +199,8 @@ router.post('/api/focus/:id/meta', (req, res) => {
 router.get('/api/focus/:id/meta', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM focus_sessions WHERE id=? AND user_id=?').get(id, req.userId);
+  if (!ex) return res.status(404).json({ error: 'Focus session not found' });
   const meta = db.prepare('SELECT * FROM focus_session_meta WHERE session_id=?').get(id);
   if (!meta) return res.status(404).json({ error: 'No meta found for this session' });
   res.json(meta);
@@ -227,6 +229,8 @@ router.post('/api/focus/:id/steps', (req, res) => {
 router.get('/api/focus/:id/steps', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const ex = db.prepare('SELECT * FROM focus_sessions WHERE id=? AND user_id=?').get(id, req.userId);
+  if (!ex) return res.status(404).json({ error: 'Focus session not found' });
   const all = db.prepare('SELECT * FROM focus_steps WHERE session_id=? ORDER BY position').all(id);
   res.json(all);
 });
@@ -234,7 +238,7 @@ router.get('/api/focus/:id/steps', (req, res) => {
 router.put('/api/focus/steps/:stepId', (req, res) => {
   const stepId = Number(req.params.stepId);
   if (!Number.isInteger(stepId)) return res.status(400).json({ error: 'Invalid step ID' });
-  const step = db.prepare('SELECT * FROM focus_steps WHERE id=?').get(stepId);
+  const step = db.prepare('SELECT fs.* FROM focus_steps fs JOIN focus_sessions f ON fs.session_id=f.id WHERE fs.id=? AND f.user_id=?').get(stepId, req.userId);
   if (!step) return res.status(404).json({ error: 'Step not found' });
   const done = step.done ? 0 : 1;
   db.prepare('UPDATE focus_steps SET done=?, completed_at=? WHERE id=?').run(

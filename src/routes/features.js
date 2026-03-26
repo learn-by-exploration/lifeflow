@@ -354,7 +354,7 @@ router.post('/api/habits', (req, res) => {
   if (frequency && !validFreqs.includes(frequency)) return res.status(400).json({ error: 'Invalid frequency (must be daily, weekly, monthly, or yearly)' });
   if (target !== undefined && target !== null && (typeof target !== 'number' || target < 1 || !Number.isInteger(target))) return res.status(400).json({ error: 'Target must be a positive integer' });
   if (area_id !== undefined && area_id !== null) {
-    const area = db.prepare('SELECT id FROM life_areas WHERE id=?').get(area_id);
+    const area = db.prepare('SELECT id FROM life_areas WHERE id=? AND user_id=?').get(area_id, req.userId);
     if (!area) return res.status(400).json({ error: 'Invalid area_id' });
   }
   // Validate schedule_days if provided

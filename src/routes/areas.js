@@ -178,8 +178,8 @@ router.put('/api/milestones/:id', (req, res) => {
   const ex = db.prepare('SELECT m.* FROM goal_milestones m JOIN goals g ON m.goal_id=g.id WHERE m.id=? AND g.user_id=?').get(id, req.userId);
   if (!ex) return res.status(404).json({ error: 'Not found' });
   const completedAt = done && !ex.done ? new Date().toISOString() : (done ? ex.completed_at : null);
-  db.prepare('UPDATE goal_milestones SET title=COALESCE(?,title), done=COALESCE(?,done), completed_at=? WHERE id=?').run(
-    title || null, done !== undefined ? (done ? 1 : 0) : null, completedAt, id
+  db.prepare('UPDATE goal_milestones SET title=COALESCE(?,title), done=COALESCE(?,done), completed_at=? WHERE id=? AND goal_id IN (SELECT id FROM goals WHERE user_id=?)').run(
+    title || null, done !== undefined ? (done ? 1 : 0) : null, completedAt, id, req.userId
   );
   res.json(db.prepare('SELECT * FROM goal_milestones WHERE id=?').get(id));
 });

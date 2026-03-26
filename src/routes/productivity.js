@@ -31,10 +31,10 @@ router.put('/api/rules/:id', (req, res) => {
   if (name !== undefined && name.trim().length > 100) return res.status(400).json({ error: 'name max 100 characters' });
   if (trigger_type !== undefined && !VALID_TRIGGER_TYPES.includes(trigger_type)) return res.status(400).json({ error: 'invalid trigger_type' });
   if (action_type !== undefined && !VALID_ACTION_TYPES.includes(action_type)) return res.status(400).json({ error: 'invalid action_type' });
-  db.prepare('UPDATE automation_rules SET name=COALESCE(?,name), trigger_type=COALESCE(?,trigger_type), trigger_config=COALESCE(?,trigger_config), action_type=COALESCE(?,action_type), action_config=COALESCE(?,action_config), enabled=COALESCE(?,enabled) WHERE id=?').run(
-    name ? name.trim() : null, trigger_type || null, trigger_config ? JSON.stringify(trigger_config) : null, action_type || null, action_config ? JSON.stringify(action_config) : null, enabled !== undefined ? (enabled ? 1 : 0) : null, id
+  db.prepare('UPDATE automation_rules SET name=COALESCE(?,name), trigger_type=COALESCE(?,trigger_type), trigger_config=COALESCE(?,trigger_config), action_type=COALESCE(?,action_type), action_config=COALESCE(?,action_config), enabled=COALESCE(?,enabled) WHERE id=? AND user_id=?').run(
+    name ? name.trim() : null, trigger_type || null, trigger_config ? JSON.stringify(trigger_config) : null, action_type || null, action_config ? JSON.stringify(action_config) : null, enabled !== undefined ? (enabled ? 1 : 0) : null, id, req.userId
   );
-  res.json(db.prepare('SELECT * FROM automation_rules WHERE id=?').get(id));
+  res.json(db.prepare('SELECT * FROM automation_rules WHERE id=? AND user_id=?').get(id, req.userId));
 });
 router.delete('/api/rules/:id', (req, res) => {
   db.prepare('DELETE FROM automation_rules WHERE id=? AND user_id=?').run(Number(req.params.id), req.userId);
@@ -182,10 +182,10 @@ router.post('/api/reviews', (req, res) => {
   // Upsert
   const existing = db.prepare('SELECT id FROM weekly_reviews WHERE week_start=? AND user_id=?').get(week_start, req.userId);
   if (existing) {
-    db.prepare('UPDATE weekly_reviews SET tasks_completed=?, tasks_created=?, top_accomplishments=?, reflection=?, next_week_priorities=?, rating=? WHERE id=?').run(
-      completed.c, created.c, JSON.stringify(top_accomplishments || []), reflection || '', JSON.stringify(next_week_priorities || []), ratingVal, existing.id
+    db.prepare('UPDATE weekly_reviews SET tasks_completed=?, tasks_created=?, top_accomplishments=?, reflection=?, next_week_priorities=?, rating=? WHERE id=? AND user_id=?').run(
+      completed.c, created.c, JSON.stringify(top_accomplishments || []), reflection || '', JSON.stringify(next_week_priorities || []), ratingVal, existing.id, req.userId
     );
-    res.json(db.prepare('SELECT * FROM weekly_reviews WHERE id=?').get(existing.id));
+    res.json(db.prepare('SELECT * FROM weekly_reviews WHERE id=? AND user_id=?').get(existing.id, req.userId));
   } else {
     const r = db.prepare('INSERT INTO weekly_reviews (week_start, tasks_completed, tasks_created, top_accomplishments, reflection, next_week_priorities, rating, user_id) VALUES (?,?,?,?,?,?,?,?)').run(
       week_start, completed.c, created.c, JSON.stringify(top_accomplishments || []), reflection || '', JSON.stringify(next_week_priorities || []), ratingVal, req.userId
