@@ -10,11 +10,6 @@ const api={
   async patch(u,d){try{const r=await fetch(u,{method:'PATCH',headers:{'Content-Type':'application/json','X-CSRF-Token':this._getCsrf()},body:JSON.stringify(d)});if(r.status===401){window.location.href='/login';return{}}if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}}
 };
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
-function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}}
-const renderNav=debounce(()=>render(),150);
-async function withSubmit(btnId,fn){const btn=$(btnId);if(!btn||btn.disabled)return;const orig=btn.innerHTML;btn.disabled=true;btn.innerHTML='<span class="btn-spinner"></span><span class="btn-label">Saving…</span>';try{await fn()}catch(e){showToast(e?.message||'Something went wrong — please try again');throw e}finally{btn.disabled=false;btn.innerHTML=orig}}
-function loggedCatch(label,userVisible=false){return(e)=>{console.warn('[LifeFlow]',label,e);if(userVisible)showToast('Failed to load '+label)}}
-function skCards(n){const types=['short','long','medium'];return`<div aria-busy="true" aria-label="Loading...">${Array(n).fill(0).map(()=>`<div class="sk-card"><div class="sk-line sk-line-${types[Math.floor(Math.random()*3)]}"></div><div class="sk-line sk-line-medium"></div></div>`).join('')}</div>`}
 
 // ─── FORM VALIDATION HELPER ───
 function validateField(inputId, rules) {
@@ -153,7 +148,7 @@ function renderSFList(){
     activeFilterId=f.id;activeFilterName=f.name;activeFilterParams=JSON.parse(f.filters);
     currentView='filter';
     document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));
-    el.classList.add('active');closeMobileSb();renderNav();
+    el.classList.add('active');closeMobileSb();render();
   }));
   // Load badge counts for saved filters
   api.get('/api/filters/counts').then(counts=>{
@@ -161,7 +156,7 @@ function renderSFList(){
       const badge=list.querySelector(`.sf-badge[data-fid="${c.id}"]`);
       if(badge)badge.textContent=c.count||'';
     });
-  }).catch(loggedCatch('filter badge counts'));
+  }).catch(()=>{});
 }
 
 // Smart list handlers
@@ -187,7 +182,7 @@ function renderSBLists(){
     const lst=userLists.find(x=>x.id===lid);activeListName=lst?lst.name:'List';
     currentView='listdetail';
     document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));
-    it.classList.add('active');closeMobileSb();renderNav();
+    it.classList.add('active');closeMobileSb();render();
   }));
   // List context menus in sidebar
   el.querySelectorAll('.sf-menu').forEach(btn=>btn.addEventListener('click',e=>{
@@ -229,7 +224,7 @@ document.querySelectorAll('#smart-list .sf-item').forEach(el=>el.addEventListene
   activeSmartFilter=el.dataset.smart;
   currentView='smartlist';activeAreaId=null;activeGoalId=null;
   document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));
-  el.classList.add('active');closeMobileSb();renderNav();
+  el.classList.add('active');closeMobileSb();render();
 }));
 async function loadSmartCounts(){
   try{
@@ -248,7 +243,7 @@ async function loadSmartCounts(){
 document.querySelectorAll('.ni').forEach(el=>el.addEventListener('click',()=>{
   currentView=el.dataset.view;activeAreaId=null;activeGoalId=null;
   document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));
-  el.classList.add('active');closeMobileSb();renderNav();
+  el.classList.add('active');closeMobileSb();render();
 }));
 // Collapsible sidebar sections
 document.querySelectorAll('.sb-toggle').forEach(tgl=>{
@@ -256,14 +251,11 @@ document.querySelectorAll('.sb-toggle').forEach(tgl=>{
   const el=document.getElementById('sb-'+sec);
   const arrow=tgl.querySelector('.sb-arrow');
   const key='lf-sb-'+sec;
-  const collapsed=localStorage.getItem(key)==='0';
-  if(collapsed){el.classList.add('collapsed');arrow.style.transform='rotate(-90deg)';}
-  tgl.setAttribute('aria-expanded',collapsed?'false':'true');
+  if(localStorage.getItem(key)==='0'){el.classList.add('collapsed');arrow.style.transform='rotate(-90deg)'}
   tgl.addEventListener('click',()=>{
     const isOpen=!el.classList.contains('collapsed');
     el.classList.toggle('collapsed');
     arrow.style.transform=isOpen?'rotate(-90deg)':'';
-    tgl.setAttribute('aria-expanded',isOpen?'false':'true');
     localStorage.setItem(key,isOpen?'0':'1');
   });
 });
@@ -283,7 +275,7 @@ function renderAreas(){
   el.querySelectorAll('.ai').forEach(item=>item.addEventListener('click',e=>{
     if(e.target.classList.contains('ai-menu'))return;
     activeAreaId=Number(item.dataset.id);activeGoalId=null;currentView='area';
-    document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));item.classList.add('active');closeMobileSb();renderNav();
+    document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));item.classList.add('active');closeMobileSb();render();
   }));
   // Three-dot context menu on each area
   el.querySelectorAll('.ai-menu').forEach(btn=>btn.addEventListener('click',e=>{
@@ -330,7 +322,7 @@ function renderAreas(){
           const g=aGoals[i];
           const rg=await api.post('/api/areas/'+ra.id+'/goals',{title:g.title,description:g.description||'',due_date:g.due_date||null,color:g.color||'#6C63FF'});
           for(const t of aTaskSets[i]){
-            await api.post('/api/goals/'+rg.id+'/tasks',{title:t.title,note:t.note||'',status:t.status,priority:t.priority,due_date:t.due_date||null,my_day:t.my_day?1:0,recurring:t.recurring||null});
+            await api.post('/api/goals/'+rg.id+'/tasks',{title:t.title,notes:t.notes||'',status:t.status,priority:t.priority,due_date:t.due_date||null,my_day:t.my_day?1:0,recurring:t.recurring||null});
           }
         }
         await loadAreas();render();
@@ -342,6 +334,8 @@ function renderAreas(){
 async function render(){
   $('vt').style.display=(currentView==='goal')?'flex':'none';
   hideMultiSelectBar();selectedIds.clear();msMode=false;document.body.classList.remove('ms-mode');
+  // Show loading state for slow networks
+  const ct=$('ct');if(ct&&!ct.innerHTML.trim())ct.classList.add('loading');
   // Persist last view
   if(!['area','goal','filter','smartlist','help','lists','listdetail'].includes(currentView))localStorage.setItem('lf-lastView',currentView);
   if(currentView==='myday')await renderMyDay();
@@ -375,37 +369,38 @@ async function render(){
   else if(currentView==='filter')await renderSavedFilter();
   else if(currentView==='area')await renderArea();
   else if(currentView==='goal')await renderGoal();
+  // Remove loading state
+  if(ct)ct.classList.remove('loading');
   updateBC();
 }
 
-function bcHtml(group,label){const gs=group?`<span class="bc-seg bc-nolink">${esc(group)}</span><span class="sep">›</span>`:'';return`<span class="bc-seg" data-go="myday">LifeFlow</span><span class="sep">›</span>${gs}<span class="bc-cur">${esc(label)}</span>`}
 function updateBC(){
   const bc=$('bc'),pt=$('pt');let html='';
-  if(currentView==='myday'){pt.textContent='Today';bc.innerHTML=bcHtml('Execution','Today')}
-  else if(currentView==='tasks'){pt.textContent='Tasks';bc.innerHTML=bcHtml('Execution','Tasks')}
-  else if(currentView==='focus'){pt.textContent='Focus';bc.innerHTML=bcHtml('Execution','Focus')}
-  else if(currentView==='habits'){pt.textContent='Habits';bc.innerHTML=bcHtml('Execution','Habits')}
-  else if(currentView==='inbox'){pt.textContent='Inbox';bc.innerHTML=bcHtml('Execution','Inbox')}
-  else if(currentView==='board'){pt.textContent='Board';bc.innerHTML=bcHtml('Execution','Board')}
-  else if(currentView==='all'){pt.textContent='All Tasks';bc.innerHTML=bcHtml('Planning','All Tasks')}
-  else if(currentView==='calendar'){pt.textContent='Calendar';bc.innerHTML=bcHtml('Planning','Calendar')}
-  else if(currentView==='weekly'){pt.textContent='Weekly Plan';bc.innerHTML=bcHtml('Planning','Weekly Plan')}
-  else if(currentView==='matrix'){pt.textContent='Eisenhower Matrix';bc.innerHTML=bcHtml('Planning','Matrix')}
-  else if(currentView==='planner'){pt.textContent='Day Planner';bc.innerHTML=bcHtml('Planning','Day Planner')}
-  else if(currentView==='dashboard'){pt.textContent='Dashboard';bc.innerHTML=bcHtml('Reflection','Dashboard')}
-  else if(currentView==='logbook'){pt.textContent='Activity Log';bc.innerHTML=bcHtml('Reflection','Activity Log')}
-  else if(currentView==='review'){pt.textContent='Weekly Review';bc.innerHTML=bcHtml('Reflection','Weekly Review')}
-  else if(currentView==='notes'){pt.textContent='Notes';bc.innerHTML=bcHtml('Reflection','Notes')}
-  else if(currentView==='overdue'){pt.textContent='Overdue';bc.innerHTML=bcHtml(null,'Overdue')}
-  else if(currentView==='tags'){pt.textContent='Tag Manager';bc.innerHTML=bcHtml('Organization','Tags')}
-  else if(currentView==='focushistory'){pt.textContent='Focus History';bc.innerHTML=bcHtml('Reflection','Focus History')}
-  else if(currentView==='templates'){pt.textContent='Templates';bc.innerHTML=bcHtml('Organization','Templates')}
-  else if(currentView==='settings'){pt.textContent='Settings';bc.innerHTML=bcHtml(null,'Settings')}
-  else if(currentView==='timeanalytics'){pt.textContent='Time Analytics';bc.innerHTML=bcHtml('Reflection','Time Analytics')}
-  else if(currentView==='rules'){pt.textContent='Automations';bc.innerHTML=bcHtml('Organization','Automations')}
-  else if(currentView==='reports'){pt.textContent='Reports';bc.innerHTML=bcHtml('Reflection','Reports')}
-  else if(currentView==='help'){pt.textContent='Help & Guide';bc.innerHTML=bcHtml(null,'Help & Guide')}
-  else if(currentView==='changelog'){pt.textContent='Changelog';bc.innerHTML=bcHtml(null,'Changelog')}
+  if(currentView==='myday'){pt.textContent='Today';bc.innerHTML=''}
+  else if(currentView==='tasks'){pt.textContent='Tasks';bc.innerHTML=''}
+  else if(currentView==='focus'){pt.textContent='Focus';bc.innerHTML=''}
+  else if(currentView==='all'){pt.textContent='All Tasks';bc.innerHTML=''}
+  else if(currentView==='board'){pt.textContent='Board';bc.innerHTML=''}
+  else if(currentView==='calendar'){pt.textContent='Calendar';bc.innerHTML=''}
+  else if(currentView==='overdue'){pt.textContent='Overdue';bc.innerHTML=''}
+  else if(currentView==='logbook'){pt.textContent='Activity Log';bc.innerHTML=''}
+  else if(currentView==='weekly'){pt.textContent='Weekly Plan';bc.innerHTML=''}
+  else if(currentView==='matrix'){pt.textContent='Eisenhower Matrix';bc.innerHTML=''}
+  else if(currentView==='dashboard'){pt.textContent='Dashboard';bc.innerHTML=''}
+  else if(currentView==='tags'){pt.textContent='Tag Manager';bc.innerHTML=''}
+  else if(currentView==='focushistory'){pt.textContent='Focus History';bc.innerHTML=''}
+  else if(currentView==='templates'){pt.textContent='Templates';bc.innerHTML=''}
+  else if(currentView==='planner'){pt.textContent='Day Planner';bc.innerHTML=''}
+  else if(currentView==='settings'){pt.textContent='Settings';bc.innerHTML=''}
+  else if(currentView==='habits'){pt.textContent='Habits';bc.innerHTML=''}
+  else if(currentView==='inbox'){pt.textContent='Inbox';bc.innerHTML=''}
+  else if(currentView==='review'){pt.textContent='Weekly Review';bc.innerHTML=''}
+  else if(currentView==='notes'){pt.textContent='Notes';bc.innerHTML=''}
+  else if(currentView==='timeanalytics'){pt.textContent='Time Analytics';bc.innerHTML=''}
+  else if(currentView==='rules'){pt.textContent='Automations';bc.innerHTML=''}
+  else if(currentView==='reports'){pt.textContent='Reports';bc.innerHTML=''}
+  else if(currentView==='help'){pt.textContent='Help & Guide';bc.innerHTML=''}
+  else if(currentView==='changelog'){pt.textContent='Changelog';bc.innerHTML=''}
   else if(currentView==='lists'){pt.textContent='Lists';bc.innerHTML=''}
   else if(currentView==='listdetail'){
     pt.textContent=activeListName||'List';
@@ -454,7 +449,6 @@ function progressRingSvg(pct,r=18,stroke=4){const c=2*Math.PI*r;const off=c-(pct
 async function renderMyDay(){return renderToday()}
 async function renderToday(){
   const c=$('ct');
-  c.innerHTML=skCards(4);
   const ds=new Date().toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   // Parallel fetch: my-day tasks, overdue, stats, streaks, habits, balance
   const [t,overdue,stats,streakData,habits,balance]=await Promise.all([
@@ -576,6 +570,8 @@ async function renderToday(){
       await api.put('/api/tasks/'+Number(el.dataset.unblock),{time_block_start:null,time_block_end:null});
       renderToday();
     }));
+    // Touch drag support for timeline
+    attachTouchWeeklyDnD();
   }
 }
 function todayHabitsStrip(habits){
@@ -705,9 +701,8 @@ async function renderFocusHub(){
 
 // ─── ALL ───
 async function renderAll(target){
-  const c=target||$('ct');
-  c.innerHTML=skCards(4);
   const t=await api.get('/api/tasks/all');
+  const c=target||$('ct');
   if(!t.length){c.innerHTML=emptyS('checklist','No tasks yet','Create a life area, add a goal, then add tasks',
     `<button class="btn-s" data-action="quick-capture"><span class="material-icons-round" style="font-size:14px">add</span>Quick Add</button>
      <button class="btn-c" data-action="go-inbox">Open Inbox</button>`);wireActions(c);return}
@@ -720,16 +715,14 @@ async function renderAll(target){
 
 // ─── GLOBAL BOARD ───
 let gbFilters={area:'',priority:'',tag:''};
-const _debouncedBoard=debounce(()=>renderGlobalBoard(),200);
 async function renderGlobalBoard(target){
-  const c=target||$('ct');
-  c.innerHTML=skCards(3);
   let qs=[];
   if(gbFilters.area)qs.push('area_id='+gbFilters.area);
   if(gbFilters.priority)qs.push('priority='+gbFilters.priority);
   if(gbFilters.tag)qs.push('tag_id='+gbFilters.tag);
   const url='/api/tasks/board'+(qs.length?'?'+qs.join('&'):'');
   const t=await api.get(url);
+  const c=target||$('ct');
   const todo=t.filter(x=>x.status==='todo'),doing=t.filter(x=>x.status==='doing'),done=t.filter(x=>x.status==='done');
   let fh=`<div class="fb">`;
   fh+=`<span class="fb-label">Filter:</span>`;
@@ -745,9 +738,9 @@ async function renderGlobalBoard(target){
   c.innerHTML=h;
   attachTE();
   attachGBD();
-  $('gb-area').addEventListener('change',e=>{gbFilters.area=e.target.value;_debouncedBoard()});
-  $('gb-pri').addEventListener('change',e=>{gbFilters.priority=e.target.value;_debouncedBoard()});
-  $('gb-tag').addEventListener('change',e=>{gbFilters.tag=e.target.value;_debouncedBoard()});
+  $('gb-area').addEventListener('change',e=>{gbFilters.area=e.target.value;renderGlobalBoard()});
+  $('gb-pri').addEventListener('change',e=>{gbFilters.priority=e.target.value;renderGlobalBoard()});
+  $('gb-tag').addEventListener('change',e=>{gbFilters.tag=e.target.value;renderGlobalBoard()});
 }
 function attachGBD(){
   document.querySelectorAll('.tc').forEach(card=>{
@@ -814,12 +807,10 @@ async function renderArea(){
     const gTasks=await api.get('/api/goals/'+gid+'/tasks');
     await api.del('/api/goals/'+gid);
     await loadAreas();render();
-    const snapAreaId=g.area_id;
     showToast('Goal deleted — "'+g.title+'"', async()=>{
-      if(!snapAreaId)return;
-      const rg=await api.post('/api/areas/'+snapAreaId+'/goals',{title:g.title,description:g.description||'',due_date:g.due_date||null,color:g.color||'#6C63FF'});
+      const rg=await api.post('/api/areas/'+activeAreaId+'/goals',{title:g.title,description:g.description||'',due_date:g.due_date||null,color:g.color||'#6C63FF'});
       for(const t of gTasks){
-        await api.post('/api/goals/'+rg.id+'/tasks',{title:t.title,note:t.note||'',status:t.status,priority:t.priority,due_date:t.due_date||null,my_day:t.my_day?1:0,recurring:t.recurring||null});
+        await api.post('/api/goals/'+rg.id+'/tasks',{title:t.title,notes:t.notes||'',status:t.status,priority:t.priority,due_date:t.due_date||null,my_day:t.my_day?1:0,recurring:t.recurring||null});
       }
       await loadAreas();render();
     });
@@ -858,13 +849,8 @@ async function renderGoal(){
   if(goalTab==='board')h+=renderBoard();else h+=renderTL();
   c.innerHTML=h;attachTA();attachTE();
   if(goalTab==='board')attachBD();
-  // Sync active tab class (listeners are wired once in initVtBtns)
-  document.querySelectorAll('.vt-btn').forEach(t=>t.classList.toggle('active',t.dataset.tab===goalTab));
-}
-// Wire view-tab buttons once to avoid accumulating duplicate listeners
-(function initVtBtns(){
   document.querySelectorAll('.vt-btn').forEach(t=>{t.addEventListener('click',()=>{goalTab=t.dataset.tab;document.querySelectorAll('.vt-btn').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderGoal()})});
-})();
+}
 function renderTL(){
   if(!tasks.length)return emptyS('task_alt','No tasks yet','Add your first action');
   const todo=tasks.filter(t=>t.status==='todo'),doing=tasks.filter(t=>t.status==='doing'),done=tasks.filter(t=>t.status==='done');
@@ -927,7 +913,7 @@ function tcHtml(t,ctx){
   if(t.priority===3)cls.push('p3');else if(t.priority===2)cls.push('p2');else if(t.priority===1)cls.push('p1');
   let meta='';
   if(t.due_date){const o=isOD(t.due_date)&&t.status!=='done';const tm=t.due_time?(' '+new Date('2000-01-01T'+t.due_time).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})):'';meta+=`<span class="${o?'od':''}"><span class="material-icons-round">event</span>${fmtDue(t.due_date)}${tm}</span>`}
-  if(t.priority>0)meta+=`<span class="pri-badge pri-${t.priority}" aria-label="Priority: ${PL[t.priority]}"><span class="pri-dot" aria-hidden="true"></span>${PL[t.priority]}</span>`;
+  if(t.priority>0)meta+=`<span style="color:${PC[t.priority]}">${PL[t.priority]}</span>`;
   if(t.assigned_to)meta+=`<span>👤 ${esc(t.assigned_to)}</span>`;
   if(t.recurring)meta+=`<span>🔁 ${esc(t.recurring)}</span>`;
   if(t.blocked_by&&t.blocked_by.some(b=>b.status!=='done'))meta+=`<span class="blocked-indicator"><span class="material-icons-round" style="font-size:12px">lock</span>Blocked</span>`;
@@ -949,11 +935,11 @@ function tcHtml(t,ctx){
     </div>`).join('')+`</div>`
   }
   const nextPri=(t.priority+1)%4;
-  return`<div class="${cls.join(' ')} ${selectedIds.has(t.id)?'selected':''}" data-id="${t.id}" draggable="true">
+  return`<div class="${cls.join(' ')} ${selectedIds.has(t.id)?'selected':''}" data-id="${t.id}" draggable="true" tabindex="0">
     <div class="ms-chk" data-id="${t.id}"></div>
-    <div class="tk" data-id="${t.id}"><span class="material-icons-round">check</span></div>
+    <div class="tk" data-id="${t.id}" role="checkbox" tabindex="0" aria-checked="${t.status==='done'}" aria-label="Complete task"><span class="material-icons-round">check</span></div>
     <div class="tb2"><div class="tt">${esc(t.title)}</div>${meta?`<div class="tm">${meta}</div>`:''}${stBar}${stList}</div>
-    <div class="ta" style="position:relative">${currentView!=='myday'?`<span class="material-icons-round myday-toggle ${t.my_day?'active':''}" data-id="${t.id}" title="${t.my_day?'Remove from My Day':'Add to My Day'}" role="button" tabindex="0" aria-label="${t.my_day?'Remove from My Day':'Add to My Day'}" aria-pressed="${t.my_day?'true':'false'}">${t.my_day?'wb_sunny':'light_mode'}</span>`:''}<button class="material-icons-round snz-btn" data-id="${t.id}" title="Reschedule" aria-label="Reschedule task">schedule</button><button class="material-icons-round ft-start" data-id="${t.id}" title="Focus timer" aria-label="Start focus timer">timer</button><button class="material-icons-round et" data-id="${t.id}" title="Edit task" aria-label="Edit task">edit</button><button class="material-icons-round dt" data-id="${t.id}" title="Delete task" aria-label="Delete task">delete_outline</button></div>
+    <div class="ta" style="position:relative">${currentView!=='myday'?`<span class="material-icons-round myday-toggle ${t.my_day?'active':''}" data-id="${t.id}" title="${t.my_day?'Remove from My Day':'Add to My Day'}">${t.my_day?'wb_sunny':'light_mode'}</span>`:''}<button class="material-icons-round snz-btn" data-id="${t.id}" title="Reschedule">schedule</button><button class="material-icons-round ft-start" data-id="${t.id}" title="Focus timer">timer</button><button class="material-icons-round et" data-id="${t.id}">edit</button><button class="material-icons-round dt" data-id="${t.id}">delete_outline</button></div>
     <div class="qa-row"><button class="qa-btn qa-pri pri-${t.priority}" data-id="${t.id}" data-next="${nextPri}" title="Cycle priority (${PL[t.priority]||'None'}→${PL[nextPri]||'None'})"><span class="material-icons-round">flag</span></button><button class="qa-btn qa-date" data-id="${t.id}" title="Set due date"><span class="material-icons-round">event</span></button><button class="qa-btn qa-myday" data-id="${t.id}" title="${t.my_day?'Remove from':'Add to'} My Day"><span class="material-icons-round">${t.my_day?'wb_sunny':'light_mode'}</span></button>${t.recurring?`<button class="qa-btn qa-skip" data-id="${t.id}" title="Skip occurrence"><span class="material-icons-round">skip_next</span></button>`:''}<button class="qa-btn qa-edit" data-id="${t.id}" title="Edit"><span class="material-icons-round">edit</span></button></div>
   </div>`;
 }
@@ -1005,16 +991,13 @@ function attachTE(){
     await loadAreas();render();loadOverdueBadge();
   }));
   // My Day quick toggle
-  document.querySelectorAll('.myday-toggle').forEach(el=>{
-    el.addEventListener('click',async e=>{
-      e.stopPropagation();const id=Number(el.dataset.id);
-      const isActive=el.classList.contains('active');
-      await api.put('/api/tasks/'+id,{my_day:isActive?0:1});
-      showToast(isActive?'Removed from My Day':'Added to My Day');
-      await loadAreas();render();loadOverdueBadge();
-    });
-    el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}});
-  });
+  document.querySelectorAll('.myday-toggle').forEach(el=>el.addEventListener('click',async e=>{
+    e.stopPropagation();const id=Number(el.dataset.id);
+    const isActive=el.classList.contains('active');
+    await api.put('/api/tasks/'+id,{my_day:isActive?0:1});
+    showToast(isActive?'Removed from My Day':'Added to My Day');
+    await loadAreas();render();loadOverdueBadge();
+  }));
   // Quick Reschedule (snooze)
   document.querySelectorAll('.snz-btn').forEach(el=>el.addEventListener('click',e=>{
     e.stopPropagation();
@@ -1034,7 +1017,7 @@ function attachTE(){
       {label:'Next Week',icon:'date_range',date:fmt(nextWk)},
       {label:'No Date',icon:'block',date:null}
     ];
-    dd.innerHTML=opts.map(o=>`<div class="snz-opt" role="menuitem" tabindex="0" data-date="${o.date||''}"><span class="material-icons-round" style="font-size:14px">${esc(o.icon)}</span>${esc(o.label)}</div>`).join('');
+    dd.innerHTML=opts.map(o=>`<div class="snz-opt" role="menuitem" tabindex="0" data-date="${o.date||''}"><span class="material-icons-round" style="font-size:14px">${o.icon}</span>${o.label}</div>`).join('');
     ta.appendChild(dd);
     // Keyboard navigation for snooze dropdown
     const snzItems=[...dd.querySelectorAll('.snz-opt')];let snzIdx=-1;
@@ -1166,6 +1149,166 @@ function attachTE(){
   }));
 }
 
+// ─── TOUCH DRAG-AND-DROP POLYFILL ───
+// HTML5 DnD doesn't fire touch events on iOS/Android. This provides a touch-based fallback.
+const touchDnD={
+  _dragEl:null,_ghost:null,_startX:0,_startY:0,_moved:false,_longPress:null,
+  _onDrop:null,_containerSel:null,_itemSel:null,
+
+  attach(containerSel,itemSel,onDropFn){
+    if(!('ontouchstart' in window))return; // Only needed on touch devices
+    this._containerSel=containerSel;this._itemSel=itemSel;this._onDrop=onDropFn;
+    document.addEventListener('touchstart',this._handleStart.bind(this),{passive:false});
+    document.addEventListener('touchmove',this._handleMove.bind(this),{passive:false});
+    document.addEventListener('touchend',this._handleEnd.bind(this),{passive:false});
+  },
+
+  _handleStart(e){
+    const item=e.target.closest(this._itemSel);
+    if(!item||!item.dataset.id||msMode)return;
+    // Long-press detection (200ms) to distinguish from scroll
+    this._startX=e.touches[0].clientX;this._startY=e.touches[0].clientY;this._moved=false;
+    this._longPress=setTimeout(()=>{
+      this._dragEl=item;item.classList.add('dragging');
+      this._ghost=item.cloneNode(true);
+      this._ghost.style.cssText='position:fixed;pointer-events:none;z-index:10000;opacity:0.8;width:'+item.offsetWidth+'px;transform:rotate(2deg);transition:none;';
+      document.body.appendChild(this._ghost);
+      this._positionGhost(e.touches[0]);
+      if(navigator.vibrate)navigator.vibrate(30);
+    },200);
+  },
+
+  _handleMove(e){
+    const dx=Math.abs(e.touches[0].clientX-this._startX);
+    const dy=Math.abs(e.touches[0].clientY-this._startY);
+    if(!this._dragEl&&(dx>8||dy>8)){clearTimeout(this._longPress);this._longPress=null;return}
+    if(!this._dragEl)return;
+    e.preventDefault(); // Prevent scroll while dragging
+    this._moved=true;
+    this._positionGhost(e.touches[0]);
+    // Highlight drop target
+    const target=this._getDropTarget(e.touches[0]);
+    document.querySelectorAll('.drag-over,.drag-target').forEach(c=>{c.classList.remove('drag-over');c.classList.remove('drag-target')});
+    if(target){
+      target.classList.add(target.matches(this._itemSel)?'drag-over':'drag-target');
+      // Auto-scroll if near edges
+      const ct=$('ct');if(ct){
+        const rect=ct.getBoundingClientRect();
+        if(e.touches[0].clientY<rect.top+40)ct.scrollTop-=8;
+        if(e.touches[0].clientY>rect.bottom-40)ct.scrollTop+=8;
+      }
+    }
+  },
+
+  _handleEnd(e){
+    clearTimeout(this._longPress);this._longPress=null;
+    if(!this._dragEl){return}
+    if(this._ghost){this._ghost.remove();this._ghost=null}
+    this._dragEl.classList.remove('dragging');
+    document.querySelectorAll('.drag-over,.drag-target').forEach(c=>{c.classList.remove('drag-over');c.classList.remove('drag-target')});
+    if(this._moved){
+      const touch=e.changedTouches[0];
+      const target=this._getDropTarget(touch);
+      if(target&&this._onDrop){this._onDrop(this._dragEl,target)}
+    }
+    this._dragEl=null;this._moved=false;
+  },
+
+  _positionGhost(touch){
+    if(!this._ghost)return;
+    this._ghost.style.left=(touch.clientX-30)+'px';
+    this._ghost.style.top=(touch.clientY-20)+'px';
+  },
+
+  _getDropTarget(touch){
+    if(this._ghost)this._ghost.style.display='none';
+    const el=document.elementFromPoint(touch.clientX,touch.clientY);
+    if(this._ghost)this._ghost.style.display='';
+    if(!el)return null;
+    // Check if target is a draggable item or a container
+    return el.closest(this._itemSel)||el.closest(this._containerSel);
+  }
+};
+
+// Attach touch DnD for task list reorder
+function attachTouchDragReorder(){
+  touchDnD.attach('.ct','[draggable].tc',async(dragEl,dropEl)=>{
+    const fromId=Number(dragEl.dataset.id);
+    const toId=Number(dropEl.dataset.id);
+    if(!fromId||!toId||fromId===toId)return;
+    const allCards=[...document.querySelectorAll('.tc[data-id]')];
+    const ids=allCards.map(c=>Number(c.dataset.id));
+    const fromIdx=ids.indexOf(fromId),toIdx=ids.indexOf(toId);
+    if(fromIdx<0||toIdx<0)return;
+    ids.splice(fromIdx,1);ids.splice(toIdx,0,fromId);
+    const items=ids.map((id,i)=>({id,position:i}));
+    await api.put('/api/tasks/reorder',{items});
+    await loadAreas();render();
+  });
+}
+
+// Attach touch DnD for weekly planner
+function attachTouchWeeklyDnD(){
+  if(!('ontouchstart' in window))return;
+  let dragEl=null,ghost=null,startX=0,startY=0,longPress=null,moved=false;
+  document.querySelectorAll('.wp-tc,.planner-task').forEach(card=>{
+    card.addEventListener('touchstart',e=>{
+      startX=e.touches[0].clientX;startY=e.touches[0].clientY;moved=false;
+      longPress=setTimeout(()=>{
+        dragEl=card;card.classList.add('dragging');
+        ghost=card.cloneNode(true);
+        ghost.style.cssText='position:fixed;pointer-events:none;z-index:10000;opacity:0.8;width:'+card.offsetWidth+'px;transform:rotate(2deg);';
+        document.body.appendChild(ghost);
+        if(navigator.vibrate)navigator.vibrate(30);
+      },200);
+    },{passive:false});
+    card.addEventListener('touchmove',e=>{
+      const dx=Math.abs(e.touches[0].clientX-startX);
+      const dy=Math.abs(e.touches[0].clientY-startY);
+      if(!dragEl&&(dx>8||dy>8)){clearTimeout(longPress);return}
+      if(!dragEl)return;
+      e.preventDefault();moved=true;
+      if(ghost){ghost.style.left=(e.touches[0].clientX-30)+'px';ghost.style.top=(e.touches[0].clientY-20)+'px'}
+      document.querySelectorAll('.drag-target').forEach(c=>c.classList.remove('drag-target'));
+      if(ghost)ghost.style.display='none';
+      const el=document.elementFromPoint(e.touches[0].clientX,e.touches[0].clientY);
+      if(ghost)ghost.style.display='';
+      const col=el?.closest('.wp-day,.wp-un,.planner-hour-tasks,.bcb');
+      if(col)col.classList.add('drag-target');
+    },{passive:false});
+    card.addEventListener('touchend',async e=>{
+      clearTimeout(longPress);
+      if(!dragEl){return}
+      if(ghost){ghost.remove();ghost=null}
+      dragEl.classList.remove('dragging');
+      document.querySelectorAll('.drag-target').forEach(c=>c.classList.remove('drag-target'));
+      if(moved){
+        const touch=e.changedTouches[0];
+        const el=document.elementFromPoint(touch.clientX,touch.clientY);
+        const col=el?.closest('.wp-day,.wp-un');
+        const hourSlot=el?.closest('.planner-hour-tasks');
+        const boardCol=el?.closest('.bcb');
+        const taskId=Number(dragEl.dataset.id);
+        if(col&&taskId){
+          const newDate=col.dataset.date||null;
+          await api.put('/api/tasks/'+taskId,{due_date:newDate});
+          if(typeof renderWeekly==='function')await renderWeekly();
+          else{await loadAreas();render()}
+        }else if(hourSlot&&taskId){
+          const hour=hourSlot.dataset.hour;
+          const endHr=String(Number(hour)+1).padStart(2,'0');
+          await api.put('/api/tasks/'+taskId,{due_date:_toDateStr(new Date()),time_block_start:hour+':00',time_block_end:endHr+':00'});
+          if(typeof renderToday==='function')renderToday();
+        }else if(boardCol&&taskId){
+          await api.put('/api/tasks/'+taskId,{status:boardCol.dataset.s});
+          await loadAreas();render();
+        }
+      }
+      dragEl=null;moved=false;
+    },{passive:false});
+  });
+}
+
 // ─── DRAG REORDER ───
 function attachDragReorder(){
   let dragId=null;
@@ -1198,6 +1341,8 @@ function attachDragReorder(){
       await loadAreas();render();
     });
   });
+  // Also attach touch reorder on each render
+  attachTouchDragReorder();
 }
 
 // ─── MULTI-SELECT ───
@@ -1220,6 +1365,8 @@ function attachBD(){
       const id=Number(e.dataTransfer.getData('text/plain'));
       await api.put('/api/tasks/'+id,{status:col.dataset.s});await loadAreas();renderGoal()});
   });
+  // Touch drag support for board
+  attachTouchWeeklyDnD();
 }
 
 // ─── WEEKLY PLANNING ───
@@ -1269,6 +1416,8 @@ async function renderWeekly(){
       await loadAreas();renderWeekly();
     });
   });
+  // Touch drag support for mobile
+  attachTouchWeeklyDnD();
 }
 function wpCard(t){
   const cls=['wp-tc'];if(t.status==='done')cls.push('done');
@@ -1352,48 +1501,24 @@ async function openDP(id){
   renderDPBody();
   $('dp').classList.add('open');
 }
-function dpSecOpen(key){try{const s=JSON.parse(localStorage.getItem('lf-dp-sec')||'{}');return s[key]!==false}catch(e){return true}}
-function dpSecToggle(key,el){const s=dpSecOpen(key)?false:true;try{const d=JSON.parse(localStorage.getItem('lf-dp-sec')||'{}');d[key]=s;localStorage.setItem('lf-dp-sec',JSON.stringify(d))}catch(e){}el.classList.toggle('collapsed',!s)}
 function renderDPBody(){
   const t=dpTask;
-  const sec=(icon,key,title,body,noCollapse)=>{const open=noCollapse||dpSecOpen(key);return`<div class="dp-section${open?'':' collapsed'}"${noCollapse?' data-no-collapse="true"':''} data-sec="${key}"><div class="dp-sec-head"${noCollapse?'':` aria-expanded="${open}"`} role="button" tabindex="0"><span class="material-icons-round">${icon}</span>${title}${noCollapse?'':'<span class="material-icons-round dp-sec-arrow">expand_more</span>'}</div><div class="dp-sec-body">${body}</div></div>`};
-  let h='';
-  // Core (never collapsible)
-  h+=sec('edit_note','core','Core',`
-    <label>Title</label><input type="text" id="dp-ttl" value="${escA(t.title)}">
+  let h=`<label>Title</label><input type="text" id="dp-ttl" value="${escA(t.title)}">
     <label>Notes</label><textarea id="dp-note">${esc(t.note||'')}</textarea>
     <div id="dp-note-preview" class="md-note" style="display:none;padding:8px 10px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin:-6px 0 10px;max-height:200px;overflow-y:auto"></div>
-    <label>Linked List</label><select id="dp-list"><option value="">None</option></select>
-  `,true);
-  // Scheduling
-  h+=sec('event','scheduling','Scheduling',`
     <div class="dp-row"><div><label>Due Date</label><div style="display:flex;gap:6px"><input type="date" id="dp-due" value="${t.due_date||''}" style="flex:1"><input type="time" id="dp-time" value="${t.due_time||''}" style="width:100px"></div></div>
+    <div><label>Priority</label><select id="dp-pri"><option value="0" ${t.priority===0?'selected':''}>None</option><option value="1" ${t.priority===1?'selected':''}>Normal</option><option value="2" ${t.priority===2?'selected':''}>High</option><option value="3" ${t.priority===3?'selected':''}>Critical</option></select></div></div>
+    <div class="dp-row"><div><label>Assigned To</label><input type="text" id="dp-asg" value="${escA(t.assigned_to||'')}"></div>
     <div><label>Recurring</label><select id="dp-rec"><option value="">None</option><option value="daily" ${t.recurring==='daily'?'selected':''}>Daily</option><option value="weekdays" ${t.recurring==='weekdays'?'selected':''}>Weekdays</option><option value="weekly" ${t.recurring==='weekly'?'selected':''}>Weekly</option><option value="biweekly" ${t.recurring==='biweekly'?'selected':''}>Every 2 Weeks</option><option value="monthly" ${t.recurring==='monthly'?'selected':''}>Monthly</option><option value="yearly" ${t.recurring==='yearly'?'selected':''}>Yearly</option><option value="custom" ${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)?'selected':''}>Custom…</option></select><div id="dp-rec-custom" style="display:${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)&&t.recurring!=='every-2-weeks'?'flex':'none'};gap:6px;margin-top:4px;align-items:center"><span style="font-size:11px">Every</span><input type="number" id="dp-rec-n" min="1" max="365" style="width:60px" value="${(t.recurring?.match(/^every-(\d+)/)||[])[1]||'3'}"><select id="dp-rec-unit" style="width:80px"><option value="days" ${t.recurring?.endsWith('-days')?'selected':''}>Days</option><option value="weeks" ${t.recurring?.endsWith('-weeks')?'selected':''}>Weeks</option></select></div><div id="dp-rec-preview" style="display:${t.recurring?'block':'none'};margin-top:6px;padding:6px 8px;background:var(--bg-c);border-radius:4px;font-size:10px;color:var(--tx2)"><span class="material-icons-round" style="font-size:12px;vertical-align:middle">repeat</span> <span id="dp-rec-txt">${esc(t.recurring||'')} </span></div></div></div>
-    <div><label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:0"><input type="checkbox" id="dp-md" ${t.my_day?'checked':''} style="width:auto;margin:0">Add to My Day</label></div>
-  `);
-  // Time Tracking
-  h+=sec('timer','timetracking','Time Tracking',`
+    <div><label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:10px"><input type="checkbox" id="dp-md" ${t.my_day?'checked':''} style="width:auto;margin:0">Add to My Day</label></div>
     <div class="dp-row"><div><label>Estimated (min)</label><input type="number" id="dp-est" min="0" value="${t.estimated_minutes||''}" placeholder="e.g. 30"></div>
     <div><label>Actual (min)</label><input type="number" id="dp-act" min="0" value="${t.actual_minutes||''}" placeholder="0"></div></div>
-  `);
-  // Organization
-  h+=sec('label','organization','Organization',`
-    <div class="dp-row"><div><label>Priority</label><select id="dp-pri"><option value="0" ${t.priority===0?'selected':''}>None</option><option value="1" ${t.priority===1?'selected':''}>Normal</option><option value="2" ${t.priority===2?'selected':''}>High</option><option value="3" ${t.priority===3?'selected':''}>Critical</option></select></div>
-    <div><label>Assigned To</label><input type="text" id="dp-asg" value="${escA(t.assigned_to||'')}"></div></div>
+    <label>Linked List</label><select id="dp-list"><option value="">None</option></select>
     <label>Tags</label><div class="tg-wrap" id="tg-wrap"><div class="tgi" id="tgi"></div></div>
-  `);
-  // Relationships
-  h+=sec('account_tree','relationships','Relationships',`
-    <label>Subtasks</label><div class="sta"><input type="text" id="st-input" placeholder="Add subtask..."><button id="st-add" aria-label="Add subtask">Add</button></div><div class="stl" id="stl"></div>
+    <label>Subtasks</label><div class="sta"><input type="text" id="st-input" placeholder="Add subtask..."><button id="st-add">Add</button></div><div class="stl" id="stl"></div>
     <label>Dependencies</label><div id="dp-deps"></div>
-    <label>Comments</label><div class="sta"><input type="text" id="cmt-input" placeholder="Add a comment..."><button id="cmt-add" aria-label="Post comment">Post</button></div><div id="dp-comments"></div>
-  `);
+    <label>Comments</label><div class="sta"><input type="text" id="cmt-input" placeholder="Add a comment..."><button id="cmt-add">Post</button></div><div id="dp-comments"></div>`;
   $('dp-body').innerHTML=h;
-  // Section collapse toggles
-  $('dp-body').querySelectorAll('.dp-sec-head').forEach(head=>{
-    head.addEventListener('click',()=>{const sec=head.closest('.dp-section');if(sec&&!sec.dataset.noCollapse){dpSecToggle(sec.dataset.sec,sec);head.setAttribute('aria-expanded',!sec.classList.contains('collapsed'))}});
-    head.addEventListener('keydown',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();head.click()}});
-  });
   // Populate list picker
   const dpListSel=$('dp-list');
   dpListSel.innerHTML='<option value="">None</option>'+userLists.filter(l=>!l.parent_id).map(l=>{
@@ -1507,15 +1632,7 @@ function renderSubtasks(){
     s.done=s.done?0:1;renderSubtasks();
   }));
   el.querySelectorAll('.stde').forEach(b=>b.addEventListener('click',async()=>{
-    const sid=Number(b.dataset.id);const sub=dpSubtasks.find(s=>s.id===sid);
-    if(!sub)return;
-    await api.del('/api/subtasks/'+sid);
-    dpSubtasks=dpSubtasks.filter(s=>s.id!==sid);renderSubtasks();
-    const taskIdSnap=dpTask.id;
-    showToast(`Subtask deleted — "${sub.title}"`,async()=>{
-      const r=await api.post('/api/tasks/'+taskIdSnap+'/subtasks',{title:sub.title,note:sub.note||'',done:sub.done?1:0});
-      if(r&&r.id){dpSubtasks.push(r);renderSubtasks();}
-    });
+    await api.del('/api/subtasks/'+b.dataset.id);dpSubtasks=dpSubtasks.filter(s=>s.id!==Number(b.dataset.id));renderSubtasks();
   }));
   el.querySelectorAll('.stn').forEach(n=>n.addEventListener('blur',async()=>{
     const sid=Number(n.dataset.id);const note=n.textContent.trim();
@@ -1564,24 +1681,22 @@ async function renderDeps(){
 
 $('dp-close').addEventListener('click',()=>$('dp').classList.remove('open'));
 $('dp-cancel').addEventListener('click',()=>$('dp').classList.remove('open'));
-$('dp-save').addEventListener('click',()=>{
+$('dp-save').addEventListener('click',async()=>{
   const dpTitleVal=$('dp-ttl').value.trim();
   if(!dpTitleVal){showToast('Task title cannot be empty');$('dp-ttl').classList.add('inp-err');$('dp-ttl').focus();return;}
   $('dp-ttl').classList.remove('inp-err');
-  withSubmit('dp-save',async()=>{
-    let rec=$('dp-rec').value||null;
-    if(rec==='custom'){const n=parseInt($('dp-rec-n').value)||3;const u=$('dp-rec-unit').value;rec='every-'+n+'-'+u}
-    await api.put('/api/tasks/'+dpTask.id,{
-      title:$('dp-ttl').value, note:$('dp-note').value, due_date:$('dp-due').value||null,
-      due_time:$('dp-time').value||null,
-      priority:Number($('dp-pri').value), assigned_to:$('dp-asg').value,
-      recurring:rec, my_day:$('dp-md').checked,
-      estimated_minutes:Number($('dp-est').value)||null, actual_minutes:Number($('dp-act').value)||0,
-      list_id:$('dp-list').value?Number($('dp-list').value):null
-    });
-    await api.put('/api/tasks/'+dpTask.id+'/tags',{tagIds:dpTags});
-    $('dp').classList.remove('open');showToast('Task saved');await loadAreas();render();loadBellReminders();
+  let rec=$('dp-rec').value||null;
+  if(rec==='custom'){const n=parseInt($('dp-rec-n').value)||3;const u=$('dp-rec-unit').value;rec='every-'+n+'-'+u}
+  await api.put('/api/tasks/'+dpTask.id,{
+    title:$('dp-ttl').value, note:$('dp-note').value, due_date:$('dp-due').value||null,
+    due_time:$('dp-time').value||null,
+    priority:Number($('dp-pri').value), assigned_to:$('dp-asg').value,
+    recurring:rec, my_day:$('dp-md').checked,
+    estimated_minutes:Number($('dp-est').value)||null, actual_minutes:Number($('dp-act').value)||0,
+    list_id:$('dp-list').value?Number($('dp-list').value):null
   });
+  await api.put('/api/tasks/'+dpTask.id+'/tags',{tagIds:dpTags});
+  $('dp').classList.remove('open');showToast('Task saved');await loadAreas();render();loadBellReminders();
 });
 
 // ─── AREA MODAL ───
@@ -1602,15 +1717,13 @@ function openAreaModal(area){
 }
 $('add-area-btn').addEventListener('click',(e)=>{e.stopPropagation();openAreaModal()});
 $('am-cancel').addEventListener('click',()=>$('am').classList.remove('active'));
-$('am-save').addEventListener('click',()=>{
+$('am-save').addEventListener('click',async()=>{
   if(!validateField('am-name',{required:true,maxlength:100,requiredMsg:'Please enter an area name'}))return;
-  withSubmit('am-save',async()=>{
-    const n=$('am-name').value.trim();
-    const data={name:n,icon:$('am-icon').value||'📋',color:$('am-color').value};
-    if(_editAreaId){await api.put('/api/areas/'+_editAreaId,data);showToast('Area updated')}
-    else{await api.post('/api/areas',data);showToast('Area created')}
-    $('am').classList.remove('active');await loadAreas();render();
-  });
+  const n=$('am-name').value.trim();
+  const data={name:n,icon:$('am-icon').value||'📋',color:$('am-color').value};
+  if(_editAreaId){await api.put('/api/areas/'+_editAreaId,data)}
+  else{await api.post('/api/areas',data)}
+  $('am').classList.remove('active');await loadAreas();render();
 });
 
 function openGM(id){
@@ -1619,15 +1732,10 @@ function openGM(id){
   $('gm').classList.add('active');$('gm-title').focus();
 }
 $('gm-cancel').addEventListener('click',()=>$('gm').classList.remove('active'));
-$('gm-save').addEventListener('click',()=>{if(!validateField('gm-title',{required:true,maxlength:200,requiredMsg:'Please enter a goal title'}))return;
-  withSubmit('gm-save',async()=>{
-    const t=$('gm-title').value.trim();
-    const d={title:t,description:$('gm-desc').value,due_date:$('gm-due').value||null,color:$('gm-color').value};
-    if(editingId){await api.put('/api/goals/'+editingId,d);showToast('Goal updated')}
-    else{await api.post('/api/areas/'+activeAreaId+'/goals',d);showToast('Goal created')}
-    $('gm').classList.remove('active');await loadAreas();render();
-  });
-});
+$('gm-save').addEventListener('click',async()=>{if(!validateField('gm-title',{required:true,maxlength:200,requiredMsg:'Please enter a goal title'}))return;const t=$('gm-title').value.trim();
+  const d={title:t,description:$('gm-desc').value,due_date:$('gm-due').value||null,color:$('gm-color').value};
+  if(editingId)await api.put('/api/goals/'+editingId,d);else await api.post('/api/areas/'+activeAreaId+'/goals',d);
+  $('gm').classList.remove('active');await loadAreas();render()});
 
 document.querySelectorAll('.mo').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('active')}));
 function emptyS(i,t,s,actions){let h=`<div class="empty"><span class="material-icons-round">${i}</span><p>${t}</p><p style="font-size:11px">${s}</p>`;if(actions)h+=`<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${actions}</div>`;h+=`</div>`;return h}
@@ -1663,8 +1771,9 @@ function initThemes(){
   tp.innerHTML=THEMES.map(t=>`<div class="tp-dot ${t.id===saved?'active':''}" data-t="${t.id}" title="${t.label}" tabindex="0" role="button" aria-label="Theme: ${t.label}" style="background:${t.dot}${t.id==='light'?';border:1px solid #CBD5E1':''}"></div>`).join('');
   tp.querySelectorAll('.tp-dot').forEach(d=>{
     function activate(){
-    const tid=d.dataset.t;localStorage.setItem('lf-theme',tid);
+    const tid=d.dataset.t;localStorage.setItem('lf-theme',tid);localStorage.setItem('lf-theme-explicit','true');
     document.documentElement.setAttribute('data-theme',tid);
+    document.documentElement.removeAttribute('data-theme-auto');
     tp.querySelectorAll('.tp-dot').forEach(x=>x.classList.remove('active'));d.classList.add('active');
     }
     d.addEventListener('click',activate);
@@ -1727,22 +1836,57 @@ Promise.all([loadSettings(),loadAreas(),loadTags(),loadSavedFilters(),loadSmartC
     document.querySelector(`.ni[data-view="${appSettings.defaultView}"]`)?.classList.add('active');
   }
   render();loadOverdueBadge();loadBellReminders();initServiceWorker();requestNotificationPermission();
+  // iOS keyboard detection — toggle body class for CSS positioning fixes
+  if(/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.userAgent.includes('Mac')&&'ontouchend' in document)){
+    const vv=window.visualViewport;
+    if(vv){
+      vv.addEventListener('resize',()=>{
+        const kbOpen=vv.height<window.innerHeight*0.75;
+        document.body.classList.toggle('keyboard-open',kbOpen);
+      });
+    }
+  }
+  // Prefers-color-scheme: auto-set theme if user hasn't explicitly chosen one
+  if(!localStorage.getItem('lf-theme-explicit')){
+    document.documentElement.setAttribute('data-theme-auto','true');
+  }
   // Check for first-time user onboarding
   if(!localStorage.getItem('lf-onboarded')&&!areas.length){$('onb-ov').classList.add('active')}
 });
 
 // ─── SERVICE WORKER ───
 async function initServiceWorker(){
-  if(!('serviceWorker' in navigator))return;
+  if(!('serviceWorker' in navigator)){
+    console.warn('Service Worker not supported — offline mode unavailable');
+    return;
+  }
   try{
     const reg=await navigator.serviceWorker.register('/sw.js',{scope:'/'});
     // Listen for messages from SW (e.g., notification click with taskId)
     navigator.serviceWorker.addEventListener('message',e=>{
       if(e.data?.action==='openTask'&&e.data?.taskId){openDP(e.data.taskId)}
+      if(e.data?.type==='sw-update-available'){
+        showToast('🔄 App update available — refresh to get the latest version',()=>{
+          if(reg.waiting)reg.waiting.postMessage({type:'skip-waiting'});
+          window.location.reload();
+        },10000);
+      }
     });
+    // Monitor SW state for failures
+    if(reg.installing){
+      reg.installing.addEventListener('statechange',function(){
+        if(this.state==='redundant'){
+          console.error('SW install failed (redundant)');
+          showToast('⚠️ Offline mode failed to activate');
+        }
+      });
+    }
     // Set up periodic sync for reminders (syncs every 60 min if app closed)
     if('periodicSync' in reg){try{await reg.periodicSync.register('lifeflow-sync-reminders',{minInterval:60*60*1000})}catch(e){}}
-  }catch(err){console.error('SW registration failed:',err)}
+  }catch(err){
+    console.error('SW registration failed:',err);
+    showToast('⚠️ Offline mode unavailable — '+err.message);
+  }
 }
 
 // ─── NOTIFICATION PERMISSION ───
@@ -1901,7 +2045,7 @@ if('Notification' in window&&Notification.permission==='granted'){
     const sp=spotlight;
     sp.style.left=(rect.left-6)+'px';sp.style.top=(rect.top-6)+'px';
     sp.style.width=(rect.width+12)+'px';sp.style.height=(rect.height+12)+'px';
-    titleEl.innerHTML=`<span class="material-icons-round">${esc(s.icon)}</span>${esc(s.title)}`;
+    titleEl.innerHTML=`<span class="material-icons-round">${s.icon}</span>${s.title}`;
     descEl.textContent=s.desc;
     progressEl.style.width=((step+1)/steps.length*100)+'%';
     // Dots
@@ -2362,7 +2506,7 @@ function startFocusTimer(taskId){
   let tk=tasks.find(t=>t.id===taskId);
   if(!tk||!tk.subtasks){
     // Fetch full task with subtasks from individual endpoint
-    api.get('/api/tasks/'+taskId).then(t=>{ftTask=t;showTechniquePicker()}).catch(loggedCatch('task detail',true));
+    api.get('/api/tasks/'+taskId).then(t=>{ftTask=t;showTechniquePicker()}).catch(()=>{});
     return;
   }
   ftTask=tk;showTechniquePicker();
@@ -2505,7 +2649,7 @@ function showFocusPlan(){
   const tech=FT_TECHNIQUES[ftTechnique]||FT_TECHNIQUES.pomodoro;
   const badge=$('ft-plan-technique');
   if(badge){
-    badge.innerHTML=`<span style="font-size:16px;vertical-align:middle">${esc(tech.icon)}</span> ${esc(tech.name)}${tech.dur?' <span style="opacity:.5">('+esc(String(tech.dur))+'min)</span>':''} <span style="font-size:10px;opacity:.4">↺ change</span>`;
+    badge.innerHTML=`<span style="font-size:16px;vertical-align:middle">${tech.icon}</span> ${tech.name}${tech.dur?' <span style="opacity:.5">(${tech.dur}min)</span>':''} <span style="font-size:10px;opacity:.4">↺ change</span>`;
     badge.onclick=()=>showTechniquePicker();
   }
   const tbRow=$('ft-timebox-row');
@@ -3396,7 +3540,8 @@ async function renderSettings(){
   c.querySelectorAll('.theme-card').forEach(card=>card.addEventListener('click',async()=>{
     const theme=card.dataset.theme;
     document.documentElement.setAttribute('data-theme',theme);
-    localStorage.setItem('lf-theme',theme);
+    localStorage.setItem('lf-theme',theme);localStorage.setItem('lf-theme-explicit','true');
+    document.documentElement.removeAttribute('data-theme-auto');
     await saveSetting('theme',theme);
     renderSettings();
   }));
@@ -3517,7 +3662,7 @@ function openListModal(editList){
         $('lm').classList.remove('active');
         await loadUserLists();activeListId=r.id;activeListName=r.name;currentView='listdetail';render();
       }));
-    }).catch(loggedCatch('list templates'));
+    }).catch(()=>{});
   }
   $('lm').classList.add('active');$('lm-name').focus();
 }
@@ -3531,27 +3676,25 @@ document.querySelectorAll('.lm-type').forEach(t=>t.addEventListener('click',()=>
   $('lm-icon').value=icons[t.dataset.type]||'📋';
 }));
 $('lm-cancel').addEventListener('click',()=>$('lm').classList.remove('active'));
-$('lm-save').addEventListener('click',()=>{
+$('lm-save').addEventListener('click',async()=>{
   if(!validateField('lm-name',{required:true,maxlength:100,requiredMsg:'Please enter a list name'}))return;
-  withSubmit('lm-save',async()=>{
-    const name=$('lm-name').value.trim();
-    const type=document.querySelector('.lm-type.sel')?.dataset.type||'checklist';
-    const icon=$('lm-icon').value||'📋';
-    const color=$('lm-color').value;
-    const area_id=$('lm-area').value?Number($('lm-area').value):null;
-    const editId=$('lm-edit-id').value;
-    const parent_id=$('lm-parent').value?Number($('lm-parent').value):null;
-    if(editId){
-      await api.put('/api/lists/'+editId,{name,icon,color,area_id});
-    }else{
-      const r=await api.post('/api/lists',{name,type,icon,color,area_id,parent_id});
-      activeListId=r.id;activeListName=r.name;
-    }
-    $('lm').classList.remove('active');
-    await loadUserLists();
-    if(!editId){currentView='listdetail';}
-    render();
-  });
+  const name=$('lm-name').value.trim();
+  const type=document.querySelector('.lm-type.sel')?.dataset.type||'checklist';
+  const icon=$('lm-icon').value||'📋';
+  const color=$('lm-color').value;
+  const area_id=$('lm-area').value?Number($('lm-area').value):null;
+  const editId=$('lm-edit-id').value;
+  const parent_id=$('lm-parent').value?Number($('lm-parent').value):null;
+  if(editId){
+    await api.put('/api/lists/'+editId,{name,icon,color,area_id});
+  }else{
+    const r=await api.post('/api/lists',{name,type,icon,color,area_id,parent_id});
+    activeListId=r.id;activeListName=r.name;
+  }
+  $('lm').classList.remove('active');
+  await loadUserLists();
+  if(!editId){currentView='listdetail';}
+  render();
 });
 
 async function renderLists(){
@@ -4980,18 +5123,14 @@ function updateMultiSelectBar(){
       <button class="ms-del" id="ms-del"><span class="material-icons-round" style="font-size:15px">delete_outline</span>Delete</button>
       <button id="ms-clear"><span class="material-icons-round" style="font-size:15px">close</span>Clear</button>`;
     document.body.appendChild(bar);
-    document.getElementById('ms-done').addEventListener('click',()=>{
-      withSubmit('ms-done',async()=>{
-        await api.put('/api/tasks/bulk',{ids:[...selectedIds],changes:{status:'done'}});
-        showToast(selectedIds.size+' tasks completed');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
-      });
+    document.getElementById('ms-done').addEventListener('click',async()=>{
+      await api.put('/api/tasks/bulk',{ids:[...selectedIds],changes:{status:'done'}});
+      showToast(selectedIds.size+' tasks completed');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
     });
     document.getElementById('ms-del').addEventListener('click',async()=>{
       if(!confirm('Delete '+selectedIds.size+' tasks?'))return;
-      withSubmit('ms-del',async()=>{
-        for(const id of selectedIds)await api.del('/api/tasks/'+id);
-        showToast(selectedIds.size+' tasks deleted');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
-      });
+      for(const id of selectedIds)await api.del('/api/tasks/'+id);
+      showToast(selectedIds.size+' tasks deleted');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
     });
     document.getElementById('ms-pri').addEventListener('click',async()=>{
       const p=prompt('Set priority (0=None, 1=Normal, 2=High, 3=Critical):','2');
@@ -5009,11 +5148,9 @@ function updateMultiSelectBar(){
       await api.put('/api/tasks/bulk',{ids:[...selectedIds],changes:{due_date:date}});
       showToast(selectedIds.size+' tasks rescheduled');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
     });
-    document.getElementById('ms-myday').addEventListener('click',()=>{
-      withSubmit('ms-myday',async()=>{
-        await api.post('/api/tasks/bulk-myday',{ids:[...selectedIds]});
-        showToast(selectedIds.size+' added to My Day');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();
-      });
+    document.getElementById('ms-myday').addEventListener('click',async()=>{
+      await api.post('/api/tasks/bulk-myday',{ids:[...selectedIds]});
+      showToast(selectedIds.size+' added to My Day');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();
     });
     document.getElementById('ms-move').addEventListener('click',async()=>{
       // Show goal picker dropdown
