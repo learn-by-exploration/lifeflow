@@ -1027,3 +1027,7 @@ body.demo-mode .sb{top:36px;height:calc(100vh - 36px)}
 body.demo-mode .mn{margin-top:36px}
 body.demo-mode .ham{top:50px}
 .link-task-row:hover{background:var(--bg-h)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.btn-spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
+.btn-s,.btn-c{display:inline-flex;align-items:center;gap:6px}
+@media(prefers-reduced-motion:reduce){.btn-spinner{animation:none;opacity:.6}}

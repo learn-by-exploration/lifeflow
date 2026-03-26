@@ -12,6 +12,8 @@ const api={
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}}
 const renderNav=debounce(()=>render(),150);
+async function withSubmit(btnId,fn){const btn=$(btnId);if(!btn||btn.disabled)return;const orig=btn.innerHTML;btn.disabled=true;btn.innerHTML='<span class="btn-spinner"></span><span class="btn-label">Saving…</span>';try{await fn()}catch(e){showToast(e?.message||'Something went wrong — please try again');throw e}finally{btn.disabled=false;btn.innerHTML=orig}}
+function loggedCatch(label,userVisible=false){return(e)=>{console.warn('[LifeFlow]',label,e);if(userVisible)showToast('Failed to load '+label)}}
 
 // ─── FORM VALIDATION HELPER ───
 function validateField(inputId, rules) {
@@ -158,7 +160,7 @@ function renderSFList(){
       const badge=list.querySelector(`.sf-badge[data-fid="${c.id}"]`);
       if(badge)badge.textContent=c.count||'';
     });
-  }).catch(()=>{});
+  }).catch(loggedCatch('filter badge counts'));
 }
 
 // Smart list handlers
@@ -734,9 +736,10 @@ async function renderGlobalBoard(target){
   c.innerHTML=h;
   attachTE();
   attachGBD();
-  $('gb-area').addEventListener('change',e=>{gbFilters.area=e.target.value;renderGlobalBoard()});
-  $('gb-pri').addEventListener('change',e=>{gbFilters.priority=e.target.value;renderGlobalBoard()});
-  $('gb-tag').addEventListener('change',e=>{gbFilters.tag=e.target.value;renderGlobalBoard()});
+  const _debouncedBoard=debounce(()=>renderGlobalBoard(),200);
+  $('gb-area').addEventListener('change',e=>{gbFilters.area=e.target.value;_debouncedBoard()});
+  $('gb-pri').addEventListener('change',e=>{gbFilters.priority=e.target.value;_debouncedBoard()});
+  $('gb-tag').addEventListener('change',e=>{gbFilters.tag=e.target.value;_debouncedBoard()});
 }
 function attachGBD(){
   document.querySelectorAll('.tc').forEach(card=>{
@@ -1013,7 +1016,7 @@ function attachTE(){
       {label:'Next Week',icon:'date_range',date:fmt(nextWk)},
       {label:'No Date',icon:'block',date:null}
     ];
-    dd.innerHTML=opts.map(o=>`<div class="snz-opt" role="menuitem" tabindex="0" data-date="${o.date||''}"><span class="material-icons-round" style="font-size:14px">${o.icon}</span>${o.label}</div>`).join('');
+    dd.innerHTML=opts.map(o=>`<div class="snz-opt" role="menuitem" tabindex="0" data-date="${o.date||''}"><span class="material-icons-round" style="font-size:14px">${esc(o.icon)}</span>${esc(o.label)}</div>`).join('');
     ta.appendChild(dd);
     // Keyboard navigation for snooze dropdown
     const snzItems=[...dd.querySelectorAll('.snz-opt')];let snzIdx=-1;
@@ -1462,7 +1465,9 @@ function renderSubtasks(){
     s.done=s.done?0:1;renderSubtasks();
   }));
   el.querySelectorAll('.stde').forEach(b=>b.addEventListener('click',async()=>{
-    await api.del('/api/subtasks/'+b.dataset.id);dpSubtasks=dpSubtasks.filter(s=>s.id!==Number(b.dataset.id));renderSubtasks();
+    const sid=Number(b.dataset.id);const sub=dpSubtasks.find(s=>s.id===sid);
+    if(!confirm('Delete subtask'+(sub?` "${sub.title}"`:'')+'?'))return;
+    await api.del('/api/subtasks/'+sid);dpSubtasks=dpSubtasks.filter(s=>s.id!==sid);renderSubtasks();
   }));
   el.querySelectorAll('.stn').forEach(n=>n.addEventListener('blur',async()=>{
     const sid=Number(n.dataset.id);const note=n.textContent.trim();
@@ -1547,13 +1552,15 @@ function openAreaModal(area){
 }
 $('add-area-btn').addEventListener('click',(e)=>{e.stopPropagation();openAreaModal()});
 $('am-cancel').addEventListener('click',()=>$('am').classList.remove('active'));
-$('am-save').addEventListener('click',async()=>{
+$('am-save').addEventListener('click',()=>{
   if(!validateField('am-name',{required:true,maxlength:100,requiredMsg:'Please enter an area name'}))return;
-  const n=$('am-name').value.trim();
-  const data={name:n,icon:$('am-icon').value||'📋',color:$('am-color').value};
-  if(_editAreaId){await api.put('/api/areas/'+_editAreaId,data)}
-  else{await api.post('/api/areas',data)}
-  $('am').classList.remove('active');await loadAreas();render();
+  withSubmit('am-save',async()=>{
+    const n=$('am-name').value.trim();
+    const data={name:n,icon:$('am-icon').value||'📋',color:$('am-color').value};
+    if(_editAreaId){await api.put('/api/areas/'+_editAreaId,data)}
+    else{await api.post('/api/areas',data)}
+    $('am').classList.remove('active');await loadAreas();render();
+  });
 });
 
 function openGM(id){
@@ -1562,10 +1569,14 @@ function openGM(id){
   $('gm').classList.add('active');$('gm-title').focus();
 }
 $('gm-cancel').addEventListener('click',()=>$('gm').classList.remove('active'));
-$('gm-save').addEventListener('click',async()=>{if(!validateField('gm-title',{required:true,maxlength:200,requiredMsg:'Please enter a goal title'}))return;const t=$('gm-title').value.trim();
-  const d={title:t,description:$('gm-desc').value,due_date:$('gm-due').value||null,color:$('gm-color').value};
-  if(editingId)await api.put('/api/goals/'+editingId,d);else await api.post('/api/areas/'+activeAreaId+'/goals',d);
-  $('gm').classList.remove('active');await loadAreas();render()});
+$('gm-save').addEventListener('click',()=>{if(!validateField('gm-title',{required:true,maxlength:200,requiredMsg:'Please enter a goal title'}))return;
+  withSubmit('gm-save',async()=>{
+    const t=$('gm-title').value.trim();
+    const d={title:t,description:$('gm-desc').value,due_date:$('gm-due').value||null,color:$('gm-color').value};
+    if(editingId)await api.put('/api/goals/'+editingId,d);else await api.post('/api/areas/'+activeAreaId+'/goals',d);
+    $('gm').classList.remove('active');await loadAreas();render();
+  });
+});
 
 document.querySelectorAll('.mo').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('active')}));
 function emptyS(i,t,s,actions){let h=`<div class="empty"><span class="material-icons-round">${i}</span><p>${t}</p><p style="font-size:11px">${s}</p>`;if(actions)h+=`<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${actions}</div>`;h+=`</div>`;return h}
@@ -1839,7 +1850,7 @@ if('Notification' in window&&Notification.permission==='granted'){
     const sp=spotlight;
     sp.style.left=(rect.left-6)+'px';sp.style.top=(rect.top-6)+'px';
     sp.style.width=(rect.width+12)+'px';sp.style.height=(rect.height+12)+'px';
-    titleEl.innerHTML=`<span class="material-icons-round">${s.icon}</span>${s.title}`;
+    titleEl.innerHTML=`<span class="material-icons-round">${esc(s.icon)}</span>${esc(s.title)}`;
     descEl.textContent=s.desc;
     progressEl.style.width=((step+1)/steps.length*100)+'%';
     // Dots
@@ -2300,7 +2311,7 @@ function startFocusTimer(taskId){
   let tk=tasks.find(t=>t.id===taskId);
   if(!tk||!tk.subtasks){
     // Fetch full task with subtasks from individual endpoint
-    api.get('/api/tasks/'+taskId).then(t=>{ftTask=t;showTechniquePicker()}).catch(()=>{});
+    api.get('/api/tasks/'+taskId).then(t=>{ftTask=t;showTechniquePicker()}).catch(loggedCatch('task detail',true));
     return;
   }
   ftTask=tk;showTechniquePicker();
@@ -2443,7 +2454,7 @@ function showFocusPlan(){
   const tech=FT_TECHNIQUES[ftTechnique]||FT_TECHNIQUES.pomodoro;
   const badge=$('ft-plan-technique');
   if(badge){
-    badge.innerHTML=`<span style="font-size:16px;vertical-align:middle">${tech.icon}</span> ${tech.name}${tech.dur?' <span style="opacity:.5">(${tech.dur}min)</span>':''} <span style="font-size:10px;opacity:.4">↺ change</span>`;
+    badge.innerHTML=`<span style="font-size:16px;vertical-align:middle">${esc(tech.icon)}</span> ${esc(tech.name)}${tech.dur?' <span style="opacity:.5">('+esc(String(tech.dur))+'min)</span>':''} <span style="font-size:10px;opacity:.4">↺ change</span>`;
     badge.onclick=()=>showTechniquePicker();
   }
   const tbRow=$('ft-timebox-row');
@@ -3455,7 +3466,7 @@ function openListModal(editList){
         $('lm').classList.remove('active');
         await loadUserLists();activeListId=r.id;activeListName=r.name;currentView='listdetail';render();
       }));
-    }).catch(()=>{});
+    }).catch(loggedCatch('list templates'));
   }
   $('lm').classList.add('active');$('lm-name').focus();
 }
@@ -3469,25 +3480,27 @@ document.querySelectorAll('.lm-type').forEach(t=>t.addEventListener('click',()=>
   $('lm-icon').value=icons[t.dataset.type]||'📋';
 }));
 $('lm-cancel').addEventListener('click',()=>$('lm').classList.remove('active'));
-$('lm-save').addEventListener('click',async()=>{
+$('lm-save').addEventListener('click',()=>{
   if(!validateField('lm-name',{required:true,maxlength:100,requiredMsg:'Please enter a list name'}))return;
-  const name=$('lm-name').value.trim();
-  const type=document.querySelector('.lm-type.sel')?.dataset.type||'checklist';
-  const icon=$('lm-icon').value||'📋';
-  const color=$('lm-color').value;
-  const area_id=$('lm-area').value?Number($('lm-area').value):null;
-  const editId=$('lm-edit-id').value;
-  const parent_id=$('lm-parent').value?Number($('lm-parent').value):null;
-  if(editId){
-    await api.put('/api/lists/'+editId,{name,icon,color,area_id});
-  }else{
-    const r=await api.post('/api/lists',{name,type,icon,color,area_id,parent_id});
-    activeListId=r.id;activeListName=r.name;
-  }
-  $('lm').classList.remove('active');
-  await loadUserLists();
-  if(!editId){currentView='listdetail';}
-  render();
+  withSubmit('lm-save',async()=>{
+    const name=$('lm-name').value.trim();
+    const type=document.querySelector('.lm-type.sel')?.dataset.type||'checklist';
+    const icon=$('lm-icon').value||'📋';
+    const color=$('lm-color').value;
+    const area_id=$('lm-area').value?Number($('lm-area').value):null;
+    const editId=$('lm-edit-id').value;
+    const parent_id=$('lm-parent').value?Number($('lm-parent').value):null;
+    if(editId){
+      await api.put('/api/lists/'+editId,{name,icon,color,area_id});
+    }else{
+      const r=await api.post('/api/lists',{name,type,icon,color,area_id,parent_id});
+      activeListId=r.id;activeListName=r.name;
+    }
+    $('lm').classList.remove('active');
+    await loadUserLists();
+    if(!editId){currentView='listdetail';}
+    render();
+  });
 });
 
 async function renderLists(){
