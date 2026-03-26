@@ -14,7 +14,7 @@ function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>f
 const renderNav=debounce(()=>render(),150);
 async function withSubmit(btnId,fn){const btn=$(btnId);if(!btn||btn.disabled)return;const orig=btn.innerHTML;btn.disabled=true;btn.innerHTML='<span class="btn-spinner"></span><span class="btn-label">Saving…</span>';try{await fn()}catch(e){showToast(e?.message||'Something went wrong — please try again');throw e}finally{btn.disabled=false;btn.innerHTML=orig}}
 function loggedCatch(label,userVisible=false){return(e)=>{console.warn('[LifeFlow]',label,e);if(userVisible)showToast('Failed to load '+label)}}
-function skCards(n){const types=['short','long','medium'];return Array(n).fill(0).map(()=>`<div class="sk-card"><div class="sk-line sk-line-${types[Math.floor(Math.random()*3)]}"></div><div class="sk-line sk-line-medium"></div></div>`).join('')}
+function skCards(n){const types=['short','long','medium'];return`<div aria-busy="true" aria-label="Loading...">${Array(n).fill(0).map(()=>`<div class="sk-card"><div class="sk-line sk-line-${types[Math.floor(Math.random()*3)]}"></div><div class="sk-line sk-line-medium"></div></div>`).join('')}</div>`}
 
 // ─── FORM VALIDATION HELPER ───
 function validateField(inputId, rules) {
@@ -1343,7 +1343,7 @@ function dpSecOpen(key){try{const s=JSON.parse(localStorage.getItem('lf-dp-sec')
 function dpSecToggle(key,el){const s=dpSecOpen(key)?false:true;try{const d=JSON.parse(localStorage.getItem('lf-dp-sec')||'{}');d[key]=s;localStorage.setItem('lf-dp-sec',JSON.stringify(d))}catch(e){}el.classList.toggle('collapsed',!s)}
 function renderDPBody(){
   const t=dpTask;
-  const sec=(icon,key,title,body,noCollapse)=>{const open=noCollapse||dpSecOpen(key);return`<div class="dp-section${open?'':' collapsed'}" data-sec="${key}"><div class="dp-sec-head"><span class="material-icons-round">${icon}</span>${title}${noCollapse?'':'<span class="material-icons-round dp-sec-arrow">expand_more</span>'}</div><div class="dp-sec-body">${body}</div></div>`};
+  const sec=(icon,key,title,body,noCollapse)=>{const open=noCollapse||dpSecOpen(key);return`<div class="dp-section${open?'':' collapsed'}"${noCollapse?' data-no-collapse="true"':''} data-sec="${key}"><div class="dp-sec-head"${noCollapse?'':` aria-expanded="${open}"`} role="button" tabindex="0"><span class="material-icons-round">${icon}</span>${title}${noCollapse?'':'<span class="material-icons-round dp-sec-arrow">expand_more</span>'}</div><div class="dp-sec-body">${body}</div></div>`};
   let h='';
   // Core (never collapsible)
   h+=sec('edit_note','core','Core',`
@@ -1378,7 +1378,8 @@ function renderDPBody(){
   $('dp-body').innerHTML=h;
   // Section collapse toggles
   $('dp-body').querySelectorAll('.dp-sec-head').forEach(head=>{
-    head.addEventListener('click',()=>{const sec=head.closest('.dp-section');if(sec&&!sec.dataset.noCollapse)dpSecToggle(sec.dataset.sec,sec)});
+    head.addEventListener('click',()=>{const sec=head.closest('.dp-section');if(sec&&!sec.dataset.noCollapse){dpSecToggle(sec.dataset.sec,sec);head.setAttribute('aria-expanded',!sec.classList.contains('collapsed'))}});
+    head.addEventListener('keydown',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();head.click()}});
   });
   // Populate list picker
   const dpListSel=$('dp-list');

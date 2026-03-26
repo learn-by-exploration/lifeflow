@@ -102,6 +102,7 @@ router.get('/api/areas/:areaId/goals', (req, res) => {
 router.post('/api/areas/:areaId/goals', (req, res) => {
   const areaId = Number(req.params.areaId);
   if (!Number.isInteger(areaId)) return res.status(400).json({ error: 'Invalid ID' });
+  if (!db.prepare('SELECT id FROM life_areas WHERE id=? AND user_id=?').get(areaId, req.userId)) return res.status(404).json({ error: 'Area not found' });
   const { title, description, color, due_date } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
   if (title.trim().length > 200) return res.status(400).json({ error: 'Title too long (max 200 characters)' });
@@ -114,13 +115,13 @@ router.post('/api/areas/:areaId/goals', (req, res) => {
 router.put('/api/goals/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const g = db.prepare('SELECT * FROM goals WHERE id=? AND user_id=?').get(id, req.userId);
+  if (!g) return res.status(404).json({ error: 'Not found' });
   const { title, description, color, status, due_date } = req.body;
   db.prepare('UPDATE goals SET title=COALESCE(?,title),description=COALESCE(?,description),color=COALESCE(?,color),status=COALESCE(?,status),due_date=? WHERE id=? AND user_id=?').run(
     title||null, description!==undefined?description:null, color||null, status||null, due_date!==undefined?due_date:null, id, req.userId
   );
-  const g = db.prepare('SELECT * FROM goals WHERE id=? AND user_id=?').get(id, req.userId);
-  if (!g) return res.status(404).json({ error: 'Not found' });
-  res.json(g);
+  res.json(db.prepare('SELECT * FROM goals WHERE id=? AND user_id=?').get(id, req.userId));
 });
 router.delete('/api/goals/:id', (req, res) => {
   const id = Number(req.params.id);

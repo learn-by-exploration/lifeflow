@@ -174,6 +174,7 @@ module.exports = function(deps) {
     const id = Number(req.params.id);
     const itemId = Number(req.params.itemId);
     if (!Number.isInteger(id) || !Number.isInteger(itemId)) return res.status(400).json({ error: 'Invalid ID' });
+    if (!db.prepare('SELECT id FROM lists WHERE id=? AND user_id=?').get(id, req.userId)) return res.status(404).json({ error: 'List not found' });
     const ex = db.prepare('SELECT * FROM list_items WHERE id=? AND list_id=?').get(itemId, id);
     if (!ex) return res.status(404).json({ error: 'Item not found' });
     const { title, checked, category, quantity, note, position } = req.body;
@@ -191,6 +192,7 @@ module.exports = function(deps) {
     const id = Number(req.params.id);
     const itemId = Number(req.params.itemId);
     if (!Number.isInteger(id) || !Number.isInteger(itemId)) return res.status(400).json({ error: 'Invalid ID' });
+    if (!db.prepare('SELECT id FROM lists WHERE id=? AND user_id=?').get(id, req.userId)) return res.status(404).json({ error: 'List not found' });
     const ex = db.prepare('SELECT * FROM list_items WHERE id=? AND list_id=?').get(itemId, id);
     if (!ex) return res.status(404).json({ error: 'Item not found' });
     db.prepare('DELETE FROM list_items WHERE id=?').run(itemId);
@@ -201,6 +203,7 @@ module.exports = function(deps) {
   router.patch('/api/lists/:id/items/reorder', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+    if (!db.prepare('SELECT id FROM lists WHERE id=? AND user_id=?').get(id, req.userId)) return res.status(404).json({ error: 'List not found' });
     const items = req.body;
     if (!Array.isArray(items)) return res.status(400).json({ error: 'Array of {id, position} required' });
     const stmt = db.prepare('UPDATE list_items SET position=? WHERE id=? AND list_id=?');
