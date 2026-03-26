@@ -375,33 +375,34 @@ async function render(){
   updateBC();
 }
 
+function bcHtml(group,label){const gs=group?`<span class="bc-seg bc-nolink">${esc(group)}</span><span class="sep">›</span>`:'';return`<span class="bc-seg" data-go="myday">LifeFlow</span><span class="sep">›</span>${gs}<span class="bc-cur">${esc(label)}</span>`}
 function updateBC(){
   const bc=$('bc'),pt=$('pt');let html='';
-  if(currentView==='myday'){pt.textContent='Today';bc.innerHTML=''}
-  else if(currentView==='tasks'){pt.textContent='Tasks';bc.innerHTML=''}
-  else if(currentView==='focus'){pt.textContent='Focus';bc.innerHTML=''}
-  else if(currentView==='all'){pt.textContent='All Tasks';bc.innerHTML=''}
-  else if(currentView==='board'){pt.textContent='Board';bc.innerHTML=''}
-  else if(currentView==='calendar'){pt.textContent='Calendar';bc.innerHTML=''}
-  else if(currentView==='overdue'){pt.textContent='Overdue';bc.innerHTML=''}
-  else if(currentView==='logbook'){pt.textContent='Activity Log';bc.innerHTML=''}
-  else if(currentView==='weekly'){pt.textContent='Weekly Plan';bc.innerHTML=''}
-  else if(currentView==='matrix'){pt.textContent='Eisenhower Matrix';bc.innerHTML=''}
-  else if(currentView==='dashboard'){pt.textContent='Dashboard';bc.innerHTML=''}
-  else if(currentView==='tags'){pt.textContent='Tag Manager';bc.innerHTML=''}
-  else if(currentView==='focushistory'){pt.textContent='Focus History';bc.innerHTML=''}
-  else if(currentView==='templates'){pt.textContent='Templates';bc.innerHTML=''}
-  else if(currentView==='planner'){pt.textContent='Day Planner';bc.innerHTML=''}
-  else if(currentView==='settings'){pt.textContent='Settings';bc.innerHTML=''}
-  else if(currentView==='habits'){pt.textContent='Habits';bc.innerHTML=''}
-  else if(currentView==='inbox'){pt.textContent='Inbox';bc.innerHTML=''}
-  else if(currentView==='review'){pt.textContent='Weekly Review';bc.innerHTML=''}
-  else if(currentView==='notes'){pt.textContent='Notes';bc.innerHTML=''}
-  else if(currentView==='timeanalytics'){pt.textContent='Time Analytics';bc.innerHTML=''}
-  else if(currentView==='rules'){pt.textContent='Automations';bc.innerHTML=''}
-  else if(currentView==='reports'){pt.textContent='Reports';bc.innerHTML=''}
-  else if(currentView==='help'){pt.textContent='Help & Guide';bc.innerHTML=''}
-  else if(currentView==='changelog'){pt.textContent='Changelog';bc.innerHTML=''}
+  if(currentView==='myday'){pt.textContent='Today';bc.innerHTML=bcHtml('Execution','Today')}
+  else if(currentView==='tasks'){pt.textContent='Tasks';bc.innerHTML=bcHtml('Execution','Tasks')}
+  else if(currentView==='focus'){pt.textContent='Focus';bc.innerHTML=bcHtml('Execution','Focus')}
+  else if(currentView==='habits'){pt.textContent='Habits';bc.innerHTML=bcHtml('Execution','Habits')}
+  else if(currentView==='inbox'){pt.textContent='Inbox';bc.innerHTML=bcHtml('Execution','Inbox')}
+  else if(currentView==='board'){pt.textContent='Board';bc.innerHTML=bcHtml('Execution','Board')}
+  else if(currentView==='all'){pt.textContent='All Tasks';bc.innerHTML=bcHtml('Planning','All Tasks')}
+  else if(currentView==='calendar'){pt.textContent='Calendar';bc.innerHTML=bcHtml('Planning','Calendar')}
+  else if(currentView==='weekly'){pt.textContent='Weekly Plan';bc.innerHTML=bcHtml('Planning','Weekly Plan')}
+  else if(currentView==='matrix'){pt.textContent='Eisenhower Matrix';bc.innerHTML=bcHtml('Planning','Matrix')}
+  else if(currentView==='planner'){pt.textContent='Day Planner';bc.innerHTML=bcHtml('Planning','Day Planner')}
+  else if(currentView==='dashboard'){pt.textContent='Dashboard';bc.innerHTML=bcHtml('Reflection','Dashboard')}
+  else if(currentView==='logbook'){pt.textContent='Activity Log';bc.innerHTML=bcHtml('Reflection','Activity Log')}
+  else if(currentView==='review'){pt.textContent='Weekly Review';bc.innerHTML=bcHtml('Reflection','Weekly Review')}
+  else if(currentView==='notes'){pt.textContent='Notes';bc.innerHTML=bcHtml('Reflection','Notes')}
+  else if(currentView==='overdue'){pt.textContent='Overdue';bc.innerHTML=bcHtml(null,'Overdue')}
+  else if(currentView==='tags'){pt.textContent='Tag Manager';bc.innerHTML=bcHtml('Organization','Tags')}
+  else if(currentView==='focushistory'){pt.textContent='Focus History';bc.innerHTML=bcHtml('Reflection','Focus History')}
+  else if(currentView==='templates'){pt.textContent='Templates';bc.innerHTML=bcHtml('Organization','Templates')}
+  else if(currentView==='settings'){pt.textContent='Settings';bc.innerHTML=bcHtml(null,'Settings')}
+  else if(currentView==='timeanalytics'){pt.textContent='Time Analytics';bc.innerHTML=bcHtml('Reflection','Time Analytics')}
+  else if(currentView==='rules'){pt.textContent='Automations';bc.innerHTML=bcHtml('Organization','Automations')}
+  else if(currentView==='reports'){pt.textContent='Reports';bc.innerHTML=bcHtml('Reflection','Reports')}
+  else if(currentView==='help'){pt.textContent='Help & Guide';bc.innerHTML=bcHtml(null,'Help & Guide')}
+  else if(currentView==='changelog'){pt.textContent='Changelog';bc.innerHTML=bcHtml(null,'Changelog')}
   else if(currentView==='lists'){pt.textContent='Lists';bc.innerHTML=''}
   else if(currentView==='listdetail'){
     pt.textContent=activeListName||'List';

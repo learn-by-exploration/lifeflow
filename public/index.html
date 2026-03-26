@@ -25,33 +25,44 @@
 
 <aside class="sb" id="sb" role="navigation" aria-label="Sidebar navigation">
   <div class="sb-brand"><div class="logo">L</div><h1>LifeFlow</h1></div>
-  <!-- Primary Navigation (7 items — always visible) -->
-  <div class="ns">
-    <div class="ni active" data-view="myday"><span class="material-icons-round">wb_sunny</span>Today<span class="badge" id="myday-badge">0</span><span class="badge overdue-pip" id="overdue-badge" style="background:var(--err);display:none">0</span></div>
-    <div class="ni" data-view="tasks"><span class="material-icons-round">checklist</span>Tasks</div>
-    <div class="ni" data-view="focus"><span class="material-icons-round">timer</span>Focus</div>
-    <div class="ni" data-view="habits"><span class="material-icons-round">repeat</span>Habits</div>
-    <div class="ni" data-view="inbox"><span class="material-icons-round">inbox</span>Inbox<span class="badge" id="inbox-badge">0</span></div>
-    <div class="ni" data-view="review"><span class="material-icons-round">rate_review</span>Review</div>
+  <!-- Execution group -->
+  <div class="ns sb-collapsible">
+    <div class="sb-group-label"><span class="material-icons-round sb-group-icon">bolt</span>Execution</div>
+    <div class="sb-sec" id="sb-exec" style="max-height:none">
+      <div class="ni active" data-view="myday"><span class="material-icons-round">wb_sunny</span>Today<span class="badge" id="myday-badge">0</span><span class="badge overdue-pip" id="overdue-badge" style="background:var(--err);display:none">0</span></div>
+      <div class="ni" data-view="focus"><span class="material-icons-round">timer</span>Focus</div>
+      <div class="ni" data-view="habits"><span class="material-icons-round">repeat</span>Habits</div>
+      <div class="ni" data-view="inbox"><span class="material-icons-round">inbox</span>Inbox<span class="badge" id="inbox-badge">0</span></div>
+      <div class="ni" data-view="tasks"><span class="material-icons-round">checklist</span>Tasks</div>
+      <div class="ni" data-view="board"><span class="material-icons-round">view_kanban</span>Board</div>
+    </div>
+  </div>
+  <!-- Planning group -->
+  <div class="ns sb-collapsible">
+    <div class="sb-group-label"><span class="material-icons-round sb-group-icon">map</span>Planning</div>
+    <div class="sb-sec" id="sb-plan" style="max-height:none">
+      <div class="ni" data-view="calendar"><span class="material-icons-round">calendar_month</span>Calendar</div>
+      <div class="ni" data-view="weekly"><span class="material-icons-round">view_week</span>Weekly Plan</div>
+      <div class="ni" data-view="matrix"><span class="material-icons-round">grid_view</span>Matrix</div>
+      <div class="ni" data-view="planner"><span class="material-icons-round">schedule</span>Day Planner</div>
+      <div class="ni" data-view="all"><span class="material-icons-round">list</span>All Tasks</div>
+    </div>
+  </div>
+  <!-- Reflection group -->
+  <div class="ns sb-collapsible">
+    <div class="sb-group-label"><span class="material-icons-round sb-group-icon">insights</span>Reflection</div>
+    <div class="sb-sec" id="sb-reflect" style="max-height:none">
+      <div class="ni" data-view="dashboard"><span class="material-icons-round">bar_chart</span>Dashboard</div>
+      <div class="ni" data-view="logbook"><span class="material-icons-round">history</span>Activity Log</div>
+      <div class="ni" data-view="review"><span class="material-icons-round">rate_review</span>Weekly Review</div>
+      <div class="ni" data-view="notes"><span class="material-icons-round">sticky_note_2</span>Notes</div>
+    </div>
   </div>
   <!-- Life Areas (collapsible) -->
   <div class="ns sb-collapsible">
     <div class="ns-label sb-toggle" data-sec="areas" style="display:flex;align-items:center;justify-content:space-between">Life Areas <span style="display:flex;align-items:center;gap:4px"><span class="material-icons-round" id="add-area-btn" style="font-size:16px;cursor:pointer;opacity:.6" title="New Life Area">add_circle_outline</span><span class="material-icons-round sb-arrow">expand_more</span></span></div>
     <div class="sb-sec" id="sb-areas">
     <div class="al" id="area-list"></div>
-    </div>
-  </div>
-  <!-- More (collapsible — plan, filters, lists) -->
-  <div class="ns sb-collapsible">
-    <div class="ns-label sb-toggle" data-sec="more">More <span class="material-icons-round sb-arrow">expand_more</span></div>
-    <div class="sb-sec" id="sb-more">
-    <div class="ni" data-view="all"><span class="material-icons-round">list</span>All Tasks</div>
-    <div class="ni" data-view="board"><span class="material-icons-round">view_kanban</span>Board</div>
-    <div class="ni" data-view="calendar"><span class="material-icons-round">calendar_month</span>Calendar</div>
-    <div class="ni" data-view="weekly"><span class="material-icons-round">view_week</span>Weekly Plan</div>
-    <div class="ni" data-view="matrix"><span class="material-icons-round">grid_view</span>Matrix</div>
-    <div class="ni" data-view="planner"><span class="material-icons-round">schedule</span>Day Planner</div>
-    <div class="ni" data-view="notes"><span class="material-icons-round">sticky_note_2</span>Notes</div>
     </div>
   </div>
   <!-- Filters (collapsible — smart lists + saved filters merged) -->
