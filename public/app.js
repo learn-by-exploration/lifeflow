@@ -137,7 +137,7 @@ async function loadSavedFilters(){
 }
 function renderSFList(){
   const list=$('sf-list');
-  list.innerHTML=savedFilters.map(f=>`<div class="sf-item ${activeFilterId===f.id?'active':''}" data-fid="${f.id}"><span class="sf-icon">${esc(f.icon)}</span><span>${esc(f.name)}</span><span class="sf-badge" data-fid="${f.id}"></span><span class="material-icons-round sf-del" data-fid="${f.id}" title="Delete">close</span></div>`).join('');
+  list.innerHTML=savedFilters.map(f=>`<div class="sf-item ${activeFilterId===f.id?'active':''}" data-fid="${f.id}" title="${esc(f.name)}"><span class="sf-icon">${esc(f.icon)}</span><span>${esc(f.name)}</span><span class="sf-badge" data-fid="${f.id}"></span><span class="material-icons-round sf-del" data-fid="${f.id}" title="Delete">close</span></div>`).join('');
   list.querySelectorAll('.sf-item').forEach(el=>el.addEventListener('click',e=>{
     if(e.target.closest('.sf-del')){
       const fid=Number(e.target.dataset.fid);
@@ -170,9 +170,11 @@ function renderSBLists(){
   const parents=userLists.filter(l=>!l.parent_id);
   el.innerHTML=parents.map(l=>{
     const subs=userLists.filter(s=>s.parent_id===l.id);
-    let html=`<div class="sf-item${l.id===activeListId?' active':''}" data-lid="${l.id}"><span class="sf-icon">${esc(l.icon)}</span><span>${esc(l.name)}</span><span class="sf-badge">${l.item_count?((l.checked_count||0)+'/'+l.item_count):''}</span><button class="sf-menu material-icons-round" data-lid="${l.id}" title="Options">more_vert</button></div>`;
+    const lIcon=l.icon||'📋';
+    let html=`<div class="sf-item${l.id===activeListId?' active':''}" data-lid="${l.id}" title="${esc(l.name)}"><span class="sf-icon">${esc(lIcon)}</span><span>${esc(l.name)}</span><span class="sf-badge">${l.item_count?((l.checked_count||0)+'/'+l.item_count):''}</span><button class="sf-menu material-icons-round" data-lid="${l.id}" title="Options">more_vert</button></div>`;
     subs.forEach(s=>{
-      html+=`<div class="sf-item${s.id===activeListId?' active':''}" data-lid="${s.id}" style="padding-left:28px;font-size:12px"><span class="sf-icon" style="font-size:12px">${esc(s.icon)}</span><span>${esc(s.name)}</span><span class="sf-badge">${s.item_count?((s.checked_count||0)+'/'+s.item_count):''}</span></div>`;
+      const sIcon=s.icon||'📋';
+      html+=`<div class="sf-item${s.id===activeListId?' active':''}" data-lid="${s.id}" title="${esc(s.name)}" style="padding-left:28px;font-size:12px"><span class="sf-icon" style="font-size:12px">${esc(sIcon)}</span><span>${esc(s.name)}</span><span class="sf-badge">${s.item_count?((s.checked_count||0)+'/'+s.item_count):''}</span></div>`;
     });
     return html;
   }).join('');
@@ -267,7 +269,7 @@ function renderAreas(){
   const el=$('area-list');
   el.innerHTML=areas.map(a=>{
     const pct=a.total_tasks?Math.round(a.done_tasks/a.total_tasks*100):0;
-    return`<div class="ai ${a.id===activeAreaId?'active':''}" data-id="${a.id}">
+    return`<div class="ai ${a.id===activeAreaId?'active':''}" data-id="${a.id}" title="${esc(a.name)}">
     <span class="ai-icon" style="font-size:15px">${esc(a.icon)}</span><span class="an">${esc(a.name)}</span>
     ${a.total_tasks?`<span class="ac" title="${a.done_tasks}/${a.total_tasks} done (${pct}%)">${a.pending_tasks||0}</span>`:`<span class="ac">0</span>`}
     <button class="ai-menu material-icons-round" data-id="${a.id}" title="Options">more_vert</button>
@@ -391,7 +393,7 @@ function updateBC(){
   else if(currentView==='focushistory'){pt.textContent='Focus History';bc.innerHTML=''}
   else if(currentView==='templates'){pt.textContent='Templates';bc.innerHTML=''}
   else if(currentView==='planner'){pt.textContent='Day Planner';bc.innerHTML=''}
-  else if(currentView==='settings'){pt.textContent='Settings';bc.innerHTML=''}
+  else if(currentView==='settings'){pt.textContent='Settings';bc.innerHTML='<button class=\"settings-home-btn\" id=\"settings-home\"><span class=\"material-icons-round\" style=\"font-size:18px\">arrow_back</span>Home</button>'}
   else if(currentView==='habits'){pt.textContent='Habits';bc.innerHTML=''}
   else if(currentView==='inbox'){pt.textContent='Inbox';bc.innerHTML=''}
   else if(currentView==='review'){pt.textContent='Weekly Review';bc.innerHTML=''}
@@ -438,6 +440,8 @@ function updateBC(){
     activeListId=lid;activeListName=lst?lst.name:'List';currentView='listdetail';
     document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));render();
   })});
+  // Settings home button
+  $('settings-home')?.addEventListener('click',()=>go('myday'));
 }
 
 // ─── MY DAY ───
@@ -1713,7 +1717,7 @@ function openAreaModal(area){
     buildSwatches('am-sw','am-color','#2563EB');
     $('am-save').textContent='Create';
   }
-  $('am').classList.add('active');$('am-name').focus();clearFieldError('am-name');
+  $('am').classList.add('active');$('am-name').focus();clearFieldError('am-name');$('am-err-banner').classList.remove('show');
 }
 $('add-area-btn').addEventListener('click',(e)=>{e.stopPropagation();openAreaModal()});
 $('am-cancel').addEventListener('click',()=>$('am').classList.remove('active'));
@@ -1721,15 +1725,23 @@ $('am-save').addEventListener('click',async()=>{
   if(!validateField('am-name',{required:true,maxlength:100,requiredMsg:'Please enter an area name'}))return;
   const n=$('am-name').value.trim();
   const data={name:n,icon:$('am-icon').value||'📋',color:$('am-color').value};
-  if(_editAreaId){await api.put('/api/areas/'+_editAreaId,data)}
-  else{await api.post('/api/areas',data)}
-  $('am').classList.remove('active');await loadAreas();render();
+  try{
+    let res;
+    if(_editAreaId){res=await api.put('/api/areas/'+_editAreaId,data)}
+    else{res=await api.post('/api/areas',data)}
+    if(res&&res.error){$('am-err-msg').textContent=res.error;$('am-err-banner').classList.add('show');return}
+    $('am-err-banner').classList.remove('show');
+    $('am').classList.remove('active');await loadAreas();render();
+  }catch(e){
+    $('am-err-msg').textContent='Network error — please try again.';
+    $('am-err-banner').classList.add('show');
+  }
 });
 
 function openGM(id){
   if(id){editingId=id;const g=goals.find(x=>x.id===id);if(!g)return;$('gm-t').textContent='Edit Goal';$('gm-title').value=g.title;$('gm-desc').value=g.description||'';$('gm-due').value=g.due_date||'';$('gm-color').value=g.color||'#6C63FF';buildSwatches('gm-sw','gm-color',g.color||'#6C63FF');}
   else{editingId=null;$('gm-t').textContent='New Goal';$('gm-title').value='';$('gm-desc').value='';$('gm-due').value='';$('gm-color').value='#6C63FF';buildSwatches('gm-sw','gm-color','#6C63FF');}
-  $('gm').classList.add('active');$('gm-title').focus();
+  $('gm').classList.add('active');$('gm-title').focus();$('gm-err-banner')?.classList.remove('show');
 }
 $('gm-cancel').addEventListener('click',()=>$('gm').classList.remove('active'));
 $('gm-save').addEventListener('click',async()=>{if(!validateField('gm-title',{required:true,maxlength:200,requiredMsg:'Please enter a goal title'}))return;const t=$('gm-title').value.trim();
@@ -1822,6 +1834,30 @@ $('ham').addEventListener('click', () => { $('sb').classList.toggle('open'); $('
 $('sb-ov').addEventListener('click', () => { $('sb').classList.remove('open'); $('sb-ov').classList.remove('open'); });
 // Close sidebar on nav click (mobile)
 function closeMobileSb() { $('sb').classList.remove('open'); $('sb-ov').classList.remove('open'); }
+
+// ─── SIDEBAR COLLAPSE (desktop icon rail) ───
+$('sb-home').addEventListener('click', (e) => {
+  if(e.target.closest('.sb-collapse-btn')) return;
+  currentView='myday';activeAreaId=null;activeGoalId=null;
+  document.querySelectorAll('.ni,.ai,.sf-item').forEach(n=>n.classList.remove('active'));
+  const todayItem=document.querySelector('.ni[data-view="myday"]');if(todayItem)todayItem.classList.add('active');
+  closeMobileSb();render();
+});
+function toggleSidebarCollapse(){
+  const sb=$('sb');
+  if(window.innerWidth<=768) return;
+  sb.classList.toggle('collapsed');
+  localStorage.setItem('lf-sb-collapsed',sb.classList.contains('collapsed')?'1':'0');
+}
+$('sb-collapse').addEventListener('click', (e) => { e.stopPropagation(); toggleSidebarCollapse(); });
+// Restore collapsed state
+if(localStorage.getItem('lf-sb-collapsed')==='1' && window.innerWidth>768){ $('sb').classList.add('collapsed'); }
+// Keyboard shortcut: Ctrl+B / Cmd+B to toggle sidebar
+document.addEventListener('keydown', (e) => {
+  if((e.metaKey||e.ctrlKey) && e.key==='b'){
+    e.preventDefault(); toggleSidebarCollapse();
+  }
+});
 
 // Boot
 Promise.all([loadSettings(),loadAreas(),loadTags(),loadSavedFilters(),loadSmartCounts(),loadUserLists()]).then(()=>{
@@ -2005,8 +2041,10 @@ if('Notification' in window&&Notification.permission==='granted'){
     {sel:'.sb-brand',title:'LifeFlow',icon:'home',desc:'This is your home base. The sidebar gives you quick access to every view and feature in the app.',pos:'right'},
     {sel:'.ni[data-view="myday"]',title:'Today View',icon:'wb_sunny',desc:'Your daily command center. See tasks due today and ones you\'ve added to "My Day". Start every morning here.',pos:'right'},
     {sel:'.ni[data-view="inbox"]',title:'Inbox',icon:'inbox',desc:'Quick-capture tasks without organizing. Triage them later into the right life areas and goals.',pos:'right'},
+    {sel:'[data-sec="exec"]',title:'Execution',icon:'play_circle',desc:'This group has your active views — Board, Calendar, Day Planner, and Focus Timer. Click to expand and see them all.',pos:'right'},
+    {sel:'[data-sec="plan"]',title:'Planning',icon:'event_note',desc:'Planning tools — Upcoming tasks, the Eisenhower Matrix for prioritization, and Weekly Planning view.',pos:'right'},
+    {sel:'[data-sec="reflect"]',title:'Reflection',icon:'auto_graph',desc:'Track your progress with the Dashboard, Activity Log, Focus History, Habits, and Weekly Review.',pos:'right'},
     {sel:'#add-area-btn',title:'Life Areas',icon:'category',desc:'Organize your life into areas like Work, Health, and Personal. Click the + icon to create your first area.',pos:'right'},
-    {sel:'.ni[data-view="board"]',title:'Board View',icon:'view_kanban',desc:'A Kanban-style board for visual task management. Drag tasks between columns to update status.',pos:'right'},
     {sel:'#sr-inp',title:'Search & Commands',icon:'search',desc:'Press Ctrl+K to search tasks instantly. Type > for the command palette — switch themes, export data, and more.',pos:'bottom'},
     {sel:'#sb-settings-btn',title:'Settings',icon:'settings',desc:'Customize LifeFlow — choose from 8 themes, set your default view, configure task behavior, and manage backups.',pos:'right'},
     {sel:'#sb-reports-btn',title:'Reports',icon:'assessment',desc:'Track your productivity with dashboards, activity logs, focus stats, and habit streaks.',pos:'right'}
@@ -3252,42 +3290,63 @@ async function renderSettings(){
   const c=$('ct');
   // Settings tabs
   const settingsTabDefs=[
-    {id:'general',label:'General',icon:'tune'},
-    {id:'taskdefaults',label:'Task Defaults',icon:'checklist'},
-    {id:'appearance',label:'Appearance',icon:'palette'},
-    {id:'areas',label:'Life Areas',icon:'category'},
-    {id:'listconfig',label:'Lists',icon:'format_list_bulleted'},
-    {id:'tags',label:'Tags',icon:'label'},
-    {id:'templates',label:'Templates',icon:'content_copy'},
-    {id:'automations',label:'Automations',icon:'auto_fix_high'},
-    {id:'badges',label:'Badges',icon:'emoji_events'},
-    {id:'data',label:'Data',icon:'storage'},
-    {id:'shortcuts',label:'Shortcuts',icon:'keyboard'}
+    {id:'general',label:'General',icon:'tune',g:1},
+    {id:'taskdefaults',label:'Task Defaults',icon:'checklist',g:1},
+    {id:'appearance',label:'Appearance',icon:'palette',g:2},
+    {id:'areas',label:'Life Areas',icon:'category',g:3},
+    {id:'listconfig',label:'Lists',icon:'format_list_bulleted',g:3},
+    {id:'tags',label:'Tags',icon:'label',g:3},
+    {id:'templates',label:'Templates',icon:'content_copy',g:4},
+    {id:'automations',label:'Automations',icon:'auto_fix_high',g:4},
+    {id:'badges',label:'Badges',icon:'emoji_events',g:5},
+    {id:'data',label:'Data',icon:'storage',g:6},
+    {id:'shortcuts',label:'Shortcuts',icon:'keyboard',g:6}
   ];
   if(!window._settingsTab)window._settingsTab='general';
-  let tabsHtml=`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;border-bottom:1px solid var(--brd);padding-bottom:8px">`;
+  let tabsHtml=`<input type="text" class="settings-search" id="settings-filter" placeholder="Search settings..." value="${esc(window._settingsFilter||'')}">`;
+  tabsHtml+=`<div class="settings-tabs" role="tablist">`;
+  let lastG=0;
   settingsTabDefs.forEach(t=>{
+    if(lastG&&t.g!==lastG)tabsHtml+=`<span class="tab-sep" aria-hidden="true"></span>`;
+    lastG=t.g;
     const isActive=window._settingsTab===t.id;
-    tabsHtml+=`<button class="btn-c settings-tab${isActive?' active':''}" data-stab="${t.id}" style="font-size:12px;padding:6px 12px;border-radius:var(--rs);${isActive?'background:var(--brand);color:#fff;border-color:var(--brand)':''}"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">${t.icon}</span>${t.label}</button>`;
+    tabsHtml+=`<button class="btn-c settings-tab${isActive?' active':''}" role="tab" aria-selected="${isActive}" id="stab-${t.id}" data-stab="${t.id}" style="font-size:12px;padding:6px 12px;border-radius:var(--rs);white-space:nowrap;flex-shrink:0;${isActive?'background:var(--brand);color:#fff;border-color:var(--brand)':''}"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">${t.icon}</span>${t.label}</button>`;
   });
   tabsHtml+=`</div>`;
+
+  function wireSettingsTabs(){
+    c.querySelectorAll('.settings-tab').forEach(btn=>btn.addEventListener('click',()=>{window._settingsTab=btn.dataset.stab;renderSettings()}));
+    const _sf=$('settings-filter');
+    if(_sf){
+      _sf.addEventListener('input',()=>{
+        const q=_sf.value.toLowerCase().trim();window._settingsFilter=q;
+        const tabDefs=[{id:'general',label:'General'},{id:'taskdefaults',label:'Task Defaults'},{id:'appearance',label:'Appearance Theme'},{id:'areas',label:'Life Areas'},{id:'listconfig',label:'Lists Grocery Categories'},{id:'tags',label:'Tags'},{id:'templates',label:'Templates'},{id:'automations',label:'Automations Rules'},{id:'badges',label:'Badges Achievements'},{id:'data',label:'Data Export Import Reset'},{id:'shortcuts',label:'Shortcuts Keyboard'}];
+        c.querySelectorAll('.settings-tab').forEach(btn=>{
+          const def=tabDefs.find(d=>d.id===btn.dataset.stab);
+          btn.style.display=(!q||def&&def.label.toLowerCase().includes(q))?'':'none';
+        });
+        c.querySelectorAll('.tab-sep').forEach(s=>{s.style.display=q?'none':''});
+      });
+      _sf.focus();_sf.setSelectionRange(_sf.value.length,_sf.value.length);
+    }
+  }
 
   if(window._settingsTab==='tags'){
     await renderTags();
     c.insertAdjacentHTML('afterbegin',tabsHtml);
-    c.querySelectorAll('.settings-tab').forEach(btn=>btn.addEventListener('click',()=>{window._settingsTab=btn.dataset.stab;renderSettings()}));
+    wireSettingsTabs();
     return;
   }
   if(window._settingsTab==='templates'){
     await renderTemplates();
     c.insertAdjacentHTML('afterbegin',tabsHtml);
-    c.querySelectorAll('.settings-tab').forEach(btn=>btn.addEventListener('click',()=>{window._settingsTab=btn.dataset.stab;renderSettings()}));
+    wireSettingsTabs();
     return;
   }
   if(window._settingsTab==='automations'){
     await renderRules();
     c.insertAdjacentHTML('afterbegin',tabsHtml);
-    c.querySelectorAll('.settings-tab').forEach(btn=>btn.addEventListener('click',()=>{window._settingsTab=btn.dataset.stab;renderSettings()}));
+    wireSettingsTabs();
     return;
   }
   if(window._settingsTab==='areas'){
@@ -3303,6 +3362,8 @@ async function renderSettings(){
         <span style="font-size:20px">${esc(a.icon)}</span>
         <span style="flex:1;font-size:13px;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</span>
         <span class="sa-color" style="width:16px;height:16px;border-radius:50%;background:${escA(a.color)}"></span>
+        <button class="btn-c sa-move-up" data-aid="${a.id}" title="Move up"${i===0?' disabled':''}><span class="material-icons-round" style="font-size:16px">arrow_upward</span></button>
+        <button class="btn-c sa-move-dn" data-aid="${a.id}" title="Move down"${i===active.length-1?' disabled':''}><span class="material-icons-round" style="font-size:16px">arrow_downward</span></button>
         <button class="btn-c sa-edit" data-aid="${a.id}" title="Edit"><span class="material-icons-round" style="font-size:16px">edit</span></button>
         <button class="btn-c sa-archive" data-aid="${a.id}" title="Archive"><span class="material-icons-round" style="font-size:16px">archive</span></button>
         <button class="btn-c sa-del" data-aid="${a.id}" title="Delete" style="color:var(--dn)"><span class="material-icons-round" style="font-size:16px">delete</span></button>
@@ -3327,7 +3388,7 @@ async function renderSettings(){
     h+=`</section>`;
     h+=`</div>`;
     c.innerHTML=h;
-    c.querySelectorAll('.settings-tab').forEach(btn=>btn.addEventListener('click',()=>{window._settingsTab=btn.dataset.stab;renderSettings()}));
+    wireSettingsTabs();
     // Wire area actions
     $('sa-add')?.addEventListener('click',()=>{openAreaModal();setTimeout(()=>{const check=setInterval(()=>{if(!$('am').classList.contains('active')){clearInterval(check);renderSettings()}},300)},100)});
     c.querySelectorAll('.sa-edit').forEach(btn=>btn.addEventListener('click',()=>{
@@ -3344,6 +3405,18 @@ async function renderSettings(){
       const a=allAreas.find(x=>x.id===Number(btn.dataset.aid));
       if(!confirm('Delete "'+a.name+'" and all its goals and tasks?'))return;
       await api.del('/api/areas/'+btn.dataset.aid);await loadAreas();renderSettings();showToast('Area deleted');
+    }));
+    // Up/down reorder buttons (touch-friendly alternative to drag)
+    c.querySelectorAll('.sa-move-up,.sa-move-dn').forEach(btn=>btn.addEventListener('click',async()=>{
+      const rows=Array.from(c.querySelectorAll('#sa-list .sa-row'));
+      const ids=rows.map(r=>Number(r.dataset.aid));
+      const aid=Number(btn.dataset.aid);const idx=ids.indexOf(aid);
+      const isUp=btn.classList.contains('sa-move-up');
+      if(isUp&&idx>0){ids.splice(idx,1);ids.splice(idx-1,0,aid)}
+      else if(!isUp&&idx<ids.length-1){ids.splice(idx,1);ids.splice(idx+1,0,aid)}
+      else return;
+      await api.put('/api/areas/reorder',ids.map((id,i)=>({id,position:i})));
+      await loadAreas();renderSettings();
     }));
     // Drag & drop reorder
     let dragAid=null;
@@ -3373,7 +3446,7 @@ async function renderSettings(){
   const weekDays=[['0','Sunday'],['1','Monday']];
 
   function selOpts(opts,cur){return opts.map(([v,l])=>`<option value="${v}"${String(cur)===String(v)?' selected':''}>${esc(l)}</option>`).join('')}
-  function tog(key,cur){return `<label class="set-toggle"><input type="checkbox" data-key="${key}" ${cur==='true'?'checked':''}><span class="set-slider"></span></label>`}
+  function tog(key,cur){return `<label class="set-toggle"><input type="checkbox" data-key="${key}" ${cur==='true'?'checked':''}><span class="slider"></span></label>`}
 
   let content='';
   if(window._settingsTab==='general'){
@@ -3446,6 +3519,8 @@ async function renderSettings(){
       content+=`<div class="gc-row" draggable="true" data-gci="${i}" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--brd)">
         <span class="material-icons-round" style="font-size:14px;color:var(--txd);cursor:grab">drag_indicator</span>
         <input type="text" class="gc-input" value="${esc(cat)}" style="flex:1;padding:4px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px">
+        <button class="gc-up" data-gci="${i}" style="background:none;border:none;cursor:pointer;color:var(--txd);padding:2px"${i===0?' disabled':''}><span class="material-icons-round" style="font-size:16px">arrow_upward</span></button>
+        <button class="gc-dn" data-gci="${i}" style="background:none;border:none;cursor:pointer;color:var(--txd);padding:2px"${i===cats.length-1?' disabled':''}><span class="material-icons-round" style="font-size:16px">arrow_downward</span></button>
         <button class="gc-del" data-gci="${i}" style="background:none;border:none;cursor:pointer;color:var(--dn);font-size:16px"><span class="material-icons-round" style="font-size:16px">close</span></button>
       </div>`;
     });
@@ -3477,7 +3552,11 @@ async function renderSettings(){
     ];
     let earned=[];
     try{const badges=await api.get('/api/badges');earned=badges.map(b=>b.type)}catch{}
-    try{const check=await api.post('/api/badges/check',{});if(check.earned&&check.earned.length){earned.push(...check.earned);check.earned.forEach(b=>{const def=badgeDefs.find(d=>d.type===b);if(def)showToast('🏆 Badge earned: '+def.name+'!')})}}catch{}
+    const _now=Date.now();
+    if(!window._lastBadgeCheck||_now-window._lastBadgeCheck>60000){
+      window._lastBadgeCheck=_now;
+      try{const check=await api.post('/api/badges/check',{});if(check.earned&&check.earned.length){earned.push(...check.earned);check.earned.forEach(b=>{const def=badgeDefs.find(d=>d.type===b);if(def)showToast('🏆 Badge earned: '+def.name+'!')})}}catch{}
+    }
     content=`<div class="settings-grid"><section class="settings-section">
     <h3>Achievement Badges</h3>
     <p style="font-size:12px;color:var(--txd);margin-bottom:16px">${earned.length} of ${badgeDefs.length} badges earned</p>
@@ -3510,12 +3589,10 @@ async function renderSettings(){
     content+=`</section></div>`;
   }
 
-  c.innerHTML=tabsHtml+content;
+  c.innerHTML=tabsHtml+`<div role="tabpanel" aria-labelledby="stab-${window._settingsTab}">`+content+`</div>`;
 
-  // Wire tab clicks
-  c.querySelectorAll('.settings-tab').forEach(btn=>btn.addEventListener('click',()=>{
-    window._settingsTab=btn.dataset.stab;renderSettings();
-  }));
+  // Wire tab clicks + search filter
+  wireSettingsTabs();
 
   // Auto-save on change for selects and number inputs
   c.querySelectorAll('select[data-key], input[type="number"][data-key]').forEach(el=>{
@@ -3550,6 +3627,14 @@ async function renderSettings(){
     const labels={todo:$('sl-todo').value.trim()||'To Do',doing:$('sl-doing').value.trim()||'In Progress',done:$('sl-done').value.trim()||'Done'};
     await saveSetting('statusLabels',JSON.stringify(labels));showToast('Status labels saved');
   });
+  // Auto-save status labels on input (debounced)
+  let _slTimer;
+  ['sl-todo','sl-doing','sl-done'].forEach(id=>{
+    $(id)?.addEventListener('input',()=>{clearTimeout(_slTimer);_slTimer=setTimeout(async()=>{
+      const labels={todo:$('sl-todo')?.value.trim()||'To Do',doing:$('sl-doing')?.value.trim()||'In Progress',done:$('sl-done')?.value.trim()||'Done'};
+      await saveSetting('statusLabels',JSON.stringify(labels));showSavedIndicator($('sl-todo')?.parentElement);
+    },800)});
+  });
   // Priority labels+colors save
   $('pl-save')?.addEventListener('click',async()=>{
     const labels={'0':$('pl-0').value.trim()||'None','1':$('pl-1').value.trim()||'Normal','2':$('pl-2').value.trim()||'High','3':$('pl-3').value.trim()||'Critical'};
@@ -3557,6 +3642,17 @@ async function renderSettings(){
     await saveSetting('priorityLabels',JSON.stringify(labels));
     await saveSetting('priorityColors',JSON.stringify(colors));
     showToast('Priority settings saved');
+  });
+  // Auto-save priority labels/colors (debounced)
+  let _plTimer;
+  ['pl-0','pl-1','pl-2','pl-3','pc-0','pc-1','pc-2','pc-3'].forEach(id=>{
+    $(id)?.addEventListener('input',()=>{clearTimeout(_plTimer);_plTimer=setTimeout(async()=>{
+      const labels={'0':$('pl-0')?.value.trim()||'None','1':$('pl-1')?.value.trim()||'Normal','2':$('pl-2')?.value.trim()||'High','3':$('pl-3')?.value.trim()||'Critical'};
+      const colors={'0':$('pc-0')?.value||'#64748B','1':$('pc-1')?.value||'#3B82F6','2':$('pc-2')?.value||'#F59E0B','3':$('pc-3')?.value||'#EF4444'};
+      await saveSetting('priorityLabels',JSON.stringify(labels));
+      await saveSetting('priorityColors',JSON.stringify(colors));
+      showSavedIndicator($('pl-0')?.parentElement);
+    },800)});
   });
   // Grocery category editor
   $('gc-add')?.addEventListener('click',()=>{
@@ -3571,6 +3667,12 @@ async function renderSettings(){
     row.querySelector('.gc-input').focus();
   });
   c.querySelectorAll('.gc-del').forEach(btn=>btn.addEventListener('click',()=>btn.closest('.gc-row').remove()));
+  // Grocery up/down reorder
+  c.querySelectorAll('.gc-up,.gc-dn').forEach(btn=>btn.addEventListener('click',()=>{
+    const row=btn.closest('.gc-row');const list=row.parentElement;
+    if(btn.classList.contains('gc-up')&&row.previousElementSibling)list.insertBefore(row,row.previousElementSibling);
+    else if(btn.classList.contains('gc-dn')&&row.nextElementSibling)list.insertBefore(row.nextElementSibling,row);
+  }));
   $('gc-save')?.addEventListener('click',async()=>{
     const inputs=Array.from(document.querySelectorAll('#gc-list .gc-input'));
     const cats=inputs.map(i=>i.value.trim()).filter(Boolean);
@@ -3664,7 +3766,7 @@ function openListModal(editList){
       }));
     }).catch(()=>{});
   }
-  $('lm').classList.add('active');$('lm-name').focus();
+  $('lm').classList.add('active');$('lm-name').focus();$('lm-err-banner')?.classList.remove('show');
 }
 
 // Type selector clicks
@@ -4230,9 +4332,9 @@ async function renderPlanner(){
 
   let h=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
     <div style="display:flex;align-items:center;gap:8px">
-      <button class="material-icons-round btn-c" id="pl-prev" style="padding:4px">chevron_left</button>
+      <button class="btn-c" id="pl-prev" style="padding:4px"><span class="material-icons-round" style="font-size:20px">chevron_left</span></button>
       <h2 style="margin:0;font-size:16px">${dayLabel}</h2>
-      <button class="material-icons-round btn-c" id="pl-next" style="padding:4px">chevron_right</button>
+      <button class="btn-c" id="pl-next" style="padding:4px"><span class="material-icons-round" style="font-size:20px">chevron_right</span></button>
       ${!isToday?'<button class="btn-c" id="pl-today" style="font-size:11px;padding:4px 10px">Today</button>':''}
     </div>
   </div>`;

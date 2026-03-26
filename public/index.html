@@ -24,39 +24,39 @@
 <div class="sb-overlay" id="sb-ov"></div>
 
 <aside class="sb" id="sb" role="navigation" aria-label="Sidebar navigation">
-  <div class="sb-brand"><div class="logo">L</div><h1>LifeFlow</h1></div>
+  <div class="sb-brand" id="sb-home" title="Go to Today" style="cursor:pointer"><div class="logo">L</div><h1>LifeFlow</h1><button class="sb-collapse-btn" id="sb-collapse" title="Collapse sidebar" aria-label="Toggle sidebar"><span class="material-icons-round">chevron_left</span></button></div>
   <div class="sb-scroll">
   <!-- Execution group -->
   <div class="ns sb-collapsible">
     <div class="ns-label sb-toggle" data-sec="exec">Execution <span class="material-icons-round sb-arrow">expand_more</span></div>
     <div class="sb-sec" id="sb-exec">
-      <div class="ni active" data-view="myday"><span class="material-icons-round">wb_sunny</span>Today<span class="badge" id="myday-badge">0</span><span class="badge overdue-pip" id="overdue-badge" style="background:var(--err);display:none">0</span></div>
-      <div class="ni" data-view="focus"><span class="material-icons-round">timer</span>Focus</div>
-      <div class="ni" data-view="habits"><span class="material-icons-round">repeat</span>Habits</div>
-      <div class="ni" data-view="inbox"><span class="material-icons-round">inbox</span>Inbox<span class="badge" id="inbox-badge">0</span></div>
-      <div class="ni" data-view="tasks"><span class="material-icons-round">checklist</span>Tasks</div>
-      <div class="ni" data-view="board"><span class="material-icons-round">view_kanban</span>Board</div>
+      <div class="ni active" data-view="myday" title="Today"><span class="material-icons-round">wb_sunny</span><span class="ni-label">Today</span><span class="badge" id="myday-badge">0</span><span class="badge overdue-pip" id="overdue-badge" style="background:var(--err);display:none">0</span></div>
+      <div class="ni" data-view="focus" title="Focus"><span class="material-icons-round">timer</span><span class="ni-label">Focus</span></div>
+      <div class="ni" data-view="habits" title="Habits"><span class="material-icons-round">repeat</span><span class="ni-label">Habits</span></div>
+      <div class="ni" data-view="inbox" title="Inbox"><span class="material-icons-round">inbox</span><span class="ni-label">Inbox</span><span class="badge" id="inbox-badge">0</span></div>
+      <div class="ni" data-view="tasks" title="Tasks"><span class="material-icons-round">checklist</span><span class="ni-label">Tasks</span></div>
+      <div class="ni" data-view="board" title="Board"><span class="material-icons-round">view_kanban</span><span class="ni-label">Board</span></div>
     </div>
   </div>
   <!-- Planning group -->
   <div class="ns sb-collapsible">
     <div class="ns-label sb-toggle" data-sec="plan">Planning <span class="material-icons-round sb-arrow">expand_more</span></div>
     <div class="sb-sec" id="sb-plan">
-      <div class="ni" data-view="calendar"><span class="material-icons-round">calendar_month</span>Calendar</div>
-      <div class="ni" data-view="weekly"><span class="material-icons-round">view_week</span>Weekly Plan</div>
-      <div class="ni" data-view="matrix"><span class="material-icons-round">grid_view</span>Matrix</div>
-      <div class="ni" data-view="planner"><span class="material-icons-round">schedule</span>Day Planner</div>
-      <div class="ni" data-view="all"><span class="material-icons-round">list</span>All Tasks</div>
+      <div class="ni" data-view="calendar" title="Calendar"><span class="material-icons-round">calendar_month</span><span class="ni-label">Calendar</span></div>
+      <div class="ni" data-view="weekly" title="Weekly Plan"><span class="material-icons-round">view_week</span><span class="ni-label">Weekly Plan</span></div>
+      <div class="ni" data-view="matrix" title="Matrix"><span class="material-icons-round">grid_view</span><span class="ni-label">Matrix</span></div>
+      <div class="ni" data-view="planner" title="Day Planner"><span class="material-icons-round">schedule</span><span class="ni-label">Day Planner</span></div>
+      <div class="ni" data-view="all" title="All Tasks"><span class="material-icons-round">list</span><span class="ni-label">All Tasks</span></div>
     </div>
   </div>
   <!-- Reflection group -->
   <div class="ns sb-collapsible">
     <div class="ns-label sb-toggle" data-sec="reflect">Reflection <span class="material-icons-round sb-arrow">expand_more</span></div>
     <div class="sb-sec" id="sb-reflect">
-      <div class="ni" data-view="dashboard"><span class="material-icons-round">bar_chart</span>Dashboard</div>
-      <div class="ni" data-view="logbook"><span class="material-icons-round">history</span>Activity Log</div>
-      <div class="ni" data-view="review"><span class="material-icons-round">rate_review</span>Weekly Review</div>
-      <div class="ni" data-view="notes"><span class="material-icons-round">sticky_note_2</span>Notes</div>
+      <div class="ni" data-view="dashboard" title="Dashboard"><span class="material-icons-round">bar_chart</span><span class="ni-label">Dashboard</span></div>
+      <div class="ni" data-view="logbook" title="Activity Log"><span class="material-icons-round">history</span><span class="ni-label">Activity Log</span></div>
+      <div class="ni" data-view="review" title="Weekly Review"><span class="material-icons-round">rate_review</span><span class="ni-label">Weekly Review</span></div>
+      <div class="ni" data-view="notes" title="Notes"><span class="material-icons-round">sticky_note_2</span><span class="ni-label">Notes</span></div>
     </div>
   </div>
   <!-- Life Areas (collapsible) -->
@@ -71,9 +71,9 @@
     <div class="ns-label sb-toggle" data-sec="filters">Filters <span class="material-icons-round sb-arrow">expand_more</span></div>
     <div class="sb-sec" id="sb-filters">
     <div id="smart-list">
-      <div class="sf-item" data-smart="stale"><span class="sf-icon">⏳</span><span>Stale Tasks</span><span class="sf-badge" id="smart-stale-cnt"></span></div>
-      <div class="sf-item" data-smart="quickwins"><span class="sf-icon">⚡</span><span>Quick Wins</span><span class="sf-badge" id="smart-qw-cnt"></span></div>
-      <div class="sf-item" data-smart="blocked"><span class="sf-icon">🔒</span><span>Blocked</span><span class="sf-badge" id="smart-blocked-cnt"></span></div>
+      <div class="sf-item" data-smart="stale" title="Stale Tasks"><span class="sf-icon">⏳</span><span>Stale Tasks</span><span class="sf-badge" id="smart-stale-cnt"></span></div>
+      <div class="sf-item" data-smart="quickwins" title="Quick Wins"><span class="sf-icon">⚡</span><span>Quick Wins</span><span class="sf-badge" id="smart-qw-cnt"></span></div>
+      <div class="sf-item" data-smart="blocked" title="Blocked"><span class="sf-icon">🔒</span><span>Blocked</span><span class="sf-badge" id="smart-blocked-cnt"></span></div>
     </div>
     <div id="sf-list"></div>
     </div>
@@ -83,7 +83,7 @@
     <div class="ns-label sb-toggle" data-sec="lists">Lists <span class="material-icons-round sb-arrow">expand_more</span></div>
     <div class="sb-sec" id="sb-lists">
     <div id="sb-list-items"></div>
-    <div class="sf-item" id="sb-new-list" style="color:var(--brand);cursor:pointer"><span class="sf-icon">+</span><span>New List</span></div>
+    <div class="sf-item" id="sb-new-list" title="New List" style="color:var(--brand);cursor:pointer"><span class="sf-icon">+</span><span>New List</span></div>
     </div>
   </div>
   </div><!-- end sb-scroll -->
@@ -91,11 +91,11 @@
   <div class="sb-bot">
     <input type="file" id="import-file" accept=".json" style="display:none">
     <div class="sb-bot-icons">
-      <button class="ab sb-bot-icon" id="sb-settings-btn" title="Settings" aria-label="Settings"><span class="material-icons-round">settings</span>Settings</button>
-      <button class="ab sb-bot-icon" id="sb-reports-btn" title="Reports" aria-label="Reports"><span class="material-icons-round">assessment</span>Reports</button>
+      <button class="ab sb-bot-icon" id="sb-settings-btn" title="Settings" aria-label="Settings"><span class="material-icons-round">settings</span><span class="ni-label">Settings</span></button>
+      <button class="ab sb-bot-icon" id="sb-reports-btn" title="Reports" aria-label="Reports"><span class="material-icons-round">assessment</span><span class="ni-label">Reports</span></button>
     </div>
-    <button class="ab sb-bot-help" id="sb-help-btn" title="Help & Guide" aria-label="Help & Guide"><span class="material-icons-round">help_outline</span>Help & Guide</button>
-    <button class="ab sb-bot-help" id="sb-changelog-btn" title="Changelog" aria-label="Changelog" style="margin-top:2px;font-size:11px"><span class="material-icons-round">new_releases</span>v0.2.1 Changelog</button>
+    <button class="ab sb-bot-help" id="sb-help-btn" title="Help & Guide" aria-label="Help & Guide"><span class="material-icons-round">help_outline</span><span class="ni-label">Help & Guide</span></button>
+    <button class="ab sb-bot-help" id="sb-changelog-btn" title="Changelog" aria-label="Changelog" style="margin-top:2px;font-size:11px"><span class="material-icons-round">new_releases</span><span class="ni-label">v0.2.1 Changelog</span></button>
     <div class="sb-user" id="sb-user" style="margin-top:6px;padding:6px 12px;display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8;border-top:1px solid #334155">
       <span class="material-icons-round" style="font-size:18px">account_circle</span>
       <span id="sb-user-name" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">User</span>
