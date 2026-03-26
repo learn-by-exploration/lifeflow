@@ -119,6 +119,7 @@
   <label for="am-name">Name</label><input type="text" id="am-name" placeholder="e.g. Health, Career..." required aria-required="true" maxlength="100" autocomplete="off"><span class="field-err" id="am-name-err" role="alert"></span>
   <div class="md-row"><div><label for="am-icon">Icon</label><input type="text" id="am-icon" placeholder="💪" maxlength="4" autocomplete="off"></div><div><label>Color</label><div class="swatches" id="am-sw"></div></div></div>
   <input type="hidden" id="am-color" value="#2563EB">
+  <div class="md-err-banner" id="am-err-banner" role="alert"><span class="material-icons-round">error_outline</span><span id="am-err-msg">Something went wrong. Please try again.</span></div>
   <div class="md-actions"><button class="btn-c" id="am-cancel">Cancel</button><button class="btn-s" id="am-save">Create</button></div>
 </div></div>
 
@@ -129,6 +130,7 @@
   <label for="gm-desc">Description</label><textarea id="gm-desc" placeholder="Optional details..." maxlength="2000"></textarea>
   <div class="md-row"><div><label for="gm-due">Target Date</label><input type="date" id="gm-due"></div><div><label>Color</label><div class="swatches" id="gm-sw"></div></div></div>
   <input type="hidden" id="gm-color" value="#6C63FF">
+  <div class="md-err-banner" id="gm-err-banner" role="alert"><span class="material-icons-round">error_outline</span><span id="gm-err-msg">Something went wrong. Please try again.</span></div>
   <div class="md-actions"><button class="btn-c" id="gm-cancel">Cancel</button><button class="btn-s" id="gm-save">Save</button></div>
 </div></div>
 
@@ -151,6 +153,7 @@
   </div>
   <input type="hidden" id="lm-edit-id" value="">
   <input type="hidden" id="lm-parent" value="">
+  <div class="md-err-banner" id="lm-err-banner" role="alert"><span class="material-icons-round">error_outline</span><span id="lm-err-msg">Something went wrong. Please try again.</span></div>
   <div class="md-actions"><button class="btn-c" id="lm-cancel">Cancel</button><button class="btn-s" id="lm-save">Create</button></div>
 </div></div>
 

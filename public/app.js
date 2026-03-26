@@ -14,6 +14,7 @@ function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>f
 const renderNav=debounce(()=>render(),150);
 async function withSubmit(btnId,fn){const btn=$(btnId);if(!btn||btn.disabled)return;const orig=btn.innerHTML;btn.disabled=true;btn.innerHTML='<span class="btn-spinner"></span><span class="btn-label">Saving…</span>';try{await fn()}catch(e){showToast(e?.message||'Something went wrong — please try again');throw e}finally{btn.disabled=false;btn.innerHTML=orig}}
 function loggedCatch(label,userVisible=false){return(e)=>{console.warn('[LifeFlow]',label,e);if(userVisible)showToast('Failed to load '+label)}}
+function skCards(n){const types=['short','long','medium'];return Array(n).fill(0).map(()=>`<div class="sk-card"><div class="sk-line sk-line-${types[Math.floor(Math.random()*3)]}"></div><div class="sk-line sk-line-medium"></div></div>`).join('')}
 
 // ─── FORM VALIDATION HELPER ───
 function validateField(inputId, rules) {
@@ -449,6 +450,7 @@ function progressRingSvg(pct,r=18,stroke=4){const c=2*Math.PI*r;const off=c-(pct
 async function renderMyDay(){return renderToday()}
 async function renderToday(){
   const c=$('ct');
+  c.innerHTML=skCards(4);
   const ds=new Date().toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   // Parallel fetch: my-day tasks, overdue, stats, streaks, habits, balance
   const [t,overdue,stats,streakData,habits,balance]=await Promise.all([
@@ -699,8 +701,9 @@ async function renderFocusHub(){
 
 // ─── ALL ───
 async function renderAll(target){
-  const t=await api.get('/api/tasks/all');
   const c=target||$('ct');
+  c.innerHTML=skCards(4);
+  const t=await api.get('/api/tasks/all');
   if(!t.length){c.innerHTML=emptyS('checklist','No tasks yet','Create a life area, add a goal, then add tasks',
     `<button class="btn-s" data-action="quick-capture"><span class="material-icons-round" style="font-size:14px">add</span>Quick Add</button>
      <button class="btn-c" data-action="go-inbox">Open Inbox</button>`);wireActions(c);return}
@@ -714,13 +717,14 @@ async function renderAll(target){
 // ─── GLOBAL BOARD ───
 let gbFilters={area:'',priority:'',tag:''};
 async function renderGlobalBoard(target){
+  const c=target||$('ct');
+  c.innerHTML=skCards(3);
   let qs=[];
   if(gbFilters.area)qs.push('area_id='+gbFilters.area);
   if(gbFilters.priority)qs.push('priority='+gbFilters.priority);
   if(gbFilters.tag)qs.push('tag_id='+gbFilters.tag);
   const url='/api/tasks/board'+(qs.length?'?'+qs.join('&'):'');
   const t=await api.get(url);
-  const c=target||$('ct');
   const todo=t.filter(x=>x.status==='todo'),doing=t.filter(x=>x.status==='doing'),done=t.filter(x=>x.status==='done');
   let fh=`<div class="fb">`;
   fh+=`<span class="fb-label">Filter:</span>`;
@@ -1516,22 +1520,24 @@ async function renderDeps(){
 
 $('dp-close').addEventListener('click',()=>$('dp').classList.remove('open'));
 $('dp-cancel').addEventListener('click',()=>$('dp').classList.remove('open'));
-$('dp-save').addEventListener('click',async()=>{
+$('dp-save').addEventListener('click',()=>{
   const dpTitleVal=$('dp-ttl').value.trim();
   if(!dpTitleVal){showToast('Task title cannot be empty');$('dp-ttl').classList.add('inp-err');$('dp-ttl').focus();return;}
   $('dp-ttl').classList.remove('inp-err');
-  let rec=$('dp-rec').value||null;
-  if(rec==='custom'){const n=parseInt($('dp-rec-n').value)||3;const u=$('dp-rec-unit').value;rec='every-'+n+'-'+u}
-  await api.put('/api/tasks/'+dpTask.id,{
-    title:$('dp-ttl').value, note:$('dp-note').value, due_date:$('dp-due').value||null,
-    due_time:$('dp-time').value||null,
-    priority:Number($('dp-pri').value), assigned_to:$('dp-asg').value,
-    recurring:rec, my_day:$('dp-md').checked,
-    estimated_minutes:Number($('dp-est').value)||null, actual_minutes:Number($('dp-act').value)||0,
-    list_id:$('dp-list').value?Number($('dp-list').value):null
+  withSubmit('dp-save',async()=>{
+    let rec=$('dp-rec').value||null;
+    if(rec==='custom'){const n=parseInt($('dp-rec-n').value)||3;const u=$('dp-rec-unit').value;rec='every-'+n+'-'+u}
+    await api.put('/api/tasks/'+dpTask.id,{
+      title:$('dp-ttl').value, note:$('dp-note').value, due_date:$('dp-due').value||null,
+      due_time:$('dp-time').value||null,
+      priority:Number($('dp-pri').value), assigned_to:$('dp-asg').value,
+      recurring:rec, my_day:$('dp-md').checked,
+      estimated_minutes:Number($('dp-est').value)||null, actual_minutes:Number($('dp-act').value)||0,
+      list_id:$('dp-list').value?Number($('dp-list').value):null
+    });
+    await api.put('/api/tasks/'+dpTask.id+'/tags',{tagIds:dpTags});
+    $('dp').classList.remove('open');showToast('Task saved');await loadAreas();render();loadBellReminders();
   });
-  await api.put('/api/tasks/'+dpTask.id+'/tags',{tagIds:dpTags});
-  $('dp').classList.remove('open');showToast('Task saved');await loadAreas();render();loadBellReminders();
 });
 
 // ─── AREA MODAL ───
@@ -1557,8 +1563,8 @@ $('am-save').addEventListener('click',()=>{
   withSubmit('am-save',async()=>{
     const n=$('am-name').value.trim();
     const data={name:n,icon:$('am-icon').value||'📋',color:$('am-color').value};
-    if(_editAreaId){await api.put('/api/areas/'+_editAreaId,data)}
-    else{await api.post('/api/areas',data)}
+    if(_editAreaId){await api.put('/api/areas/'+_editAreaId,data);showToast('Area updated')}
+    else{await api.post('/api/areas',data);showToast('Area created')}
     $('am').classList.remove('active');await loadAreas();render();
   });
 });
@@ -1573,7 +1579,8 @@ $('gm-save').addEventListener('click',()=>{if(!validateField('gm-title',{require
   withSubmit('gm-save',async()=>{
     const t=$('gm-title').value.trim();
     const d={title:t,description:$('gm-desc').value,due_date:$('gm-due').value||null,color:$('gm-color').value};
-    if(editingId)await api.put('/api/goals/'+editingId,d);else await api.post('/api/areas/'+activeAreaId+'/goals',d);
+    if(editingId){await api.put('/api/goals/'+editingId,d);showToast('Goal updated')}
+    else{await api.post('/api/areas/'+activeAreaId+'/goals',d);showToast('Goal created')}
     $('gm').classList.remove('active');await loadAreas();render();
   });
 });
@@ -4929,14 +4936,18 @@ function updateMultiSelectBar(){
       <button class="ms-del" id="ms-del"><span class="material-icons-round" style="font-size:15px">delete_outline</span>Delete</button>
       <button id="ms-clear"><span class="material-icons-round" style="font-size:15px">close</span>Clear</button>`;
     document.body.appendChild(bar);
-    document.getElementById('ms-done').addEventListener('click',async()=>{
-      await api.put('/api/tasks/bulk',{ids:[...selectedIds],changes:{status:'done'}});
-      showToast(selectedIds.size+' tasks completed');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
+    document.getElementById('ms-done').addEventListener('click',()=>{
+      withSubmit('ms-done',async()=>{
+        await api.put('/api/tasks/bulk',{ids:[...selectedIds],changes:{status:'done'}});
+        showToast(selectedIds.size+' tasks completed');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
+      });
     });
     document.getElementById('ms-del').addEventListener('click',async()=>{
       if(!confirm('Delete '+selectedIds.size+' tasks?'))return;
-      for(const id of selectedIds)await api.del('/api/tasks/'+id);
-      showToast(selectedIds.size+' tasks deleted');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
+      withSubmit('ms-del',async()=>{
+        for(const id of selectedIds)await api.del('/api/tasks/'+id);
+        showToast(selectedIds.size+' tasks deleted');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
+      });
     });
     document.getElementById('ms-pri').addEventListener('click',async()=>{
       const p=prompt('Set priority (0=None, 1=Normal, 2=High, 3=Critical):','2');
@@ -4954,9 +4965,11 @@ function updateMultiSelectBar(){
       await api.put('/api/tasks/bulk',{ids:[...selectedIds],changes:{due_date:date}});
       showToast(selectedIds.size+' tasks rescheduled');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();loadOverdueBadge();
     });
-    document.getElementById('ms-myday').addEventListener('click',async()=>{
-      await api.post('/api/tasks/bulk-myday',{ids:[...selectedIds]});
-      showToast(selectedIds.size+' added to My Day');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();
+    document.getElementById('ms-myday').addEventListener('click',()=>{
+      withSubmit('ms-myday',async()=>{
+        await api.post('/api/tasks/bulk-myday',{ids:[...selectedIds]});
+        showToast(selectedIds.size+' added to My Day');selectedIds.clear();hideMultiSelectBar();await loadAreas();render();
+      });
     });
     document.getElementById('ms-move').addEventListener('click',async()=>{
       // Show goal picker dropdown
