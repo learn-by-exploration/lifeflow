@@ -1,3 +1,8 @@
+---
+status: Partially implemented
+baseline: v0.0.13
+---
+
 # LifeFlow — Master Implementation Plan
 
 > **Consolidated from:** Strategic Review (20 experts), Configurable Lists (11 experts), Implementation Roadmap (8 experts), QA Review (12 experts), Focus Design (12 experts)

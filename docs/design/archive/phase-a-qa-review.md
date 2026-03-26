@@ -1,3 +1,8 @@
+---
+status: Superseded
+baseline: v0.0.13
+---
+
 # Phase A (v0.0.13) QA Review — Expert Panel Analysis
 
 ## Panel Composition

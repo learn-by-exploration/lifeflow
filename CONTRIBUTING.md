@@ -7,19 +7,38 @@ git clone https://github.com/learn-by-exploration/lifeflow.git
 cd lifeflow
 npm install
 npm start          # http://localhost:3456
-npm test           # 711+ tests, Node.js native test runner
+npm test           # 1,692+ tests, Node.js native test runner
 ```
 
 ## Project Structure
 
 ```
 src/
-  server.js        — Express app, schema, routes
+  server.js          — Express app entry point (174 lines)
+  db/index.js        — SQLite schema, 26 tables, migrations (511 lines)
+  routes/            — 10 route modules (157 routes total)
+    areas.js         — Life Areas CRUD + reorder
+    auth.js          — Register, login, logout, session
+    data.js          — Export, import, backup
+    features.js      — Habits, templates, automations, inbox, notes, reviews
+    filters.js       — Saved filters, smart lists
+    lists.js         — Custom lists + list items
+    productivity.js  — Focus timer, reminders, triage, comments
+    stats.js         — Dashboard, streaks, heatmap, activity
+    tags.js          — Tags CRUD + stats
+    tasks.js         — Tasks CRUD, reorder, NLP parse, board, calendar
+  middleware/        — Auth, CSRF, validation, error handling
+  services/          — Audit logging
 public/
-  index.html       — SPA frontend (vanilla JS)
+  app.js             — SPA frontend: views, routing, state (5,369 lines)
+  styles.css         — Styles, responsive breakpoints, themes (1,246 lines)
+  index.html         — SPA shell, overlays, modals (436 lines)
+  sw.js              — Service Worker (192 lines)
 tests/
-  helpers.js       — Shared setup/teardown + data builders
-  *.test.js        — Test files (node:test + supertest)
+  helpers.js         — Shared setup/teardown + data builders
+  *.test.js          — 60 test files (node:test + supertest)
+docs/
+  openapi.yaml       — Full OpenAPI 3.0.3 spec
 ```
 
 ## Running Tests
@@ -42,7 +61,7 @@ node --test --test-name-pattern "overdue"   # By name pattern
 ## Code Style
 
 - 2-space indent, single quotes, trailing commas
-- No external runtime dependencies beyond `express` and `better-sqlite3`
+- No external runtime dependencies beyond `express`, `better-sqlite3`, `bcryptjs`, `helmet`, `cors`, and `express-rate-limit`
 - Tests use `node:test` + `node:assert/strict` + `supertest`
 
 ## Database

@@ -1,3 +1,8 @@
+---
+status: Reference
+baseline: v0.0.x
+---
+
 # LifeFlow — UX & Architecture Review
 
 > **Reviewer:** UX Designer + Software Architect  

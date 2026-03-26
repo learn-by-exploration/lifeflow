@@ -1,3 +1,8 @@
+---
+status: Implemented
+baseline: Pre-v2.0
+---
+
 # LifeFlow UX Redesign — Implementation Plan
 
 **Date:** 21 March 2026  

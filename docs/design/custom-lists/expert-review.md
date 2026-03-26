@@ -1,3 +1,8 @@
+---
+status: Reference
+baseline: v2.0.0
+---
+
 # Custom Lists Feature — 25-Expert Review Panel
 
 **Date:** March 23, 2026  

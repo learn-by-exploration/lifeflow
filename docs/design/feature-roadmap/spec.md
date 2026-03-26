@@ -1,3 +1,8 @@
+---
+status: Superseded
+baseline: v0.0.x
+---
+
 # LifeFlow Feature Roadmap — Product Spec
 
 **Author:** Product Brainstorm  

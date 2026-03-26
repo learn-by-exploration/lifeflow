@@ -1,17 +1,21 @@
 {
   "name": "lifeflow",
   "version": "0.2.6",
-  "description": "",
-  "main": "index.js",
+  "description": "Self-hosted personal task planner with 4-level hierarchy, 25+ views, and zero cloud dependencies",
+  "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "backup": "bash scripts/backup.sh",
     "pretest": "bash scripts/backup.sh",
     "test": "node --test --test-force-exit tests/*.test.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["task-manager", "productivity", "self-hosted", "personal-planner", "sqlite", "express"],
+  "author": "Learn by Exploration",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/learn-by-exploration/lifeflow.git"
+  },
   "type": "commonjs",
   "dependencies": {
     "bcryptjs": "^3.0.3",

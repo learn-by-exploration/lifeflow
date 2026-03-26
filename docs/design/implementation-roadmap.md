@@ -1,3 +1,8 @@
+---
+status: Partially implemented
+baseline: v0.0.13
+---
+
 # LifeFlow Implementation Roadmap — 8-Expert Panel
 
 > **Panel:** 3 Product Managers + 2 Architects + 3 UI/UX Designers

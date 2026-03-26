@@ -1,3 +1,8 @@
+---
+status: Reference
+baseline: v0.0.13
+---
+
 # LifeFlow v0.0.13 — Strategic Review
 
 ## Panel: 4 Marketing + 4 Sales + 4 Competitor Analysts + 4 UI/UX Designers + 4 Life Management Coaches

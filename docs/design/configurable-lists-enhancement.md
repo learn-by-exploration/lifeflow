@@ -1,3 +1,8 @@
+---
+status: Partially implemented
+baseline: v0.0.12
+---
+
 # LifeFlow Configurable Lists & Personalization — 11-Expert Panel Review
 
 > **Expert Panel Design Document**

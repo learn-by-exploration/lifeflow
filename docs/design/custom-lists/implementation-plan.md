@@ -1,3 +1,8 @@
+---
+status: Partially implemented
+baseline: v2.0.0
+---
+
 # Custom Lists — Implementation Plan
 
 **Date:** March 23, 2026  

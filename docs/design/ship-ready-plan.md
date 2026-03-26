@@ -1,3 +1,8 @@
+---
+status: Partially implemented
+baseline: v0.1.0
+---
+
 # LifeFlow Ship-Ready Implementation Plan
 
 > **Baseline:** v0.1.0 | 898 tests | 68+ API endpoints | 25+ views | 8 themes

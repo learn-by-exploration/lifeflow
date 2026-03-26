@@ -1,3 +1,8 @@
+---
+status: Implemented
+baseline: Phase 7
+---
+
 # Phase 7 — Search, Scheduling & Data Portability
 
 > **Status:** Draft  

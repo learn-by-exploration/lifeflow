@@ -2,6 +2,79 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.2.6] - 2026-03-26
+
+### Mobile & Responsive UX Overhaul
+- Touch drag-and-drop polyfill (long-press 200ms, ghost element, haptic feedback)
+- iOS virtual keyboard detection via visualViewport API
+- Service Worker error handling with user-facing toasts
+- 375px overflow fix (full-width modals, panels on iPhone SE/6/7/8)
+- FAB z-index fix (45) positioned above bottom nav bar
+- Calendar grid compact breakpoints (380px, 320px)
+- Detail panel tablet sizing (min(380px, 45vw) at 769–1200px)
+- Input font 16px on iOS (prevents auto-zoom)
+- Touch targets ≥44px on coarse pointer devices
+- Detail panel smooth scroll (-webkit-overflow-scrolling:touch)
+- Z-index scale normalized (10→9999 with documentation)
+- Search overlay uses dvh for keyboard visibility
+- :focus-visible on all interactive elements
+- Print stylesheet (@media print)
+- prefers-color-scheme auto-detection with data-theme-auto
+- Weekly planner responsive grid (920px, 600px breakpoints)
+- Confetti animation respects prefers-reduced-motion
+- Loading spinner on render
+
+### Documentation
+- Full CLAUDE.md rewrite (accurate architecture, schema, metrics)
+- Documentation audit report (docs/DOCUMENTATION-AUDIT.md)
+
+### Testing
+- 105 new tests for mobile/responsive fixes (tests/mobile-responsive-fixes.test.js)
+- Total: 1,692 tests across 60 files
+
+---
+
+## [0.2.5] - 2026-03-25
+
+### CSS Input Design System
+- Sprint 1: CSS input design system + :focus-visible on all inputs
+- Sprint 2: HTML accessibility for all form inputs
+- Sprint 3: Validation engine + inline error messages
+- Sprint 4: Habits form validation + schedule_days display
+- Sprint 5: Consistency polish, touch targets, keyboard nav, transitions
+- Mobile layout: 100dvh, safe-area insets, touch quick actions
+
+---
+
+## [0.2.1] - 2026-03-25
+
+### Bug Fix
+- Timezone date offset bug — calendar, schedule, planner now use local dates
+
+---
+
+## [0.3.3] - 2026-03-25
+
+### Security Hardening
+- IDOR 404 responses, FTS user scoping, type safety, tag color validation
+- Sprint 1–7: security, stability, performance, validation, headers
+- Auth bypasses, validation fixes, accessibility improvements
+- Undo state fixes, a11y polish
+
+---
+
+## [0.3.0] - 2026-03-25
+
+### Security & Architecture
+- 200-agent security hackathon — 115 findings across 22 files
+- S1–S6 security remediation (CSRF, auth, rate limiting, input validation)
+- Backend refactoring: server.js split into 10 route modules + middleware + services
+- 26 SQLite tables (up from 7)
+- Session-based authentication with bcrypt
+- Phase 0 + Sprints 1–5: XSS fixes, pagination, validation, UI feedback, skeleton loading, navigation, breadcrumbs, detail panel, priority badges, accessibility
+
+---
+
 ## [2.0.0] - 2026-03-22
 
 ### UX Redesign

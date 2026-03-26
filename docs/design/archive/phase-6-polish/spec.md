@@ -1,3 +1,8 @@
+---
+status: Implemented
+baseline: Phase 6
+---
+
 # Phase 6: Polish & UX Refinement — Spec
 
 **Status:** Draft  

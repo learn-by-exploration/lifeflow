@@ -1,3 +1,8 @@
+---
+status: Reference
+baseline: v0.0.x
+---
+
 # LifeFlow — Sales & Go-To-Market Strategy
 
 **Author:** Sales Director / GTM Strategist  

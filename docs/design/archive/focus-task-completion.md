@@ -1,3 +1,8 @@
+---
+status: Implemented
+baseline: v0.0.11
+---
+
 # LifeFlow Focus & Task Completion — 12-Expert Panel Review
 
 > **Expert Panel Design Document**
