@@ -179,10 +179,10 @@ module.exports = function(deps) {
     if (!ex) return res.status(404).json({ error: 'Item not found' });
     const { title, checked, category, quantity, note, position } = req.body;
     if (title !== undefined && (!title || title.length > 200)) return res.status(400).json({ error: 'Invalid title' });
-    db.prepare('UPDATE list_items SET title=?,checked=?,category=?,quantity=?,note=?,position=? WHERE id=?').run(
+    db.prepare('UPDATE list_items SET title=?,checked=?,category=?,quantity=?,note=?,position=? WHERE id=? AND list_id=?').run(
       title || ex.title, checked !== undefined ? (checked ? 1 : 0) : ex.checked,
       category !== undefined ? category : ex.category, quantity !== undefined ? quantity : ex.quantity,
-      note !== undefined ? note : ex.note, position !== undefined ? position : ex.position, itemId
+      note !== undefined ? note : ex.note, position !== undefined ? position : ex.position, itemId, id
     );
     rebuildSearchIndex();
     res.json(db.prepare('SELECT * FROM list_items WHERE id=?').get(itemId));
@@ -195,7 +195,7 @@ module.exports = function(deps) {
     if (!db.prepare('SELECT id FROM lists WHERE id=? AND user_id=?').get(id, req.userId)) return res.status(404).json({ error: 'List not found' });
     const ex = db.prepare('SELECT * FROM list_items WHERE id=? AND list_id=?').get(itemId, id);
     if (!ex) return res.status(404).json({ error: 'Item not found' });
-    db.prepare('DELETE FROM list_items WHERE id=?').run(itemId);
+    db.prepare('DELETE FROM list_items WHERE id=? AND list_id=?').run(itemId, id);
     rebuildSearchIndex();
     res.json({ deleted: true });
   });

@@ -283,6 +283,11 @@ function initDatabase(dbDir) {
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_notes_goal ON notes(goal_id)'); } catch(e) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_weekly_reviews_week ON weekly_reviews(week_start)'); } catch(e) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_habit_logs_composite ON habit_logs(habit_id, log_date)'); } catch(e) {}
+  // ─── Sprint 4: Compound user+filter indexes for common query patterns ───
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_user_status ON tasks(user_id, status)'); } catch(e) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_user_due ON tasks(user_id, due_date) WHERE due_date IS NOT NULL'); } catch(e) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)'); } catch(e) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_focus_sessions_user ON focus_sessions(user_id, started_at)'); } catch(e) {}
 
   // ─── FTS5 Virtual Table for Global Search ───
   db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(

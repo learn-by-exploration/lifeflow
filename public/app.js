@@ -858,8 +858,13 @@ async function renderGoal(){
   if(goalTab==='board')h+=renderBoard();else h+=renderTL();
   c.innerHTML=h;attachTA();attachTE();
   if(goalTab==='board')attachBD();
-  document.querySelectorAll('.vt-btn').forEach(t=>{t.addEventListener('click',()=>{goalTab=t.dataset.tab;document.querySelectorAll('.vt-btn').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderGoal()})});
+  // Sync active tab class (listeners are wired once in initVtBtns)
+  document.querySelectorAll('.vt-btn').forEach(t=>t.classList.toggle('active',t.dataset.tab===goalTab));
 }
+// Wire view-tab buttons once to avoid accumulating duplicate listeners
+(function initVtBtns(){
+  document.querySelectorAll('.vt-btn').forEach(t=>{t.addEventListener('click',()=>{goalTab=t.dataset.tab;document.querySelectorAll('.vt-btn').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderGoal()})});
+})();
 function renderTL(){
   if(!tasks.length)return emptyS('task_alt','No tasks yet','Add your first action');
   const todo=tasks.filter(t=>t.status==='todo'),doing=tasks.filter(t=>t.status==='doing'),done=tasks.filter(t=>t.status==='done');

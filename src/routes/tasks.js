@@ -250,10 +250,19 @@ router.put('/api/tasks/:id', (req, res) => {
   if (status === 'done' && ex.status !== 'done' && ex.recurring) {
     const nd = nextDueDate(ex.due_date, ex.recurring);
     if (nd) {
+      // Increment occurrence count in recurring config for endAfter tracking
+      let newRecurring = ex.recurring;
+      try {
+        const rcfg = JSON.parse(ex.recurring);
+        if (rcfg && typeof rcfg === 'object') {
+          rcfg.count = (rcfg.count || 0) + 1;
+          newRecurring = JSON.stringify(rcfg);
+        }
+      } catch {}
       const recurTx = db.transaction(() => {
         const rpos = getNextPosition('tasks', 'goal_id', ex.goal_id);
         const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,time_block_start,time_block_end,estimated_minutes,list_id,user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
-          ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.due_time, ex.recurring, ex.assigned_to, 0, rpos, ex.time_block_start, ex.time_block_end, ex.estimated_minutes, ex.list_id, req.userId
+          ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.due_time, newRecurring, ex.assigned_to, 0, rpos, ex.time_block_start, ex.time_block_end, ex.estimated_minutes, ex.list_id, req.userId
         );
         // Copy tags to new task
         const oldTags = db.prepare('SELECT tag_id FROM task_tags WHERE task_id=?').all(id);
@@ -329,14 +338,20 @@ router.post('/api/tasks/bulk-myday', (req, res) => {
 router.post('/api/tasks/reschedule', (req, res) => {
   const { ids, due_date, clear_myday } = req.body;
   if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids array required' });
-  if (clear_myday) {
-    const stmt = db.prepare('UPDATE tasks SET my_day=0 WHERE id=? AND user_id=?');
-    ids.forEach(id => stmt.run(Number(id), req.userId));
+  if (due_date !== undefined && due_date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(due_date)) {
+    return res.status(400).json({ error: 'due_date must be YYYY-MM-DD' });
   }
-  if (due_date !== undefined) {
-    const stmt = db.prepare('UPDATE tasks SET due_date=? WHERE id=? AND user_id=?');
-    ids.forEach(id => stmt.run(due_date, Number(id), req.userId));
-  }
+  const rescheduleTx = db.transaction(() => {
+    if (clear_myday) {
+      const stmt = db.prepare('UPDATE tasks SET my_day=0 WHERE id=? AND user_id=?');
+      ids.forEach(id => stmt.run(Number(id), req.userId));
+    }
+    if (due_date !== undefined) {
+      const stmt = db.prepare('UPDATE tasks SET due_date=? WHERE id=? AND user_id=?');
+      ids.forEach(id => stmt.run(due_date, Number(id), req.userId));
+    }
+  });
+  rescheduleTx();
   res.json({ updated: ids.length });
 });
 
@@ -352,15 +367,19 @@ router.get('/api/tasks/:id/deps', (req, res) => {
 router.put('/api/tasks/:id/deps', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const taskOwner = db.prepare('SELECT id FROM tasks WHERE id=? AND user_id=?').get(id, req.userId);
+  if (!taskOwner) return res.status(404).json({ error: 'Not found' });
   const { blockedByIds } = req.body;
   if (!Array.isArray(blockedByIds)) return res.status(400).json({ error: 'blockedByIds array required' });
   // Prevent self-dependency
   const valid = blockedByIds.filter(bid => Number.isInteger(bid) && bid !== id);
-  // Check for circular dependencies via DFS
+  // Check for circular dependencies via DFS (with depth limit to prevent DoS)
+  const MAX_DEPTH = 100;
   for (const bid of valid) {
     const visited = new Set();
     const stack = [bid];
     while (stack.length) {
+      if (visited.size > MAX_DEPTH) return res.status(400).json({ error: 'Dependency chain too deep' });
       const curr = stack.pop();
       if (curr === id) return res.status(400).json({ error: 'Circular dependency detected' });
       if (visited.has(curr)) continue;
@@ -369,7 +388,7 @@ router.put('/api/tasks/:id/deps', (req, res) => {
       deps.forEach(d => stack.push(d.blocked_by_id));
     }
   }
-  db.prepare('DELETE FROM task_deps WHERE task_id=?').run(id);
+  db.prepare('DELETE FROM task_deps WHERE task_id=? AND task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(id, req.userId);
   const ins = db.prepare('INSERT OR IGNORE INTO task_deps (task_id, blocked_by_id) VALUES (?, ?)');
   valid.forEach(bid => ins.run(id, bid));
   res.json({ ok: true, blockedBy: db.prepare('SELECT t.id, t.title, t.status FROM tasks t JOIN task_deps d ON t.id=d.blocked_by_id WHERE d.task_id=? AND t.user_id=?').all(id, req.userId) });
@@ -390,6 +409,7 @@ router.post('/api/tasks/:id/comments', (req, res) => {
   if (!tOwn2) return res.status(404).json({ error: 'Not found' });
   const { text } = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: 'Text required' });
+  if (text.trim().length > 2000) return res.status(400).json({ error: 'Comment too long (max 2000 characters)' });
   const r = db.prepare('INSERT INTO task_comments (task_id, text) VALUES (?,?)').run(id, text.trim());
   res.status(201).json(db.prepare('SELECT * FROM task_comments WHERE id=?').get(r.lastInsertRowid));
 });
@@ -399,7 +419,7 @@ router.delete('/api/tasks/:id/comments/:commentId', (req, res) => {
   if (!Number.isInteger(id) || !Number.isInteger(commentId)) return res.status(400).json({ error: 'Invalid ID' });
   const ex = db.prepare('SELECT c.id FROM task_comments c JOIN tasks t ON c.task_id=t.id WHERE c.id=? AND c.task_id=? AND t.user_id=?').get(commentId, id, req.userId);
   if (!ex) return res.status(404).json({ error: 'Comment not found' });
-  db.prepare('DELETE FROM task_comments WHERE id=?').run(commentId);
+  db.prepare('DELETE FROM task_comments WHERE id=? AND task_id=?').run(commentId, id);
   res.json({ ok: true });
 });
 router.put('/api/tasks/:id/comments/:commentId', (req, res) => {
@@ -410,7 +430,8 @@ router.put('/api/tasks/:id/comments/:commentId', (req, res) => {
   if (!ex) return res.status(404).json({ error: 'Comment not found' });
   const { text } = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: 'Text required' });
-  db.prepare('UPDATE task_comments SET text=? WHERE id=?').run(text.trim(), commentId);
+  if (text.trim().length > 2000) return res.status(400).json({ error: 'Comment too long (max 2000 characters)' });
+  db.prepare('UPDATE task_comments SET text=? WHERE id=? AND task_id=?').run(text.trim(), commentId, id);
   res.json(db.prepare('SELECT * FROM task_comments WHERE id=?').get(commentId));
 });
 
@@ -420,10 +441,10 @@ router.post('/api/tasks/:id/time', (req, res) => {
   const ex = db.prepare('SELECT * FROM tasks WHERE id=? AND user_id=?').get(id, req.userId);
   if (!ex) return res.status(404).json({ error: 'Not found' });
   const { minutes } = req.body;
-  if (!minutes || minutes <= 0) return res.status(400).json({ error: 'minutes required (positive number)' });
-  const newActual = (ex.actual_minutes || 0) + minutes;
-  db.prepare('UPDATE tasks SET actual_minutes=? WHERE id=?').run(newActual, id);
-  res.json(db.prepare('SELECT * FROM tasks WHERE id=?').get(id));
+  if (!minutes || !Number.isInteger(Number(minutes)) || Number(minutes) <= 0) return res.status(400).json({ error: 'minutes required (positive integer)' });
+  const newActual = (ex.actual_minutes || 0) + Number(minutes);
+  db.prepare('UPDATE tasks SET actual_minutes=? WHERE id=? AND user_id=?').run(newActual, id, req.userId);
+  res.json(db.prepare('SELECT * FROM tasks WHERE id=? AND user_id=?').get(id, req.userId));
 });
 
 // ─── RECURRING TASKS: Skip & Pause ───
@@ -434,13 +455,22 @@ router.post('/api/tasks/:id/skip', (req, res) => {
   if (!ex) return res.status(404).json({ error: 'Not found' });
   if (!ex.recurring) return res.status(400).json({ error: 'Not a recurring task' });
   // Mark as skipped (done but not actually completed)
-  db.prepare("UPDATE tasks SET status='done', completed_at=? WHERE id=?").run(new Date().toISOString(), id);
+  db.prepare("UPDATE tasks SET status='done', completed_at=? WHERE id=? AND user_id=?").run(new Date().toISOString(), id, req.userId);
   // Spawn next occurrence
   const nd = nextDueDate(ex.due_date, ex.recurring);
   if (!nd) return res.json({ skipped: id, next: null });
+  // Increment occurrence count in recurring config for endAfter tracking
+  let skipRecurring = ex.recurring;
+  try {
+    const rcfg = JSON.parse(ex.recurring);
+    if (rcfg && typeof rcfg === 'object') {
+      rcfg.count = (rcfg.count || 0) + 1;
+      skipRecurring = JSON.stringify(rcfg);
+    }
+  } catch {}
   const spos = getNextPosition('tasks', 'goal_id', ex.goal_id);
   const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(
-    ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.due_time, ex.recurring, ex.assigned_to, 0, spos, req.userId
+    ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.due_time, skipRecurring, ex.assigned_to, 0, spos, req.userId
   );
   const oldTags = db.prepare('SELECT tag_id FROM task_tags WHERE task_id=?').all(id);
   oldTags.forEach(tt => db.prepare('INSERT OR IGNORE INTO task_tags (task_id,tag_id) VALUES (?,?)').run(r.lastInsertRowid, tt.tag_id));
@@ -456,8 +486,8 @@ router.post('/api/tasks/:id/move', (req, res) => {
   const ex = db.prepare('SELECT * FROM tasks WHERE id=? AND user_id=?').get(id, req.userId);
   if (!ex) return res.status(404).json({ error: 'Not found' });
   if (!verifyGoalOwnership(Number(goal_id), req.userId)) return res.status(404).json({ error: 'Goal not found or not owned by you' });
-  db.prepare('UPDATE tasks SET goal_id=? WHERE id=?').run(Number(goal_id), id);
-  res.json(enrichTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(id)));
+  db.prepare('UPDATE tasks SET goal_id=? WHERE id=? AND user_id=?').run(Number(goal_id), id, req.userId);
+  res.json(enrichTask(db.prepare('SELECT * FROM tasks WHERE id=? AND user_id=?').get(id, req.userId)));
 });
 
   return router;

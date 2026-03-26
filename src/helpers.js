@@ -108,8 +108,8 @@ module.exports = function createHelpers(db) {
       else {
         const evDays = recurrence.match(/^every-(\d+)-days$/);
         const evWeeks = recurrence.match(/^every-(\d+)-weeks$/);
-        if (evDays) d.setDate(d.getDate() + Number(evDays[1]));
-        else if (evWeeks) d.setDate(d.getDate() + Number(evWeeks[1]) * 7);
+        if (evDays) { const n = Math.min(Math.max(1, Number(evDays[1])), 36500); d.setDate(d.getDate() + n); }
+        else if (evWeeks) { const n = Math.min(Math.max(1, Number(evWeeks[1])), 5200); d.setDate(d.getDate() + n * 7); }
         else if (recurrence === 'weekdays') {
           do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
         }

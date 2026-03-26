@@ -41,8 +41,10 @@ router.post('/api/focus', (req, res) => {
   // Verify task exists and belongs to user
   const taskOwner = db.prepare('SELECT id FROM tasks WHERE id=? AND user_id=?').get(Number(task_id), req.userId);
   if (!taskOwner) return res.status(404).json({ error: 'Task not found' });
+  const durSec = Number(duration_sec) || 0;
+  if (durSec < 0) return res.status(400).json({ error: 'duration_sec must be non-negative' });
   const r = db.prepare('INSERT INTO focus_sessions (task_id, duration_sec, type, scheduled_at, user_id) VALUES (?,?,?,?,?)').run(
-    Number(task_id), duration_sec || 0, type || 'pomodoro', scheduled_at || null, req.userId
+    Number(task_id), durSec, type || 'pomodoro', scheduled_at || null, req.userId
   );
   res.status(201).json(db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(r.lastInsertRowid));
 });

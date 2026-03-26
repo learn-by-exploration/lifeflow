@@ -48,8 +48,15 @@ app.use(helmet({
   strictTransportSecurity: {
     maxAge: 31536000,
     includeSubDomains: true
-  }
+  },
+  referrerPolicy: { policy: 'same-origin' }
 }));
+
+// ─── No-cache on all API responses ───
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
 
 // ─── CORS (same-origin by default) ───
 app.use(cors({ origin: false }));
