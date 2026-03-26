@@ -19,7 +19,7 @@ router.get('/api/areas', (req, res) => {
 });
 router.post('/api/areas', (req, res) => {
   const { name, icon, color } = req.body;
-  if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'Name required' });
   if (name.trim().length > 100) return res.status(400).json({ error: 'Name too long (max 100 characters)' });
   if (!isValidColor(color)) return res.status(400).json({ error: 'Invalid color format (hex required)' });
   const pos = getNextPosition('life_areas');
@@ -48,8 +48,8 @@ router.put('/api/areas/:id', (req, res) => {
   const ex = db.prepare('SELECT * FROM life_areas WHERE id=? AND user_id=?').get(id, req.userId);
   if (!ex) return res.status(404).json({ error: 'Not found' });
   const { name, icon, color, position, default_view } = req.body;
-  if (name !== undefined && (!name || !name.trim())) return res.status(400).json({ error: 'Name cannot be empty' });
-  if (name && name.trim().length > 100) return res.status(400).json({ error: 'Name too long (max 100 characters)' });
+  if (name !== undefined && (!name || typeof name !== 'string' || !name.trim())) return res.status(400).json({ error: 'Name cannot be empty' });
+  if (name && typeof name === 'string' && name.trim().length > 100) return res.status(400).json({ error: 'Name too long (max 100 characters)' });
   if (!isValidColor(color)) return res.status(400).json({ error: 'Invalid color format (hex required)' });
   if (default_view !== undefined) {
     db.prepare('UPDATE life_areas SET name=COALESCE(?,name),icon=COALESCE(?,icon),color=COALESCE(?,color),position=COALESCE(?,position),default_view=? WHERE id=? AND user_id=?').run(
@@ -83,7 +83,8 @@ router.put('/api/areas/:id/unarchive', (req, res) => {
 router.delete('/api/areas/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  db.prepare('DELETE FROM life_areas WHERE id=? AND user_id=?').run(id, req.userId);
+  const result = db.prepare('DELETE FROM life_areas WHERE id=? AND user_id=?').run(id, req.userId);
+  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });
 
@@ -104,7 +105,7 @@ router.post('/api/areas/:areaId/goals', (req, res) => {
   if (!Number.isInteger(areaId)) return res.status(400).json({ error: 'Invalid ID' });
   if (!db.prepare('SELECT id FROM life_areas WHERE id=? AND user_id=?').get(areaId, req.userId)) return res.status(404).json({ error: 'Area not found' });
   const { title, description, color, due_date } = req.body;
-  if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
+  if (!title || typeof title !== 'string' || !title.trim()) return res.status(400).json({ error: 'Title required' });
   if (title.trim().length > 200) return res.status(400).json({ error: 'Title too long (max 200 characters)' });
   if (description && description.length > 2000) return res.status(400).json({ error: 'Description too long (max 2000 characters)' });
   if (!isValidColor(color)) return res.status(400).json({ error: 'Invalid color format (hex required)' });
@@ -126,7 +127,8 @@ router.put('/api/goals/:id', (req, res) => {
 router.delete('/api/goals/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  db.prepare('DELETE FROM goals WHERE id=? AND user_id=?').run(id, req.userId);
+  const result = db.prepare('DELETE FROM goals WHERE id=? AND user_id=?').run(id, req.userId);
+  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });
 
@@ -166,7 +168,7 @@ router.post('/api/goals/:id/milestones', (req, res) => {
   const goalOwner = db.prepare('SELECT id FROM goals WHERE id=? AND user_id=?').get(id, req.userId);
   if (!goalOwner) return res.status(404).json({ error: 'Not found' });
   const { title } = req.body;
-  if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
+  if (!title || typeof title !== 'string' || !title.trim()) return res.status(400).json({ error: 'Title required' });
   const pos = getNextPosition('goal_milestones', 'goal_id', id);
   const r = db.prepare('INSERT INTO goal_milestones (goal_id, title, position) VALUES (?,?,?)').run(id, title.trim(), pos);
   res.status(201).json(db.prepare('SELECT * FROM goal_milestones WHERE id=?').get(r.lastInsertRowid));

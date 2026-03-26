@@ -22,8 +22,8 @@ describe('Phase 7 - Search, Smart Planner, iCal Export', () => {
       // Rebuild index
       const { db } = setup();
       db.exec('DELETE FROM search_index');
-      db.prepare("INSERT INTO search_index (type,source_id,title,body,context) VALUES ('task',1,'Buy groceries for dinner','','')").run();
-      db.prepare("INSERT INTO search_index (type,source_id,title,body,context) VALUES ('task',2,'Read a book','','')").run();
+      db.prepare("INSERT INTO search_index (type,source_id,user_id,title,body,context) VALUES ('task',1,1,'Buy groceries for dinner','','')").run();
+      db.prepare("INSERT INTO search_index (type,source_id,user_id,title,body,context) VALUES ('task',2,1,'Read a book','','')").run();
       const res = await agent().get('/api/search?q=groceries').expect(200);
       assert.ok(res.body.results.length >= 1);
       assert.ok(res.body.results[0].title.includes('groceries'));
@@ -32,8 +32,8 @@ describe('Phase 7 - Search, Smart Planner, iCal Export', () => {
     it('GET /api/search returns grouped results with type', async () => {
       const { db } = setup();
       db.exec('DELETE FROM search_index');
-      db.prepare("INSERT INTO search_index (type,source_id,title,body,context) VALUES ('task',1,'Deploy app','','')").run();
-      db.prepare("INSERT INTO search_index (type,source_id,title,body,context) VALUES ('note',1,'Deploy instructions','How to deploy','')").run();
+      db.prepare("INSERT INTO search_index (type,source_id,user_id,title,body,context) VALUES ('task',1,1,'Deploy app','','')").run();
+      db.prepare("INSERT INTO search_index (type,source_id,user_id,title,body,context) VALUES ('note',1,1,'Deploy instructions','How to deploy','')").run();
       const res = await agent().get('/api/search?q=deploy').expect(200);
       assert.ok(res.body.results.length === 2);
       const types = res.body.results.map(r => r.type);
@@ -45,7 +45,7 @@ describe('Phase 7 - Search, Smart Planner, iCal Export', () => {
       const { db } = setup();
       db.exec('DELETE FROM search_index');
       for (let i = 0; i < 5; i++) {
-        db.prepare("INSERT INTO search_index (type,source_id,title,body,context) VALUES ('task',?,?,'','')").run(i, `Test task ${i}`);
+        db.prepare("INSERT INTO search_index (type,source_id,user_id,title,body,context) VALUES ('task',?,1,?,'','')").run(i, `Test task ${i}`);
       }
       const res = await agent().get('/api/search?q=test&limit=2').expect(200);
       assert.ok(res.body.results.length <= 2);

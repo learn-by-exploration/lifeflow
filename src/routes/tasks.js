@@ -68,12 +68,13 @@ router.post('/api/goals/:goalId/tasks', (req, res) => {
   if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'Invalid ID' });
   if (!db.prepare('SELECT id FROM goals WHERE id=? AND user_id=?').get(goalId, req.userId)) return res.status(404).json({ error: 'Goal not found' });
   const { title, note, priority, due_date, due_time, recurring, assigned_to, my_day, tagIds, time_block_start, time_block_end, estimated_minutes, list_id } = req.body;
-  if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
+  if (!title || typeof title !== 'string' || !title.trim()) return res.status(400).json({ error: 'Title required' });
   if (title.trim().length > 500) return res.status(400).json({ error: 'Title too long (max 500 characters)' });
+  if (note !== undefined && note !== null && typeof note !== 'string') return res.status(400).json({ error: 'Note must be a string' });
   if (note && note.length > 5000) return res.status(400).json({ error: 'Note too long (max 5000 characters)' });
   if (due_date !== undefined && due_date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(due_date)) return res.status(400).json({ error: 'Invalid due_date format (YYYY-MM-DD)' });
   if (!isValidHHMM(due_time)) return res.status(400).json({ error: 'Invalid due_time format (HH:MM)' });
-  if (priority !== undefined && priority !== null && ![0,1,2,3].includes(Number(priority))) return res.status(400).json({ error: 'Priority must be 0-3' });
+  if (priority !== undefined && priority !== null && (typeof priority === 'boolean' || ![0,1,2,3].includes(Number(priority)))) return res.status(400).json({ error: 'Priority must be 0-3' });
   if (estimated_minutes !== undefined && estimated_minutes !== null && (typeof estimated_minutes !== 'number' || estimated_minutes < 0)) return res.status(400).json({ error: 'estimated_minutes must be a non-negative number' });
   if (list_id) { const lid = Number(list_id); if (!Number.isInteger(lid) || !db.prepare('SELECT id FROM lists WHERE id=? AND user_id=?').get(lid, req.userId)) return res.status(400).json({ error: 'Invalid list_id' }); }
   const createTaskTx = db.transaction(() => {
@@ -98,7 +99,7 @@ router.put('/api/tasks/reorder', (req, res) => {
   const upd = db.prepare('UPDATE tasks SET position=?, due_date=COALESCE(?,due_date) WHERE id=? AND user_id=?');
   const tx = db.transaction(() => {
     items.forEach(({ id, position, due_date }) => {
-      if (Number.isInteger(id) && Number.isInteger(position)) upd.run(position, due_date !== undefined ? due_date : null, id, req.userId);
+      if (Number.isInteger(id) && Number.isInteger(position) && position >= 0) upd.run(position, due_date !== undefined ? due_date : null, id, req.userId);
     });
   });
   tx();
@@ -179,7 +180,7 @@ router.put('/api/tasks/bulk', (req, res) => {
   if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
   if (!changes || typeof changes !== 'object') return res.status(400).json({ error: 'changes object required' });
   if (changes.status !== undefined && !['todo','doing','done'].includes(changes.status)) return res.status(400).json({ error: 'Invalid status' });
-  if (changes.priority !== undefined && ![0,1,2,3].includes(Number(changes.priority))) return res.status(400).json({ error: 'Priority must be 0-3' });
+  if (changes.priority !== undefined && (typeof changes.priority === 'boolean' || ![0,1,2,3].includes(Number(changes.priority)))) return res.status(400).json({ error: 'Priority must be 0-3' });
   const bulkTx = db.transaction(() => {
     const results = [];
       const selectTask = db.prepare('SELECT * FROM tasks WHERE id=? AND user_id=?');
@@ -227,7 +228,8 @@ router.put('/api/tasks/:id', (req, res) => {
   if (!ex) return res.status(404).json({ error: 'Not found' });
   const { title, note, status, priority, due_date, due_time, recurring, assigned_to, my_day, position, goal_id, time_block_start, time_block_end, estimated_minutes, actual_minutes, list_id } = req.body;
   if (status !== undefined && status !== null && !['todo','doing','done'].includes(status)) return res.status(400).json({ error: 'Invalid status (must be todo, doing, or done)' });
-  if (priority !== undefined && priority !== null && ![0,1,2,3].includes(Number(priority))) return res.status(400).json({ error: 'Priority must be 0-3' });
+  if (priority !== undefined && priority !== null && (typeof priority === 'boolean' || ![0,1,2,3].includes(Number(priority)))) return res.status(400).json({ error: 'Priority must be 0-3' });
+  if (title !== undefined && title !== null && (typeof title !== 'string' || !title.trim())) return res.status(400).json({ error: 'Title must be a non-empty string' });
   if (due_date !== undefined && due_date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(due_date)) return res.status(400).json({ error: 'Invalid due_date format (YYYY-MM-DD)' });
   if (due_time !== undefined && !isValidHHMM(due_time)) return res.status(400).json({ error: 'Invalid due_time format (HH:MM)' });
   if (estimated_minutes !== undefined && estimated_minutes !== null && (typeof estimated_minutes !== 'number' || estimated_minutes < 0)) return res.status(400).json({ error: 'estimated_minutes must be a non-negative number' });
@@ -287,7 +289,8 @@ router.put('/api/tasks/:id', (req, res) => {
 router.delete('/api/tasks/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  db.prepare('DELETE FROM tasks WHERE id=? AND user_id=?').run(id, req.userId);
+  const result = db.prepare('DELETE FROM tasks WHERE id=? AND user_id=?').run(id, req.userId);
+  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });
 

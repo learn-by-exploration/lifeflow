@@ -1,4 +1,5 @@
 const { Router } = require('express');
+const { isValidColor } = require('../middleware/validate');
 module.exports = function(deps) {
   const { db, rebuildSearchIndex, getNextPosition } = deps;
   const router = Router();
@@ -9,7 +10,7 @@ router.get('/api/tags', (req, res) => {
 });
 router.post('/api/tags', (req, res) => {
   const { name, color } = req.body;
-  if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'Name required' });
   const clean = name.trim().toLowerCase().replace(/[^a-z0-9\-_ ]/g, '');
   const existing = db.prepare('SELECT * FROM tags WHERE name=? AND user_id=?').get(clean, req.userId);
   if (existing) return res.json(existing);
@@ -43,6 +44,7 @@ router.put('/api/tags/:id', (req, res) => {
     db.prepare('UPDATE tags SET name=? WHERE id=? AND user_id=?').run(clean, id, req.userId);
   }
   if (color !== undefined) {
+    if (!isValidColor(color)) return res.status(400).json({ error: 'Invalid color format (hex required)' });
     db.prepare('UPDATE tags SET color=? WHERE id=? AND user_id=?').run(color, id, req.userId);
   }
   res.json(db.prepare('SELECT * FROM tags WHERE id=? AND user_id=?').get(id, req.userId));

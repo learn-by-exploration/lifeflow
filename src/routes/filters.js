@@ -104,7 +104,7 @@ router.get('/api/filters', (req, res) => {
 });
 router.post('/api/filters', (req, res) => {
   const { name, icon, color, filters } = req.body;
-  if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'Name required' });
   if (!filters || typeof filters !== 'object') return res.status(400).json({ error: 'Filters object required' });
   const pos = getNextPosition('saved_filters');
   const r = db.prepare('INSERT INTO saved_filters (name,icon,color,filters,position,user_id) VALUES (?,?,?,?,?,?)').run(

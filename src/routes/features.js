@@ -347,7 +347,7 @@ router.get('/api/habits', (req, res) => {
 });
 router.post('/api/habits', (req, res) => {
   const { name, icon, color, frequency, target, area_id, schedule_days, preferred_time } = req.body;
-  if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'Name required' });
   if (name.trim().length > 100) return res.status(400).json({ error: 'Name too long (max 100 characters)' });
   if (preferred_time !== undefined && preferred_time !== null && preferred_time !== '' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(preferred_time)) return res.status(400).json({ error: 'preferred_time must be HH:MM format' });
   const validFreqs = ['daily','weekly','monthly','yearly'];

@@ -141,18 +141,18 @@ module.exports = function(deps) {
     const limit = Math.min(Number(req.query.limit) || 20, 50);
     try {
       const rows = db.prepare(`
-        SELECT type, source_id, title, snippet(search_index, 3, '<mark>', '</mark>', '\u2026', 24) as snippet, context, rank
-        FROM search_index WHERE search_index MATCH ?
+        SELECT type, source_id, title, snippet(search_index, 4, '<mark>', '</mark>', '\u2026', 24) as snippet, context, rank
+        FROM search_index WHERE search_index MATCH ? AND user_id=?
         ORDER BY rank LIMIT ?
-      `).all(ftsQuery, limit);
+      `).all(ftsQuery, req.userId, limit);
       res.json({ results: rows, query: q });
     } catch {
       const term = '%' + sanitized + '%';
       const rows = db.prepare(`
         SELECT type, source_id, title, body as snippet, context, 0 as rank
-        FROM search_index WHERE title LIKE ? OR body LIKE ?
+        FROM search_index WHERE user_id=? AND (title LIKE ? OR body LIKE ?)
         ORDER BY type LIMIT ?
-      `).all(term, term, limit);
+      `).all(req.userId, term, term, limit);
       res.json({ results: rows, query: q });
     }
   });

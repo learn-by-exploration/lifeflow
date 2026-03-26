@@ -290,8 +290,14 @@ function initDatabase(dbDir) {
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_focus_sessions_user ON focus_sessions(user_id, started_at)'); } catch(e) {}
 
   // ─── FTS5 Virtual Table for Global Search ───
+  // Migrate: if search_index lacks user_id column, drop and recreate
+  try {
+    db.prepare('SELECT user_id FROM search_index LIMIT 0').all();
+  } catch {
+    db.exec('DROP TABLE IF EXISTS search_index');
+  }
   db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
-    type, source_id UNINDEXED, title, body, context,
+    type, source_id UNINDEXED, user_id UNINDEXED, title, body, context,
     tokenize='porter unicode61'
   )`);
 
@@ -409,28 +415,29 @@ function initDatabase(dbDir) {
   // ─── Rebuild FTS Search Index ───
   function rebuildSearchIndex() {
     db.exec('DELETE FROM search_index');
-    const ins = db.prepare('INSERT INTO search_index (type, source_id, title, body, context) VALUES (?,?,?,?,?)');
+    const ins = db.prepare('INSERT INTO search_index (type, source_id, user_id, title, body, context) VALUES (?,?,?,?,?,?)');
     const insertAll = db.transaction(() => {
-      for (const t of db.prepare(`SELECT t.id, t.title, t.note, g.title as goal_title, a.name as area_name
+      for (const t of db.prepare(`SELECT t.id, t.title, t.note, t.user_id, g.title as goal_title, a.name as area_name
         FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id`).all()) {
-        ins.run('task', t.id, t.title, t.note || '', `${t.area_name} \u2192 ${t.goal_title}`);
+        ins.run('task', t.id, t.user_id, t.title, t.note || '', `${t.area_name} \u2192 ${t.goal_title}`);
       }
-      for (const n of db.prepare('SELECT id, title, content FROM notes').all()) {
-        ins.run('note', n.id, n.title, n.content || '', '');
+      for (const n of db.prepare(`SELECT n.id, n.title, n.content, g.user_id
+        FROM notes n LEFT JOIN goals g ON n.goal_id=g.id`).all()) {
+        ins.run('note', n.id, n.user_id || null, n.title, n.content || '', '');
       }
-      for (const g of db.prepare(`SELECT g.id, g.title, g.description, a.name as area_name
+      for (const g of db.prepare(`SELECT g.id, g.title, g.description, g.user_id, a.name as area_name
         FROM goals g JOIN life_areas a ON g.area_id=a.id`).all()) {
-        ins.run('goal', g.id, g.title, g.description || '', g.area_name);
+        ins.run('goal', g.id, g.user_id, g.title, g.description || '', g.area_name);
       }
-      for (const c of db.prepare(`SELECT tc.id, tc.text, t.title as task_title
+      for (const c of db.prepare(`SELECT tc.id, tc.text, t.user_id, t.title as task_title
         FROM task_comments tc JOIN tasks t ON tc.task_id=t.id`).all()) {
-        ins.run('comment', c.id, '', c.text || '', c.task_title);
+        ins.run('comment', c.id, c.user_id, '', c.text || '', c.task_title);
       }
       for (const i of db.prepare('SELECT id, title, note FROM inbox').all()) {
-        ins.run('inbox', i.id, i.title, i.note || '', '');
+        ins.run('inbox', i.id, null, i.title, i.note || '', '');
       }
-      for (const li of db.prepare('SELECT li.id, li.title, li.note, l.name as list_name FROM list_items li JOIN lists l ON li.list_id=l.id').all()) {
-        ins.run('list', li.id, li.title, li.note || '', li.list_name);
+      for (const li of db.prepare('SELECT li.id, li.title, li.note, l.user_id, l.name as list_name FROM list_items li JOIN lists l ON li.list_id=l.id').all()) {
+        ins.run('list', li.id, li.user_id, li.title, li.note || '', li.list_name);
       }
     });
     insertAll();

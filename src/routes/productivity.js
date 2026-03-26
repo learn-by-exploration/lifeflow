@@ -12,7 +12,7 @@ router.get('/api/rules', (req, res) => {
 });
 router.post('/api/rules', (req, res) => {
   const { name, trigger_type, trigger_config, action_type, action_config } = req.body;
-  if (!name || !name.trim()) return res.status(400).json({ error: 'name required' });
+  if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'name required' });
   if (name.trim().length > 100) return res.status(400).json({ error: 'name max 100 characters' });
   if (!trigger_type || !VALID_TRIGGER_TYPES.includes(trigger_type)) return res.status(400).json({ error: 'invalid trigger_type' });
   if (!action_type || !VALID_ACTION_TYPES.includes(action_type)) return res.status(400).json({ error: 'invalid action_type' });
@@ -27,8 +27,8 @@ router.put('/api/rules/:id', (req, res) => {
   const ex = db.prepare('SELECT * FROM automation_rules WHERE id=? AND user_id=?').get(id, req.userId);
   if (!ex) return res.status(404).json({ error: 'Not found' });
   const { name, trigger_type, trigger_config, action_type, action_config, enabled } = req.body;
-  if (name !== undefined && (!name || !name.trim())) return res.status(400).json({ error: 'name cannot be empty' });
-  if (name !== undefined && name.trim().length > 100) return res.status(400).json({ error: 'name max 100 characters' });
+  if (name !== undefined && (!name || typeof name !== 'string' || !name.trim())) return res.status(400).json({ error: 'name cannot be empty' });
+  if (name !== undefined && typeof name === 'string' && name.trim().length > 100) return res.status(400).json({ error: 'name max 100 characters' });
   if (trigger_type !== undefined && !VALID_TRIGGER_TYPES.includes(trigger_type)) return res.status(400).json({ error: 'invalid trigger_type' });
   if (action_type !== undefined && !VALID_ACTION_TYPES.includes(action_type)) return res.status(400).json({ error: 'invalid action_type' });
   db.prepare('UPDATE automation_rules SET name=COALESCE(?,name), trigger_type=COALESCE(?,trigger_type), trigger_config=COALESCE(?,trigger_config), action_type=COALESCE(?,action_type), action_config=COALESCE(?,action_config), enabled=COALESCE(?,enabled) WHERE id=? AND user_id=?').run(
