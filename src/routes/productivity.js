@@ -171,7 +171,8 @@ router.get('/api/reviews/current', (req, res) => {
 });
 router.post('/api/reviews', (req, res) => {
   const { week_start, top_accomplishments, reflection, next_week_priorities, rating } = req.body;
-  if (!week_start) return res.status(400).json({ error: 'week_start required' });
+  if (!week_start || typeof week_start !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(week_start)) return res.status(400).json({ error: 'week_start required (YYYY-MM-DD)' });
+  if (isNaN(new Date(week_start).getTime())) return res.status(400).json({ error: 'week_start is not a valid date' });
   const ratingVal = rating != null ? Math.min(5, Math.max(1, Number(rating))) : null;
   // Compute stats
   const weekEnd = new Date(week_start);

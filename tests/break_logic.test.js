@@ -92,15 +92,12 @@ describe('Business Logic Break Tests', () => {
     assert.equal(activeAfterFinal.length, 0, 'no active tasks should remain after endAfter reached');
   });
 
-  it('endAfter: 0 — BUG: endAfter:0 spawns a child due to falsy 0 in JS short-circuit', async () => {
-    // BUG REPORT: The guard `if (cfg.endAfter && cfg.count >= cfg.endAfter)` uses a truthy check on
-    // cfg.endAfter. When endAfter=0, `cfg.endAfter` is falsy (0 is falsy in JS), so the check
-    // short-circuits to false and the "stop" branch is never entered.
-    // Intent: endAfter:0 should mean "never spawn", but due to the falsy bug a child IS spawned.
-    // Fix would be: `if (cfg.endAfter != null && cfg.count >= cfg.endAfter)`
+  it('endAfter: 0 — FIXED: endAfter:0 does not spawn a child (falsy 0 bug fixed)', async () => {
+    // FIXED: The guard now uses `cfg.endAfter != null && typeof cfg.endAfter === 'number' && count>=endAfter`
+    // so endAfter:0 correctly prevents spawning (count=0 >= endAfter=0 → no spawn).
     const { goal } = await setupAreaAndGoal();
 
-    const task = await setupTask(goal.id, { title: 'endAfter:0 BUG', due_date: '2024-01-01' });
+    const task = await setupTask(goal.id, { title: 'endAfter:0 FIXED', due_date: '2024-01-01' });
     await agent()
       .put(`/api/tasks/${task.id}`)
       .send({ recurring: JSON.stringify({ pattern: 'daily', interval: 1, endAfter: 0, count: 0 }) });
@@ -108,10 +105,9 @@ describe('Business Logic Break Tests', () => {
     await completeTask(task.id);
 
     const allTasks = await getGoalTasks(goal.id);
-    // BUG: 0 is falsy, so `cfg.endAfter && ...` short-circuits, child IS spawned (total=2)
-    assert.equal(allTasks.length, 2,
-      'BUG CONFIRMED: endAfter:0 spawns a child because 0 is falsy in `cfg.endAfter && count>=endAfter`');
-    // The correct behavior would be allTasks.length === 1 (no spawn when endAfter=0)
+    // FIXED: count(0) >= endAfter(0) is true → no spawn, only original task
+    assert.equal(allTasks.length, 1,
+      'FIXED: endAfter:0 correctly prevents spawning — count(0) >= endAfter(0)');
   });
 
   it('endAfter: 1 — original spawns one child, child spawns nothing', async () => {
@@ -424,17 +420,16 @@ describe('Business Logic Break Tests', () => {
   // GROUP: Weekly Reviews
   // ======================================================================
 
-  it('Review with malformed week_start — SERVER BUG: crashes with 500', async () => {
-    // BUG REPORT: POST /api/reviews does not validate week_start format before using it
-    // in `new Date(week_start)` date arithmetic. When week_start is "not-a-date", `new Date("not-a-date")`
-    // returns an Invalid Date, and calling `.setDate()` on it throws "Invalid time value" (TypeError).
-    // Express catches it and returns 500. The fix would be to validate week_start as YYYY-MM-DD first.
+  it('Review with malformed week_start — FIXED: now returns 400', async () => {
+    // FIXED: POST /api/reviews now validates week_start as YYYY-MM-DD before date arithmetic.
+    // Invalid dates return 400 instead of crashing with 500.
     const res = await agent()
       .post('/api/reviews')
       .send({ week_start: 'not-a-date' });
 
-    assert.equal(res.status, 500,
-      'BUG CONFIRMED: malformed week_start causes unhandled date arithmetic crash → 500');
+    assert.equal(res.status, 400,
+      'FIXED: malformed week_start returns 400 (not 500)');
+    assert.match(res.body.error, /week_start/i);
   });
 
   it('Review rating clamped — 0 stored as 1 (cannot store zero rating)', async () => {

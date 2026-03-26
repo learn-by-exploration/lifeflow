@@ -108,8 +108,8 @@ router.put('/api/tasks/reorder', (req, res) => {
 
 // ─── Search (before :id to avoid param capture) ───
 router.get('/api/tasks/search', (req, res) => {
-  const q = req.query.q;
-  const hasQ = q && q.trim();
+  const q = Array.isArray(req.query.q) ? req.query.q[0] : req.query.q;
+  const hasQ = q && typeof q === 'string' && q.trim();
   const hasFilters = req.query.area_id || req.query.goal_id || req.query.status;
   if (!hasQ && !hasFilters) return res.json([]);
   let whereParts = [], params = [];

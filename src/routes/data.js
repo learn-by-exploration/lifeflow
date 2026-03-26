@@ -133,7 +133,8 @@ module.exports = function(deps) {
 
   // ─── Global Unified Search (FTS5) ───
   router.get('/api/search', (req, res) => {
-    const q = (req.query.q || '').trim();
+    const rawQ = Array.isArray(req.query.q) ? req.query.q[0] : req.query.q;
+    const q = (rawQ || '').trim();
     if (!q) return res.json({ results: [], query: '' });
     const sanitized = q.replace(/[^\w\s'-]/g, '').trim();
     if (!sanitized) return res.json({ results: [], query: q });

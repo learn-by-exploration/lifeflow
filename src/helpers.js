@@ -91,7 +91,7 @@ module.exports = function createHelpers(db) {
       // Check end conditions
       const nextDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       if (cfg.endDate && nextDate > cfg.endDate) return null;
-      if (cfg.endAfter && typeof cfg.count === 'number' && cfg.count >= cfg.endAfter) return null;
+      if (cfg.endAfter != null && typeof cfg.endAfter === 'number' && typeof cfg.count === 'number' && cfg.count >= cfg.endAfter) return null;
     } else {
       // Simple string recurrence (backward compatible)
       if (recurrence === 'daily') d.setDate(d.getDate() + 1);

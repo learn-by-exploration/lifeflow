@@ -83,6 +83,12 @@ const authLimiter = isTest ? (req, res, next) => next() : rateLimit({
 });
 
 app.use(express.json({ limit: '1mb' }));
+// Guard: ensure req.body is always an object for API POST/PUT/PATCH routes
+// (prevents 500 when non-JSON Content-Type sends unparsed body)
+app.use('/api', (req, res, next) => {
+  if (['POST', 'PUT', 'PATCH'].includes(req.method) && !req.body) req.body = {};
+  next();
+});
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // ─── CSRF Protection ───

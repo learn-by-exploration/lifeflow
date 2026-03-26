@@ -368,41 +368,36 @@ describe('HTTP Boundary & Edge Case Tests', () => {
   // ─── GROUP: Content-Type Abuse ───
 
   describe('Content-Type: text/plain with JSON string', () => {
-    it('POST /api/areas with Content-Type: text/plain → 500 (BUG: route crashes on undefined req.body)', async () => {
-      // Express json() only parses application/json bodies.
-      // With text/plain, req.body is undefined — route destructures it → unhandled TypeError → 500.
-      // DOCUMENTED BUG: routes should guard with `req.body || {}` before destructuring.
+    it('POST /api/areas with Content-Type: text/plain → 400 (FIXED: body guard ensures req.body={})', async () => {
+      // FIXED: server.js body guard middleware sets req.body={} for POST/PUT/PATCH
+      // when content-type is non-JSON. Route then returns 400 "Name required".
       const res = await agent()
         .post('/api/areas')
         .set('Content-Type', 'text/plain')
         .send('{"name":"test","color":"#FF0000"}');
-      // BUG: returns 500 instead of 400; documented here as a known defect
-      assert.equal(res.status, 500);
+      assert.equal(res.status, 400, 'FIXED: returns 400 (not 500) for non-JSON content-type');
     });
   });
 
   describe('No Content-Type with JSON-formatted body', () => {
-    it('POST /api/areas with no Content-Type → 500 (BUG: req.body undefined crashes route)', async () => {
-      // Without Content-Type, express.json() does not parse body → req.body = undefined.
-      // Route tries `const { name, icon, color } = req.body` → TypeError: Cannot destructure undefined.
-      // DOCUMENTED BUG: Express routes are missing a `req.body = req.body || {}` safety guard.
+    it('POST /api/areas with no Content-Type → 400 (FIXED: body guard prevents crash)', async () => {
+      // FIXED: body guard middleware ensures req.body={} even without content-type.
       const res = await agent()
         .post('/api/areas')
         .unset('Content-Type')
         .send('{"name":"test","color":"#FF0000"}');
-      assert.equal(res.status, 500);
+      assert.equal(res.status, 400, 'FIXED: returns 400 (not 500) for missing content-type');
     });
   });
 
   describe('Content-Type: application/xml', () => {
-    it('POST /api/areas with application/xml → 500 (BUG: req.body undefined crashes route)', async () => {
-      // express.json() ignores non-JSON content types → req.body undefined → destructure crash.
-      // DOCUMENTED BUG: same root cause as the text/plain case above.
+    it('POST /api/areas with application/xml → 400 (FIXED: body guard prevents crash)', async () => {
+      // FIXED: body guard middleware ensures req.body={} for non-JSON content types.
       const res = await agent()
         .post('/api/areas')
         .set('Content-Type', 'application/xml')
         .send('<name>test</name>');
-      assert.equal(res.status, 500);
+      assert.equal(res.status, 400, 'FIXED: returns 400 (not 500) for application/xml');
     });
   });
 
