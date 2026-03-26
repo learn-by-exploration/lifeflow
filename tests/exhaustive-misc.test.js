@@ -89,13 +89,12 @@ describe('Misc API – exhaustive edge-case coverage', () => {
       assert.equal(res.body.text, 'hello world');
     });
 
-    it('DELETE /api/tasks/:id/comments/:commentId - deleting nonexistent comment does not error', async () => {
+    it('DELETE /api/tasks/:id/comments/:commentId - returns 404 for nonexistent comment', async () => {
       const a = makeArea();
       const g = makeGoal(a.id);
       const t = makeTask(g.id);
       const res = await agent().delete(`/api/tasks/${t.id}/comments/999999`);
-      assert.equal(res.status, 200);
-      assert.equal(res.body.ok, true);
+      assert.equal(res.status, 404);
     });
 
     it('GET /api/tasks/:id/comments returns 400 for non-integer ID', async () => {

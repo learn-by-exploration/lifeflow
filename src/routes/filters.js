@@ -36,7 +36,7 @@ router.get('/api/filters/execute', (req, res) => {
   if (req.query.area_id) { whereParts.push('a.id=?'); params.push(Number(req.query.area_id)); }
   if (req.query.goal_id) { whereParts.push('g.id=?'); params.push(Number(req.query.goal_id)); }
   if (req.query.priority) { whereParts.push('t.priority=?'); params.push(Number(req.query.priority)); }
-  if (req.query.status) { whereParts.push('t.status=?'); params.push(req.query.status); }
+  if (req.query.status && ['todo','doing','done'].includes(req.query.status)) { whereParts.push('t.status=?'); params.push(req.query.status); }
   if (req.query.tag_id) { whereParts.push('EXISTS (SELECT 1 FROM task_tags tt WHERE tt.task_id=t.id AND tt.tag_id=?)'); params.push(Number(req.query.tag_id)); }
   if (req.query.due) {
     const due = req.query.due;

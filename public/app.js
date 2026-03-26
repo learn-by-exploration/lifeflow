@@ -717,6 +717,7 @@ async function renderAll(target){
 
 // ─── GLOBAL BOARD ───
 let gbFilters={area:'',priority:'',tag:''};
+const _debouncedBoard=debounce(()=>renderGlobalBoard(),200);
 async function renderGlobalBoard(target){
   const c=target||$('ct');
   c.innerHTML=skCards(3);
@@ -741,7 +742,6 @@ async function renderGlobalBoard(target){
   c.innerHTML=h;
   attachTE();
   attachGBD();
-  const _debouncedBoard=debounce(()=>renderGlobalBoard(),200);
   $('gb-area').addEventListener('change',e=>{gbFilters.area=e.target.value;_debouncedBoard()});
   $('gb-pri').addEventListener('change',e=>{gbFilters.priority=e.target.value;_debouncedBoard()});
   $('gb-tag').addEventListener('change',e=>{gbFilters.tag=e.target.value;_debouncedBoard()});
@@ -1495,8 +1495,13 @@ function renderSubtasks(){
   }));
   el.querySelectorAll('.stde').forEach(b=>b.addEventListener('click',async()=>{
     const sid=Number(b.dataset.id);const sub=dpSubtasks.find(s=>s.id===sid);
-    if(!confirm('Delete subtask'+(sub?` "${sub.title}"`:'')+'?'))return;
-    await api.del('/api/subtasks/'+sid);dpSubtasks=dpSubtasks.filter(s=>s.id!==sid);renderSubtasks();
+    if(!sub)return;
+    await api.del('/api/subtasks/'+sid);
+    dpSubtasks=dpSubtasks.filter(s=>s.id!==sid);renderSubtasks();
+    showToast(`Subtask deleted — "${sub.title}"`,async()=>{
+      const r=await api.post('/api/tasks/'+dpTask.id+'/subtasks',{title:sub.title,note:sub.note||''});
+      if(r&&r.id){dpSubtasks.push(r);renderSubtasks();}
+    });
   }));
   el.querySelectorAll('.stn').forEach(n=>n.addEventListener('blur',async()=>{
     const sid=Number(n.dataset.id);const note=n.textContent.trim();

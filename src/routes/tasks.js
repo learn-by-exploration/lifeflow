@@ -120,7 +120,7 @@ router.get('/api/tasks/search', (req, res) => {
   whereParts.push('t.user_id=?'); params.push(req.userId);
   if (req.query.area_id) { whereParts.push('a.id=?'); params.push(Number(req.query.area_id)); }
   if (req.query.goal_id) { whereParts.push('g.id=?'); params.push(Number(req.query.goal_id)); }
-  if (req.query.status) { whereParts.push('t.status=?'); params.push(req.query.status); }
+  if (req.query.status && ['todo','doing','done'].includes(req.query.status)) { whereParts.push('t.status=?'); params.push(req.query.status); }
   const whereClause = whereParts.length ? 'WHERE ' + whereParts.join(' AND ') : '';
   res.json(enrichTasks(db.prepare(`
     SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
@@ -397,7 +397,9 @@ router.delete('/api/tasks/:id/comments/:commentId', (req, res) => {
   const id = Number(req.params.id);
   const commentId = Number(req.params.commentId);
   if (!Number.isInteger(id) || !Number.isInteger(commentId)) return res.status(400).json({ error: 'Invalid ID' });
-  db.prepare('DELETE FROM task_comments WHERE id=? AND task_id=?').run(commentId, id);
+  const ex = db.prepare('SELECT c.id FROM task_comments c JOIN tasks t ON c.task_id=t.id WHERE c.id=? AND c.task_id=? AND t.user_id=?').get(commentId, id, req.userId);
+  if (!ex) return res.status(404).json({ error: 'Comment not found' });
+  db.prepare('DELETE FROM task_comments WHERE id=?').run(commentId);
   res.json({ ok: true });
 });
 router.put('/api/tasks/:id/comments/:commentId', (req, res) => {

@@ -74,7 +74,7 @@ module.exports = function(deps) {
     if (parent_id) {
       const pid = Number(parent_id);
       if (!Number.isInteger(pid)) return res.status(400).json({ error: 'Invalid parent_id' });
-      const parent = db.prepare('SELECT * FROM lists WHERE id=?').get(pid);
+      const parent = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(pid, req.userId);
       if (!parent) return res.status(400).json({ error: 'Parent list not found' });
       // Prevent nesting deeper than 1 level
       if (parent.parent_id) return res.status(400).json({ error: 'Cannot nest more than one level deep' });
@@ -108,15 +108,15 @@ module.exports = function(deps) {
       const pid = Number(newParentId);
       if (!Number.isInteger(pid)) return res.status(400).json({ error: 'Invalid parent_id' });
       if (pid === id) return res.status(400).json({ error: 'Cannot be own parent' });
-      const parent = db.prepare('SELECT * FROM lists WHERE id=?').get(pid);
+      const parent = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(pid, req.userId);
       if (!parent) return res.status(400).json({ error: 'Parent list not found' });
       if (parent.parent_id) return res.status(400).json({ error: 'Cannot nest more than one level deep' });
     }
-    db.prepare('UPDATE lists SET name=?,icon=?,color=?,area_id=?,parent_id=?,position=? WHERE id=?').run(
+    db.prepare('UPDATE lists SET name=?,icon=?,color=?,area_id=?,parent_id=?,position=? WHERE id=? AND user_id=?').run(
       name || ex.name, icon !== undefined ? icon : ex.icon, color || ex.color,
       area_id !== undefined ? (area_id ? Number(area_id) : null) : ex.area_id,
       newParentId !== undefined ? (newParentId ? Number(newParentId) : null) : ex.parent_id,
-      position !== undefined ? position : ex.position, id
+      position !== undefined ? position : ex.position, id, req.userId
     );
     res.json(db.prepare('SELECT * FROM lists WHERE id=?').get(id));
   });
@@ -127,8 +127,8 @@ module.exports = function(deps) {
     const ex = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(id, req.userId);
     if (!ex) return res.status(404).json({ error: 'List not found' });
     // Also delete child lists
-    db.prepare('DELETE FROM lists WHERE parent_id=?').run(id);
-    db.prepare('DELETE FROM lists WHERE id=?').run(id);
+    db.prepare('DELETE FROM lists WHERE parent_id=? AND user_id=?').run(id, req.userId);
+    db.prepare('DELETE FROM lists WHERE id=? AND user_id=?').run(id, req.userId);
     rebuildSearchIndex();
     res.json({ deleted: true });
   });
@@ -266,7 +266,7 @@ module.exports = function(deps) {
     if (!ex) return res.status(404).json({ error: 'List not found' });
     if (ex.share_token) return res.json({ token: ex.share_token, url: '/share/' + ex.share_token });
     const token = crypto.randomBytes(12).toString('hex');
-    db.prepare('UPDATE lists SET share_token=? WHERE id=?').run(token, id);
+    db.prepare('UPDATE lists SET share_token=? WHERE id=? AND user_id=?').run(token, id, req.userId);
     res.json({ token, url: '/share/' + token });
   });
 
