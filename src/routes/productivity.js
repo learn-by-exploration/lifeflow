@@ -3,13 +3,19 @@ module.exports = function(deps) {
   const { db, getNextPosition } = deps;
   const router = Router();
 
+const VALID_TRIGGER_TYPES = ['task_completed','task_created','task_overdue','task_updated'];
+const VALID_ACTION_TYPES  = ['add_tag','set_priority','move_to_goal','send_notification','add_to_myday','create_followup'];
+
 // ─── AUTOMATION RULES ENGINE ───
 router.get('/api/rules', (req, res) => {
   res.json(db.prepare('SELECT * FROM automation_rules WHERE user_id=? ORDER BY created_at DESC').all(req.userId));
 });
 router.post('/api/rules', (req, res) => {
   const { name, trigger_type, trigger_config, action_type, action_config } = req.body;
-  if (!name || !trigger_type || !action_type) return res.status(400).json({ error: 'name, trigger_type, action_type required' });
+  if (!name || !name.trim()) return res.status(400).json({ error: 'name required' });
+  if (name.trim().length > 100) return res.status(400).json({ error: 'name max 100 characters' });
+  if (!trigger_type || !VALID_TRIGGER_TYPES.includes(trigger_type)) return res.status(400).json({ error: 'invalid trigger_type' });
+  if (!action_type || !VALID_ACTION_TYPES.includes(action_type)) return res.status(400).json({ error: 'invalid action_type' });
   const r = db.prepare('INSERT INTO automation_rules (name, trigger_type, trigger_config, action_type, action_config, user_id) VALUES (?,?,?,?,?,?)').run(
     name.trim(), trigger_type, JSON.stringify(trigger_config || {}), action_type, JSON.stringify(action_config || {}), req.userId
   );
@@ -17,11 +23,16 @@ router.post('/api/rules', (req, res) => {
 });
 router.put('/api/rules/:id', (req, res) => {
   const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const ex = db.prepare('SELECT * FROM automation_rules WHERE id=? AND user_id=?').get(id, req.userId);
   if (!ex) return res.status(404).json({ error: 'Not found' });
   const { name, trigger_type, trigger_config, action_type, action_config, enabled } = req.body;
+  if (name !== undefined && (!name || !name.trim())) return res.status(400).json({ error: 'name cannot be empty' });
+  if (name !== undefined && name.trim().length > 100) return res.status(400).json({ error: 'name max 100 characters' });
+  if (trigger_type !== undefined && !VALID_TRIGGER_TYPES.includes(trigger_type)) return res.status(400).json({ error: 'invalid trigger_type' });
+  if (action_type !== undefined && !VALID_ACTION_TYPES.includes(action_type)) return res.status(400).json({ error: 'invalid action_type' });
   db.prepare('UPDATE automation_rules SET name=COALESCE(?,name), trigger_type=COALESCE(?,trigger_type), trigger_config=COALESCE(?,trigger_config), action_type=COALESCE(?,action_type), action_config=COALESCE(?,action_config), enabled=COALESCE(?,enabled) WHERE id=?').run(
-    name || null, trigger_type || null, trigger_config ? JSON.stringify(trigger_config) : null, action_type || null, action_config ? JSON.stringify(action_config) : null, enabled !== undefined ? (enabled ? 1 : 0) : null, id
+    name ? name.trim() : null, trigger_type || null, trigger_config ? JSON.stringify(trigger_config) : null, action_type || null, action_config ? JSON.stringify(action_config) : null, enabled !== undefined ? (enabled ? 1 : 0) : null, id
   );
   res.json(db.prepare('SELECT * FROM automation_rules WHERE id=?').get(id));
 });
@@ -46,13 +57,15 @@ router.put('/api/inbox/:id', (req, res) => {
   const ex = db.prepare('SELECT * FROM inbox WHERE id=? AND user_id=?').get(id, req.userId);
   if (!ex) return res.status(404).json({ error: 'Not found' });
   const { title, note, priority } = req.body;
+  if (priority !== undefined && (priority < 0 || priority > 3 || !Number.isInteger(Number(priority)))) return res.status(400).json({ error: 'priority must be 0-3' });
   db.prepare('UPDATE inbox SET title=COALESCE(?,title), note=COALESCE(?,note), priority=COALESCE(?,priority) WHERE id=? AND user_id=?').run(
-    title || null, note !== undefined ? note : null, priority !== undefined ? priority : null, id, req.userId
+    title || null, note !== undefined ? note : null, priority !== undefined ? Number(priority) : null, id, req.userId
   );
   res.json(db.prepare('SELECT * FROM inbox WHERE id=? AND user_id=?').get(id, req.userId));
 });
 router.delete('/api/inbox/:id', (req, res) => {
   const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   db.prepare('DELETE FROM inbox WHERE id=? AND user_id=?').run(id, req.userId);
   res.json({ ok: true });
 });
@@ -96,16 +109,20 @@ router.post('/api/notes', (req, res) => {
 });
 router.put('/api/notes/:id', (req, res) => {
   const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const ex = db.prepare('SELECT * FROM notes WHERE id=? AND user_id=?').get(id, req.userId);
   if (!ex) return res.status(404).json({ error: 'Not found' });
   const { title, content, goal_id } = req.body;
+  if (title !== undefined && !title.trim()) return res.status(400).json({ error: 'title cannot be empty' });
   db.prepare('UPDATE notes SET title=COALESCE(?,title), content=COALESCE(?,content), goal_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=?').run(
-    title || null, content !== undefined ? content : null, goal_id !== undefined ? goal_id : ex.goal_id, id, req.userId
+    title ? title.trim() : null, content !== undefined ? content : null, goal_id !== undefined ? goal_id : ex.goal_id, id, req.userId
   );
   res.json(db.prepare('SELECT * FROM notes WHERE id=? AND user_id=?').get(id, req.userId));
 });
 router.delete('/api/notes/:id', (req, res) => {
-  db.prepare('DELETE FROM notes WHERE id=? AND user_id=?').run(Number(req.params.id), req.userId);
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  db.prepare('DELETE FROM notes WHERE id=? AND user_id=?').run(id, req.userId);
   res.json({ ok: true });
 });
 

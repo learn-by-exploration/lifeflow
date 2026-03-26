@@ -18,6 +18,17 @@ router.get('/api/tasks/my-day', (req, res) => {
   `).all(req.userId)));
 });
 router.get('/api/tasks/all', (req, res) => {
+  if (req.query.limit !== undefined) {
+    const limit = Math.min(Math.max(1, Number(req.query.limit) || 50), 500);
+    const offset = Math.max(0, Number(req.query.offset) || 0);
+    const total = db.prepare('SELECT COUNT(*) as c FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id WHERE t.user_id=?').get(req.userId).c;
+    const items = enrichTasks(db.prepare(`
+      SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+      FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+      WHERE t.user_id=? ORDER BY t.status, t.priority DESC, t.due_date LIMIT ? OFFSET ?
+    `).all(req.userId, limit, offset));
+    return res.json({ items, total, hasMore: offset + limit < total, offset });
+  }
   res.json(enrichTasks(db.prepare(`
     SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
@@ -130,6 +141,16 @@ router.get('/api/tasks/overdue', (req, res) => {
 
 // Recurring tasks list (before :id to avoid param capture)
 router.get('/api/tasks/recurring', (req, res) => {
+  if (req.query.limit !== undefined) {
+    const limit = Math.min(Math.max(1, Number(req.query.limit) || 50), 500);
+    const offset = Math.max(0, Number(req.query.offset) || 0);
+    const total = db.prepare(`SELECT COUNT(DISTINCT t.id) as c FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id WHERE t.recurring IS NOT NULL AND t.status!='done' AND t.user_id=?`).get(req.userId).c;
+    const items = enrichTasks(db.prepare(`SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+      FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+      WHERE t.recurring IS NOT NULL AND t.status!='done' AND t.user_id=?
+      ORDER BY t.due_date LIMIT ? OFFSET ?`).all(req.userId, limit, offset));
+    return res.json({ items, total, hasMore: offset + limit < total, offset });
+  }
   const tasks = enrichTasks(db.prepare(`SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.recurring IS NOT NULL AND t.status!='done' AND t.user_id=?

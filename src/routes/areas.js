@@ -131,6 +131,18 @@ router.delete('/api/goals/:id', (req, res) => {
 
 // ─── All Goals (for quick capture) ───
 router.get('/api/goals', (req, res) => {
+  if (req.query.limit !== undefined) {
+    const limit = Math.min(Math.max(1, Number(req.query.limit) || 200), 500);
+    const offset = Math.max(0, Number(req.query.offset) || 0);
+    const total = db.prepare(`SELECT COUNT(*) as c FROM goals g WHERE g.status='active' AND g.user_id=?`).get(req.userId).c;
+    const items = db.prepare(`
+      SELECT g.*, a.name as area_name, a.icon as area_icon
+      FROM goals g JOIN life_areas a ON g.area_id=a.id
+      WHERE g.status='active' AND g.user_id=?
+      ORDER BY a.position, g.position LIMIT ? OFFSET ?
+    `).all(req.userId, limit, offset);
+    return res.json({ items, total, hasMore: offset + limit < total, offset });
+  }
   res.json(db.prepare(`
     SELECT g.*, a.name as area_name, a.icon as area_icon
     FROM goals g JOIN life_areas a ON g.area_id=a.id
