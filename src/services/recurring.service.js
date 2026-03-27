@@ -48,6 +48,12 @@ class RecurringService {
       const oldSubs = db.prepare('SELECT title, note, position FROM subtasks WHERE task_id=? ORDER BY position').all(task.id);
       const insSub = db.prepare('INSERT INTO subtasks (task_id, title, note, done, position) VALUES (?, ?, ?, 0, ?)');
       oldSubs.forEach(s => insSub.run(r.lastInsertRowid, s.title, s.note || '', s.position));
+      // Copy custom field values to new task
+      const oldCfv = db.prepare('SELECT field_id, value FROM task_custom_values WHERE task_id=?').all(task.id);
+      if (oldCfv.length) {
+        const insCfv = db.prepare('INSERT INTO task_custom_values (task_id, field_id, value) VALUES (?, ?, ?)');
+        oldCfv.forEach(v => insCfv.run(r.lastInsertRowid, v.field_id, v.value));
+      }
       return r.lastInsertRowid;
     });
     return spawnTx();

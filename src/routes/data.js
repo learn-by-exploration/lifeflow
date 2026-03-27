@@ -46,9 +46,42 @@ module.exports = function(deps) {
     const goals = db.prepare('SELECT * FROM goals WHERE user_id=? ORDER BY area_id, position').all(req.userId);
     const tasks = enrichTasks(db.prepare('SELECT * FROM tasks WHERE user_id=? ORDER BY goal_id, position').all(req.userId));
     const tags = db.prepare('SELECT * FROM tags WHERE user_id=? ORDER BY name').all(req.userId);
+    // Extended tables
+    const habits = db.prepare('SELECT * FROM habits WHERE user_id=? ORDER BY position').all(req.userId);
+    const habitIds = habits.map(h => h.id);
+    const habit_logs = habitIds.length
+      ? db.prepare(`SELECT * FROM habit_logs WHERE habit_id IN (${habitIds.map(() => '?').join(',')}) ORDER BY date`).all(...habitIds)
+      : [];
+    const focus_sessions = db.prepare('SELECT * FROM focus_sessions WHERE user_id=?').all(req.userId);
+    const taskIds = tasks.map(t => t.id);
+    const task_comments = taskIds.length
+      ? db.prepare(`SELECT * FROM task_comments WHERE task_id IN (${taskIds.map(() => '?').join(',')}) ORDER BY created_at`).all(...taskIds)
+      : [];
+    const task_deps = taskIds.length
+      ? db.prepare(`SELECT * FROM task_deps WHERE task_id IN (${taskIds.map(() => '?').join(',')})`)
+          .all(...taskIds)
+      : [];
+    const notes = db.prepare('SELECT * FROM notes WHERE user_id=? ORDER BY updated_at DESC').all(req.userId);
+    const lists = db.prepare('SELECT * FROM lists WHERE user_id=? ORDER BY position').all(req.userId);
+    const listIds = lists.map(l => l.id);
+    const list_items = listIds.length
+      ? db.prepare(`SELECT * FROM list_items WHERE list_id IN (${listIds.map(() => '?').join(',')}) ORDER BY position`).all(...listIds)
+      : [];
+    const custom_field_defs = db.prepare('SELECT * FROM custom_field_defs WHERE user_id=? ORDER BY position').all(req.userId);
+    const task_custom_values = taskIds.length
+      ? db.prepare(`SELECT * FROM task_custom_values WHERE task_id IN (${taskIds.map(() => '?').join(',')})`)
+          .all(...taskIds)
+      : [];
+    const automation_rules = db.prepare('SELECT * FROM automation_rules WHERE user_id=?').all(req.userId);
+    const saved_filters = db.prepare('SELECT * FROM saved_filters WHERE user_id=? ORDER BY position').all(req.userId);
     res.setHeader('Content-Disposition', 'attachment; filename=lifeflow-export.json');
     if (audit) audit.log(req.userId, 'data_export', 'export', null, req);
-    res.json({ exportDate: new Date().toISOString(), areas, goals, tasks, tags });
+    res.json({
+      exportDate: new Date().toISOString(), areas, goals, tasks, tags,
+      habits, habit_logs, focus_sessions, task_comments, task_deps,
+      notes, lists, list_items, custom_field_defs, task_custom_values,
+      automation_rules, saved_filters,
+    });
   });
 
   // ─── Import ───
@@ -64,6 +97,10 @@ module.exports = function(deps) {
     for (const t of tasks) { if (!t.title || !t.goal_id) return res.status(400).json({ error: 'Each task must have title and goal_id' }); }
     const importTx = db.transaction(() => {
       // Clear existing data in dependency order
+      db.prepare('DELETE FROM task_custom_values WHERE task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(req.userId);
+      db.prepare('DELETE FROM custom_field_defs WHERE user_id=?').run(req.userId);
+      db.prepare('DELETE FROM task_comments WHERE task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(req.userId);
+      db.prepare('DELETE FROM task_deps WHERE task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(req.userId);
       db.prepare('DELETE FROM focus_sessions WHERE user_id=?').run(req.userId);
       db.prepare('DELETE FROM task_tags WHERE task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(req.userId);
       db.prepare('DELETE FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(req.userId);
@@ -71,9 +108,16 @@ module.exports = function(deps) {
       db.prepare('DELETE FROM goals WHERE user_id=?').run(req.userId);
       db.prepare('DELETE FROM life_areas WHERE user_id=?').run(req.userId);
       db.prepare('DELETE FROM tags WHERE user_id=?').run(req.userId);
+      db.prepare('DELETE FROM habit_logs WHERE habit_id IN (SELECT id FROM habits WHERE user_id=?)').run(req.userId);
+      db.prepare('DELETE FROM habits WHERE user_id=?').run(req.userId);
+      db.prepare('DELETE FROM notes WHERE user_id=?').run(req.userId);
+      db.prepare('DELETE FROM list_items WHERE list_id IN (SELECT id FROM lists WHERE user_id=?)').run(req.userId);
+      db.prepare('DELETE FROM lists WHERE user_id=?').run(req.userId);
+      db.prepare('DELETE FROM automation_rules WHERE user_id=?').run(req.userId);
+      db.prepare('DELETE FROM saved_filters WHERE user_id=?').run(req.userId);
 
       // Map old IDs to new IDs
-      const areaMap = {}, goalMap = {}, tagMap = {};
+      const areaMap = {}, goalMap = {}, tagMap = {}, taskMap = {}, habitMap = {}, listMap = {}, fieldMap = {};
 
       // Import tags
       if (Array.isArray(tags)) {
@@ -109,6 +153,7 @@ module.exports = function(deps) {
         if (!newGoalId) return; // skip orphan tasks
         const r = insTask.run(newGoalId, t.title, t.notes || t.note || '', t.status || 'todo', t.priority || 0, t.due_date || null, t.my_day ? 1 : 0, t.position || 0, t.recurring || null, t.completed_at || null, req.userId);
         const newTaskId = r.lastInsertRowid;
+        taskMap[t.id] = newTaskId;
         // Subtasks
         if (Array.isArray(t.subtasks)) {
           t.subtasks.forEach(s => insSubtask.run(newTaskId, s.title, s.done ? 1 : 0, s.position || 0));
@@ -121,6 +166,109 @@ module.exports = function(deps) {
           });
         }
       });
+
+      // Import extended tables (all optional for backward compat)
+
+      // Habits + habit_logs
+      if (Array.isArray(req.body.habits)) {
+        const insHabit = db.prepare('INSERT INTO habits (name, icon, color, frequency, target, position, area_id, user_id) VALUES (?,?,?,?,?,?,?,?)');
+        req.body.habits.forEach(h => {
+          const r = insHabit.run(h.name, h.icon || '✅', h.color || '#22C55E', h.frequency || 'daily', h.target || 1, h.position || 0, h.area_id ? (areaMap[h.area_id] || null) : null, req.userId);
+          habitMap[h.id] = r.lastInsertRowid;
+        });
+      }
+      if (Array.isArray(req.body.habit_logs)) {
+        const insLog = db.prepare('INSERT OR REPLACE INTO habit_logs (habit_id, date, count) VALUES (?,?,?)');
+        req.body.habit_logs.forEach(l => {
+          const newHabitId = habitMap[l.habit_id];
+          if (newHabitId) insLog.run(newHabitId, l.date, l.count || 1);
+        });
+      }
+
+      // Focus sessions
+      if (Array.isArray(req.body.focus_sessions)) {
+        const insFocus = db.prepare('INSERT INTO focus_sessions (task_id, started_at, duration_sec, type, user_id) VALUES (?,?,?,?,?)');
+        req.body.focus_sessions.forEach(f => {
+          const newTaskId = taskMap[f.task_id];
+          if (newTaskId) insFocus.run(newTaskId, f.started_at, f.duration_sec || 0, f.type || 'pomodoro', req.userId);
+        });
+      }
+
+      // Task comments
+      if (Array.isArray(req.body.task_comments)) {
+        const insComment = db.prepare('INSERT INTO task_comments (task_id, text, created_at) VALUES (?,?,?)');
+        req.body.task_comments.forEach(c => {
+          const newTaskId = taskMap[c.task_id];
+          if (newTaskId) insComment.run(newTaskId, c.text, c.created_at || new Date().toISOString());
+        });
+      }
+
+      // Task dependencies
+      if (Array.isArray(req.body.task_deps)) {
+        const insDep = db.prepare('INSERT OR IGNORE INTO task_deps (task_id, blocked_by_id) VALUES (?,?)');
+        req.body.task_deps.forEach(d => {
+          const newTaskId = taskMap[d.task_id];
+          const newBlockedById = taskMap[d.blocked_by_id];
+          if (newTaskId && newBlockedById) insDep.run(newTaskId, newBlockedById);
+        });
+      }
+
+      // Notes
+      if (Array.isArray(req.body.notes)) {
+        const insNote = db.prepare('INSERT INTO notes (title, content, goal_id, user_id, created_at, updated_at) VALUES (?,?,?,?,?,?)');
+        req.body.notes.forEach(n => {
+          insNote.run(n.title, n.content || '', n.goal_id ? (goalMap[n.goal_id] || null) : null, req.userId, n.created_at || new Date().toISOString(), n.updated_at || new Date().toISOString());
+        });
+      }
+
+      // Lists + list_items
+      if (Array.isArray(req.body.lists)) {
+        const insList = db.prepare('INSERT INTO lists (name, type, icon, color, position, user_id) VALUES (?,?,?,?,?,?)');
+        req.body.lists.forEach(l => {
+          const r = insList.run(l.name, l.type || 'checklist', l.icon || '📋', l.color || '#2563EB', l.position || 0, req.userId);
+          listMap[l.id] = r.lastInsertRowid;
+        });
+      }
+      if (Array.isArray(req.body.list_items)) {
+        const insItem = db.prepare('INSERT INTO list_items (list_id, title, checked, category, quantity, note, position) VALUES (?,?,?,?,?,?,?)');
+        req.body.list_items.forEach(i => {
+          const newListId = listMap[i.list_id];
+          if (newListId) insItem.run(newListId, i.title, i.checked || 0, i.category || null, i.quantity || null, i.note || '', i.position || 0);
+        });
+      }
+
+      // Custom field definitions + values
+      if (Array.isArray(req.body.custom_field_defs)) {
+        const insField = db.prepare('INSERT INTO custom_field_defs (name, field_type, options, position, required, show_in_card, user_id) VALUES (?,?,?,?,?,?,?)');
+        req.body.custom_field_defs.forEach(f => {
+          const r = insField.run(f.name, f.field_type, f.options || null, f.position || 0, f.required || 0, f.show_in_card || 0, req.userId);
+          fieldMap[f.id] = r.lastInsertRowid;
+        });
+      }
+      if (Array.isArray(req.body.task_custom_values)) {
+        const insVal = db.prepare('INSERT OR IGNORE INTO task_custom_values (task_id, field_id, value) VALUES (?,?,?)');
+        req.body.task_custom_values.forEach(v => {
+          const newTaskId = taskMap[v.task_id];
+          const newFieldId = fieldMap[v.field_id];
+          if (newTaskId && newFieldId) insVal.run(newTaskId, newFieldId, v.value);
+        });
+      }
+
+      // Automation rules
+      if (Array.isArray(req.body.automation_rules)) {
+        const insRule = db.prepare('INSERT INTO automation_rules (name, trigger_type, trigger_config, action_type, action_config, enabled, user_id) VALUES (?,?,?,?,?,?,?)');
+        req.body.automation_rules.forEach(r => {
+          insRule.run(r.name, r.trigger_type, r.trigger_config || '{}', r.action_type, r.action_config || '{}', r.enabled !== undefined ? r.enabled : 1, req.userId);
+        });
+      }
+
+      // Saved filters
+      if (Array.isArray(req.body.saved_filters)) {
+        const insFilter = db.prepare('INSERT INTO saved_filters (name, icon, color, filters, position, user_id) VALUES (?,?,?,?,?,?)');
+        req.body.saved_filters.forEach(f => {
+          insFilter.run(f.name, f.icon || '🔍', f.color || '#2563EB', f.filters || '{}', f.position || 0, req.userId);
+        });
+      }
     });
     try {
       importTx();

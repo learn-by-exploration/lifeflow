@@ -101,13 +101,9 @@ describe('Authentication & IDOR Security Tests', () => {
   // ── Scenario 1: FTS Global Search — Cross-User Data Leak ─────────────────
   describe('Scenario 1: FTS global search cross-user data leak — CRITICAL', () => {
     /**
-     * BUG: rebuildSearchIndex() inserts rows WITHOUT a user_id column.
-     * The /api/search (FTS5) endpoint queries search_index with no WHERE
-     * user_id filter, so any authenticated user can retrieve another user's
-     * task titles, notes, goal titles, list items, comments, etc.
-     *
-     * [FAIL-EXPECTED] — the assertion below documents the SECURE behaviour.
-     * If this test fails, the cross-user data leak is confirmed.
+     * FIXED: rebuildSearchIndex() now inserts rows WITH user_id column.
+     * The /api/search (FTS5) endpoint filters by user_id, so users
+     * can only find their own data.
      */
     it('User2 should NOT find User1 task titles via global FTS search', async () => {
       cleanDb();
@@ -161,8 +157,6 @@ describe('Authentication & IDOR Security Tests', () => {
       const results = Array.isArray(body.results) ? body.results : body;
 
       // SECURE behaviour: User2 should receive zero results for User1's canary.
-      // [FAIL-EXPECTED] — This will FAIL if the FTS search_index has no user_id
-      // scoping, confirming the cross-user data leak vulnerability.
       const leaked = results.filter(
         (r) =>
           (r.title && r.title.includes('xqz-secret-canary')) ||

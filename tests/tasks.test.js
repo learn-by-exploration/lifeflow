@@ -374,6 +374,47 @@ describe('Tasks API', () => {
       ]);
     });
 
+    it('copies custom field values to spawned recurring task', async () => {
+      const { db } = setup();
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const task = makeTask(goal.id, {
+        title: 'With custom fields',
+        recurring: 'weekly',
+        due_date: '2025-07-01'
+      });
+      // Create custom field def and set value on task
+      db.prepare('INSERT INTO custom_field_defs (user_id, name, field_type) VALUES (1,?,?)').run('Client', 'text');
+      const fieldId = db.prepare('SELECT id FROM custom_field_defs WHERE name=?').get('Client').id;
+      db.prepare('INSERT INTO task_custom_values (task_id, field_id, value) VALUES (?,?,?)').run(task.id, fieldId, 'Acme Corp');
+
+      await agent().put(`/api/tasks/${task.id}`).send({ status: 'done' }).expect(200);
+
+      const tasks = await agent().get(`/api/goals/${goal.id}/tasks`).expect(200);
+      const spawned = tasks.body.find(t => t.id !== task.id);
+      assert.ok(spawned, 'Spawned task should exist');
+      assert.ok(spawned.custom_fields, 'Spawned task should have custom_fields');
+      const cf = spawned.custom_fields.find(f => f.name === 'Client');
+      assert.ok(cf, 'Client custom field should be present');
+      assert.equal(cf.value, 'Acme Corp');
+    });
+
+    it('spawns recurring task with no custom fields without error', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const task = makeTask(goal.id, {
+        title: 'No custom fields recurring',
+        recurring: 'daily',
+        due_date: '2025-07-01'
+      });
+
+      await agent().put(`/api/tasks/${task.id}`).send({ status: 'done' }).expect(200);
+
+      const tasks = await agent().get(`/api/goals/${goal.id}/tasks`).expect(200);
+      const spawned = tasks.body.find(t => t.id !== task.id);
+      assert.ok(spawned, 'Spawned task should exist');
+    });
+
     it('updates my_day flag', async () => {
       const area = makeArea();
       const goal = makeGoal(area.id);
