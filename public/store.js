@@ -42,6 +42,17 @@ const Store=(()=>{
   function getView(){return get('currentView')||'myday'}
   function setView(v){set('currentView',v);emit('view:changed',v)}
 
+  // Application state helpers
+  function setAreas(a){set('areas',a);emit('areas:changed',a)}
+  function setGoals(g){set('goals',g);emit('goals:changed',g)}
+  function setTasks(t){set('tasks',t);emit('tasks:changed',t)}
+  function setTags(t){set('tags',t);emit('tags:changed',t)}
+  function updateTask(id,patch){
+    const tasks=get('tasks')||[];
+    const idx=tasks.findIndex(t=>t.id===id);
+    if(idx>=0){Object.assign(tasks[idx],patch);set('tasks',[...tasks]);emit('task:updated',{id,patch})}
+  }
+
   // ─── Offline Mutation Queue ───
   // Restore queue from localStorage on init
   try {
@@ -79,7 +90,7 @@ const Store=(()=>{
   }
   function clearQueue(){_mutationQueue.length=0;_persistQueue();emit('queue:changed',{size:0})}
 
-  return{get,set,getAll,on,off,emit,getSettings,getSetting,setSettings,getView,setView,queueMutation,getQueueSize,getQueue,syncQueue,clearQueue};
+  return{get,set,getAll,on,off,emit,getSettings,getSetting,setSettings,getView,setView,setAreas,setGoals,setTasks,setTags,updateTask,queueMutation,getQueueSize,getQueue,syncQueue,clearQueue};
 })();
 
 if(typeof window!=='undefined')window.Store=Store;

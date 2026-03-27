@@ -378,6 +378,17 @@ function initDatabase(dbDir) {
     try { db.exec(`CREATE INDEX idx_${tbl}_user ON ${tbl}(user_id)`); } catch(e) { /* already exists */ }
   }
 
+  // ─── Daily Reviews table ───
+  db.exec(`CREATE TABLE IF NOT EXISTS daily_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL DEFAULT 1,
+    date TEXT NOT NULL,
+    note TEXT DEFAULT '',
+    completed_count INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, date)
+  )`);
+
   // ─── Multi-user assignment column ───
   try { db.exec('ALTER TABLE tasks ADD COLUMN assigned_to_user_id INTEGER REFERENCES users(id)'); } catch(e) { /* already exists */ }
 

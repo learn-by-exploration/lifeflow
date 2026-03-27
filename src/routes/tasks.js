@@ -165,6 +165,30 @@ router.get('/api/tasks/search', (req, res) => {
   `).all(...params)));
 });
 
+// ─── Suggested tasks (before :id to avoid param capture) ───
+router.get('/api/tasks/suggested', (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const tasks = enrichTasks(db.prepare(`
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.status != 'done' AND t.my_day = 0 AND (t.due_date IS NULL OR t.due_date != ?) AND t.user_id=?
+  `).all(today, req.userId));
+  // Score each task
+  const scored = tasks.map(t => {
+    let score = 0;
+    if (t.due_date && t.due_date < today) score += 50; // overdue
+    if (t.due_date) {
+      const days = Math.round((new Date(t.due_date) - new Date(today)) / 86400000);
+      if (days >= 0 && days <= 3) score += 30; // due within 3 days
+    }
+    if (t.priority >= 2) score += 20; // high priority
+    if (t.estimated_minutes && t.estimated_minutes <= 15) score += 5; // quick win
+    return { ...t, _score: score };
+  });
+  scored.sort((a, b) => b._score - a._score);
+  res.json(scored.slice(0, 5).map(({ _score, ...t }) => t));
+});
+
 // ─── Overdue (before :id to avoid param capture) ───
 router.get('/api/tasks/overdue', (req, res) => {
   res.json(enrichTasks(db.prepare(`
@@ -304,6 +328,57 @@ router.put('/api/tasks/bulk', (req, res) => {
   });
   const results = bulkTx();
   res.json({ updated: results.length, ids: results });
+});
+
+// ─── BATCH OPERATIONS (PATCH — flexible updates + multi-tag) ───
+router.patch('/api/tasks/batch', (req, res) => {
+  const { ids, updates, add_tags } = req.body;
+  if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
+  if (!updates && !add_tags) return res.status(400).json({ error: 'updates or add_tags required' });
+  // Validate all IDs belong to user
+  const selectTask = db.prepare('SELECT id FROM tasks WHERE id=? AND user_id=?');
+  for (const rawId of ids) {
+    const id = Number(rawId);
+    if (!Number.isInteger(id) || !selectTask.get(id, req.userId)) {
+      return res.status(400).json({ error: 'Task ' + rawId + ' not found or not owned by you' });
+    }
+  }
+  const batchTx = db.transaction(() => {
+    let count = 0;
+    for (const rawId of ids) {
+      const id = Number(rawId);
+      if (updates && typeof updates === 'object') {
+        const sets = [], vals = [];
+        if (updates.priority !== undefined) { sets.push('priority=?'); vals.push(Number(updates.priority)); }
+        if (updates.due_date !== undefined) { sets.push('due_date=?'); vals.push(updates.due_date || null); }
+        if (updates.my_day !== undefined) { sets.push('my_day=?'); vals.push(updates.my_day ? 1 : 0); }
+        if (updates.status !== undefined) {
+          sets.push('status=?'); vals.push(updates.status);
+          if (updates.status === 'done') { sets.push("completed_at=datetime('now')"); }
+        }
+        if (updates.goal_id !== undefined) {
+          if (!verifyGoalOwnership(Number(updates.goal_id), req.userId)) continue;
+          sets.push('goal_id=?'); vals.push(updates.goal_id);
+        }
+        if (sets.length) {
+          vals.push(id, req.userId);
+          db.prepare(`UPDATE tasks SET ${sets.join(',')} WHERE id=? AND user_id=?`).run(...vals);
+        }
+      }
+      if (Array.isArray(add_tags)) {
+        for (const tagId of add_tags) {
+          const tid = Number(tagId);
+          if (db.prepare('SELECT id FROM tags WHERE id=? AND user_id=?').get(tid, req.userId)) {
+            db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?,?)').run(id, tid);
+          }
+        }
+      }
+      count++;
+    }
+    return count;
+  });
+  const updated = batchTx();
+  res.json({ updated });
 });
 
 router.put('/api/tasks/:id', (req, res) => {

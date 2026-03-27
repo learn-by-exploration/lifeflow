@@ -12,6 +12,8 @@ const { createRequirePassword } = require('./middleware/auth');
 const errorHandler = require('./middleware/errors');
 const createCsrfMiddleware = require('./middleware/csrf');
 const createAuditLogger = require('./services/audit');
+const createRequestLogger = require('./middleware/request-logger');
+const createScheduler = require('./scheduler');
 
 const app = express();
 const PORT = config.port;
@@ -112,6 +114,11 @@ if (!config.isTest) {
   app.use('/api', csrfProtection);
 }
 
+// ─── Request Logging ───
+if (!config.isTest) {
+  app.use(createRequestLogger(logger));
+}
+
 // ─── Apply auth middleware to all /api/* routes ───
 app.use('/api', (req, res, next) => {
   // Auth endpoints use optionalAuth (sets req.userId if session exists, but doesn't require it)
@@ -200,12 +207,18 @@ const logger = require('./logger');
 if (require.main === module) {
   const server = app.listen(PORT, () => logger.info({ port: PORT, version: config.version }, 'LifeFlow started'));
 
+  // ─── Background Scheduler ───
+  const scheduler = createScheduler(db, logger);
+  scheduler.registerBuiltinJobs();
+  scheduler.start();
+
   // ─── Graceful shutdown ───
   let shuttingDown = false;
   function shutdown(signal) {
     if (shuttingDown) return;
     shuttingDown = true;
     logger.info({ signal }, 'Shutdown signal received, draining connections...');
+    scheduler.stop();
     server.close(() => {
       logger.info('HTTP server closed');
       try { db.close(); } catch {}

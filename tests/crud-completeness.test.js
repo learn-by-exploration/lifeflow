@@ -109,3 +109,61 @@ describe('DELETE /api/reviews/:id', () => {
     await agent().delete('/api/reviews/9999').expect(404);
   });
 });
+
+// ─── Daily Micro-Review API ───
+
+describe('POST /api/reviews/daily', () => {
+  it('creates a daily review entry', async () => {
+    const area = makeArea();
+    const goal = makeGoal(area.id);
+    const t = makeTask(goal.id, { status: 'done' });
+    const res = await agent().post('/api/reviews/daily').send({
+      date: '2026-03-27',
+      note: 'Good productive day'
+    }).expect(201);
+    assert.equal(res.body.date, '2026-03-27');
+    assert.equal(res.body.note, 'Good productive day');
+    assert.ok(res.body.id);
+  });
+
+  it('upserts on duplicate date', async () => {
+    await agent().post('/api/reviews/daily').send({
+      date: '2026-03-27', note: 'First draft'
+    }).expect(201);
+    const res = await agent().post('/api/reviews/daily').send({
+      date: '2026-03-27', note: 'Updated reflection'
+    }).expect(200);
+    assert.equal(res.body.note, 'Updated reflection');
+    // Only one review for this date
+    const get = await agent().get('/api/reviews/daily/2026-03-27').expect(200);
+    assert.equal(get.body.note, 'Updated reflection');
+  });
+});
+
+describe('GET /api/reviews/daily/:date', () => {
+  it('returns the review for a given date', async () => {
+    await agent().post('/api/reviews/daily').send({
+      date: '2026-03-27', note: 'Evening reflections'
+    }).expect(201);
+    const res = await agent().get('/api/reviews/daily/2026-03-27').expect(200);
+    assert.equal(res.body.note, 'Evening reflections');
+    assert.equal(res.body.date, '2026-03-27');
+  });
+
+  it('includes completed_count for the date', async () => {
+    const area = makeArea();
+    const goal = makeGoal(area.id);
+    const t1 = makeTask(goal.id);
+    const t2 = makeTask(goal.id, { title: 'Task 2' });
+    makeTask(goal.id, { title: 'Task 3' });
+    // Complete two tasks via API (sets completed_at to today)
+    await agent().put(`/api/tasks/${t1.id}`).send({ status: 'done' }).expect(200);
+    await agent().put(`/api/tasks/${t2.id}`).send({ status: 'done' }).expect(200);
+    const today = new Date().toISOString().split('T')[0];
+    await agent().post('/api/reviews/daily').send({
+      date: today, note: 'Busy day'
+    }).expect(201);
+    const res = await agent().get(`/api/reviews/daily/${today}`).expect(200);
+    assert.equal(res.body.completed_count, 2);
+  });
+});

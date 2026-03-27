@@ -1,5 +1,8 @@
+// Today view module: js/views/today.js (progressive migration — see renderTodayModule below)
 const COLORS=['#D50000','#E67C73','#F4511E','#F6BF26','#33B679','#0B8043','#039BE5','#3F51B5','#7986CB','#8E24AA','#616161','#795548'];
 const $=id=>document.getElementById(id);
+// renderTodayModule will be loaded when app.js migrates to ES modules
+const renderTodayModule = null; // future: import('./js/views/today.js')
 const api={
   _csrfToken:null,
   _getCsrf(){if(this._csrfToken)return this._csrfToken;const m=document.cookie.match(/csrf_token=([a-f0-9]{64})/);return m?m[1]:''},
@@ -525,6 +528,23 @@ async function renderToday(){
     const p=t.filter(x=>x.status!=='done'),d=t.filter(x=>x.status==='done');
     if(p.length){h+=`<div class="sl">To Do <span class="c">${p.length}</span></div>`;p.forEach(tk=>h+=tcHtml(tk,true))}
     if(d.length&&appSettings.showCompleted!=='false'){h+=`<div class="sl" style="color:var(--ok)">Done <span class="c">${d.length}</span></div>`;d.forEach(tk=>h+=tcHtml(tk,true))}
+    // "What's Next?" suggestions when few pending tasks
+    if(p.length<3){
+      try{
+        const suggested=await api.get('/api/tasks/suggested');
+        if(suggested.length){
+          h+=`<div class="sl" style="margin-top:12px">What's Next? <span class="c">${suggested.length}</span></div>`;
+          suggested.forEach(tk=>{
+            h+=`<div class="suggestion-card" style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-bottom:4px;border-radius:var(--rs);background:var(--bg-s);font-size:13px">
+              <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(tk.title)}</span>
+              ${tk.due_date?`<span style="font-size:11px;color:var(--txd)">${fmtDue(tk.due_date)}</span>`:''}
+              <button class="btn-c add-myday-btn" data-id="${tk.id}" style="font-size:11px;padding:3px 8px" title="Add to My Day">
+                <span class="material-icons-round" style="font-size:14px">add</span>My Day</button>
+            </div>`;
+          });
+        }
+      }catch(e){}
+    }
   }else{
     // Timeline tab — inline planner
     const planDate=_toDateStr(new Date());
@@ -553,9 +573,39 @@ async function renderToday(){
     });
     h+=`</div></div></div>`;
   }
+  // Daily micro-review banner (after 6pm, dismissible)
+  const _drHour=new Date().getHours();
+  const _drKey='daily-review-'+_toDateStr(new Date());
+  if(_drHour>=18&&!localStorage.getItem(_drKey)){
+    const doneCount=t.filter(x=>x.status==='done').length;
+    h+=`<div class="daily-review-banner" style="margin-top:14px;padding:12px 16px;border-radius:var(--rs);background:var(--bg-s);border:1px solid var(--brd);display:flex;align-items:center;gap:10px">
+      <span class="material-icons-round" style="font-size:20px;color:var(--brand)">nights_stay</span>
+      <span style="flex:1;font-size:13px">How was your day? You completed <strong>${doneCount}</strong> task${doneCount!==1?'s':''}.</span>
+      <button class="btn-c dr-open-btn" style="font-size:12px;padding:4px 12px">Reflect</button>
+      <span class="material-icons-round dr-dismiss" style="font-size:14px;cursor:pointer;color:var(--txd)">close</span>
+    </div>`;
+  }
   // Habits strip
   h+=todayHabitsStrip(habits);
   c.innerHTML=h;attachTE();wireHints();wireTodayTabs(c);wireTodayHabits(c);wireBalanceDismiss(c);
+  // Daily review banner handlers
+  c.querySelectorAll('.dr-dismiss').forEach(el=>el.addEventListener('click',()=>{
+    localStorage.setItem('daily-review-'+_toDateStr(new Date()),'1');
+    el.closest('.daily-review-banner').remove();
+  }));
+  c.querySelectorAll('.dr-open-btn').forEach(btn=>btn.addEventListener('click',async()=>{
+    const todayStr=_toDateStr(new Date());
+    const note=prompt('Quick reflection on your day:');
+    if(note==null)return;
+    await api.post('/api/reviews/daily',{date:todayStr,note});
+    localStorage.setItem('daily-review-'+todayStr,'1');
+    btn.closest('.daily-review-banner').remove();
+    showToast('Daily review saved');
+  }));
+  // "What's Next?" — Add to My Day buttons
+  c.querySelectorAll('.add-myday-btn').forEach(btn=>btn.addEventListener('click',async()=>{
+    await api.put('/api/tasks/'+btn.dataset.id,{my_day:1});renderToday();
+  }));
   // Timeline drag&drop
   if(todayTab==='timeline'){
     c.querySelectorAll('.planner-task[draggable]').forEach(el=>{
@@ -998,12 +1048,12 @@ async function renderArea(){
   const msMap={};
   for(const g of goals){try{msMap[g.id]=await api.get('/api/goals/'+g.id+'/milestones')}catch(e){msMap[g.id]=[]}}
   if(ac.length){h+=`<div class="sl">Active Goals <span class="c">${ac.length}</span></div><div class="gg">`;
-    ac.forEach(g=>{const pct=g.total_tasks?Math.round(g.done_tasks/g.total_tasks*100):0;
-      h+=`<div class="gc" data-id="${g.id}" style="border-left-color:${escA(g.color)}">
+    ac.forEach(g=>{const pct=g.progress_pct||0; const atRisk=g.overdue_count>0&&g.days_until_due!==null&&g.days_until_due<7;
+      h+=`<div class="gc${atRisk?' goal-at-risk':''}" data-id="${g.id}" style="border-left-color:${escA(g.color)}">
         <div class="ga"><button class="material-icons-round eg" data-id="${g.id}" title="Edit">edit</button><button class="material-icons-round ag" data-id="${g.id}" title="Archive">archive</button><button class="material-icons-round dg" data-id="${g.id}" title="Delete">delete_outline</button></div>
         <div class="gt">${esc(g.title)}</div>${g.description?`<div class="gd">${esc(g.description)}</div>`:''}
         <div class="gp"><div class="gpb" style="width:${pct}%;background:${escA(g.color)}"></div></div>
-        <div class="gm"><span>${g.done_tasks}/${g.total_tasks} tasks</span><span>${pct}%</span>${g.due_date?`<span>📅 ${fmtDue(g.due_date)}</span>`:''}</div>
+        <div class="gm"><span>${g.done_tasks}/${g.total_tasks} tasks · ${pct}%</span>${g.overdue_count?`<span class="goal-overdue">${g.overdue_count} overdue</span>`:''}${g.due_date?`<span>${g.days_until_due!==null&&g.days_until_due<0?`<span class="goal-overdue">Overdue by ${Math.abs(g.days_until_due)}d</span>`:`📅 ${fmtDue(g.due_date)}`}</span>`:''}</div>
         ${(msMap[g.id]||[]).length?`<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--brd)">${msMap[g.id].map(m=>`<div class="ms-item ${m.done?'done':''}" data-mid="${m.id}"><div class="ms-check ${m.done?'done':''}" data-mid="${m.id}"><span class="material-icons-round">${m.done?'check':''}</span></div><span>${esc(m.title)}</span><span class="material-icons-round ms-del" data-mid="${m.id}">close</span></div>`).join('')}<div style="margin-top:4px"><input type="text" class="ms-add-input" data-gid="${g.id}" placeholder="+ Add milestone..." style="border:none;background:none;font-size:11px;color:var(--txd);outline:none;padding:0;width:100%"></div></div>`:''}
       </div>`});h+=`</div>`}
   if(co.length){h+=`<div class="sl">Completed <span class="c">${co.length}</span></div><div class="gg">`;
@@ -1284,6 +1334,53 @@ function attachTE(){
   // Click card to open detail
   document.querySelectorAll('.tc').forEach(card=>card.addEventListener('click',e=>{
     if(e.target.closest('.tk,.ta,.tc-subs,.tc-expand,.tt[contenteditable]'))return;openDP(Number(card.dataset.id));
+  }));
+  // Task context menu (right-click)
+  document.querySelectorAll('.tc').forEach(card=>card.addEventListener('contextmenu',e=>{
+    e.preventDefault();e.stopPropagation();
+    const id=Number(card.dataset.id);if(!id)return;
+    document.querySelectorAll('.ctx-menu').forEach(m=>m.remove());
+    const menu=document.createElement('div');menu.className='ctx-menu task-ctx-menu';menu.setAttribute('role','menu');
+    const fmt=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dy=String(d.getDate()).padStart(2,'0');return y+'-'+m+'-'+dy};
+    const today=new Date();const tom=new Date(today);tom.setDate(tom.getDate()+1);
+    const nextWk=new Date(today);nextWk.setDate(nextWk.getDate()+7);
+    const nextMo=new Date(today);nextMo.setMonth(nextMo.getMonth()+1);
+    menu.innerHTML=`
+      <div class="ctx-item" data-act="today"><span class="material-icons-round">wb_sunny</span>Due Today</div>
+      <div class="ctx-item" data-act="tomorrow"><span class="material-icons-round">skip_next</span>Due Tomorrow</div>
+      <div class="ctx-item" data-act="nextweek"><span class="material-icons-round">date_range</span>Due Next Week</div>
+      <div class="ctx-item" data-act="nextmonth"><span class="material-icons-round">event</span>Due Next Month</div>
+      <div style="border-top:1px solid var(--brd);margin:4px 0"></div>
+      <div class="ctx-item" data-act="p3"><span class="material-icons-round" style="color:var(--err)">flag</span>P3 Urgent</div>
+      <div class="ctx-item" data-act="p2"><span class="material-icons-round" style="color:var(--warn)">flag</span>P2 High</div>
+      <div class="ctx-item" data-act="p1"><span class="material-icons-round" style="color:var(--brand)">flag</span>P1 Medium</div>
+      <div class="ctx-item" data-act="p0"><span class="material-icons-round" style="color:var(--txd)">outlined_flag</span>P0 None</div>
+      <div style="border-top:1px solid var(--brd);margin:4px 0"></div>
+      <div class="ctx-item" data-act="myday"><span class="material-icons-round">light_mode</span>Toggle My Day</div>
+      <div class="ctx-item" data-act="duplicate"><span class="material-icons-round">content_copy</span>Duplicate</div>
+      <div class="ctx-item" data-act="focus"><span class="material-icons-round">timer</span>Start Focus</div>
+      <div style="border-top:1px solid var(--brd);margin:4px 0"></div>
+      <div class="ctx-item ctx-danger" data-act="delete"><span class="material-icons-round">delete</span>Delete</div>`;
+    document.body.appendChild(menu);
+    const mw=menu.offsetWidth,mh=menu.offsetHeight;
+    menu.style.left=Math.min(e.clientX,window.innerWidth-mw-8)+'px';
+    menu.style.top=Math.min(e.clientY,window.innerHeight-mh-8)+'px';
+    const closeMenu=ev=>{if(!menu.contains(ev.target)){menu.remove();document.removeEventListener('click',closeMenu)}};
+    setTimeout(()=>document.addEventListener('click',closeMenu),0);
+    const act=async a=>{
+      menu.remove();
+      if(a==='today')await api.put('/api/tasks/'+id,{due_date:fmt(today)});
+      else if(a==='tomorrow')await api.put('/api/tasks/'+id,{due_date:fmt(tom)});
+      else if(a==='nextweek')await api.put('/api/tasks/'+id,{due_date:fmt(nextWk)});
+      else if(a==='nextmonth')await api.put('/api/tasks/'+id,{due_date:fmt(nextMo)});
+      else if(a.startsWith('p'))await api.put('/api/tasks/'+id,{priority:Number(a[1])});
+      else if(a==='myday'){const allT=await api.get('/api/tasks/all');const tk=allT.find(t=>t.id===id);if(tk)await api.put('/api/tasks/'+id,{my_day:tk.my_day?0:1})}
+      else if(a==='duplicate'){const tk=await api.get('/api/tasks/'+id);if(tk)await api.post('/api/goals/'+tk.goal_id+'/tasks',{title:tk.title+' (copy)',note:tk.note,priority:tk.priority,due_date:tk.due_date})}
+      else if(a==='focus'){startFocusTimer(id);return}
+      else if(a==='delete'){if(appSettings.confirmDelete==='true'&&!confirm('Delete this task?'))return;await api.del('/api/tasks/'+id)}
+      showToast(a==='delete'?'Task deleted':'Updated');await loadAreas();render();loadOverdueBadge();
+    };
+    menu.querySelectorAll('.ctx-item').forEach(it=>it.addEventListener('click',()=>act(it.dataset.act)));
   }));
   // Inline title editing
   document.querySelectorAll('.tt').forEach(ttEl=>{

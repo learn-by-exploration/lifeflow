@@ -210,5 +210,38 @@ router.delete('/api/reviews/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── DAILY MICRO-REVIEW API ───
+router.post('/api/reviews/daily', (req, res) => {
+  const { date, note } = req.body;
+  if (!date || typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'date required (YYYY-MM-DD)' });
+  }
+  const completedCount = db.prepare(
+    `SELECT COUNT(*) as c FROM tasks WHERE status='done' AND date(completed_at)=? AND user_id=?`
+  ).get(date, req.userId).c;
+  const existing = db.prepare('SELECT id FROM daily_reviews WHERE date=? AND user_id=?').get(date, req.userId);
+  if (existing) {
+    db.prepare('UPDATE daily_reviews SET note=?, completed_count=? WHERE id=?').run(note || '', completedCount, existing.id);
+    res.json(db.prepare('SELECT * FROM daily_reviews WHERE id=?').get(existing.id));
+  } else {
+    const r = db.prepare('INSERT INTO daily_reviews (user_id, date, note, completed_count) VALUES (?,?,?,?)').run(
+      req.userId, date, note || '', completedCount
+    );
+    res.status(201).json(db.prepare('SELECT * FROM daily_reviews WHERE id=?').get(r.lastInsertRowid));
+  }
+});
+
+router.get('/api/reviews/daily/:date', (req, res) => {
+  const { date } = req.params;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Invalid date format' });
+  const review = db.prepare('SELECT * FROM daily_reviews WHERE date=? AND user_id=?').get(date, req.userId);
+  if (!review) return res.status(404).json({ error: 'No review for this date' });
+  const completedCount = db.prepare(
+    `SELECT COUNT(*) as c FROM tasks WHERE status='done' AND date(completed_at)=? AND user_id=?`
+  ).get(date, req.userId).c;
+  review.completed_count = completedCount;
+  res.json(review);
+});
+
   return router;
 };

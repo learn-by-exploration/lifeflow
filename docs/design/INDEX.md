@@ -36,4 +36,6 @@
 | [custom-lists/expert-review.md](custom-lists/expert-review.md) | v2.0.0, 572 tests | **Reference** | 25-expert review of lists feature proposal |
 | [custom-lists/implementation-plan.md](custom-lists/implementation-plan.md) | v2.0.0, 572 tests | **Partially implemented** | Phase 1–2 shipped (checklist, grocery); Phase 3–4 remain |
 | [feature-gap-analysis/plan.md](feature-gap-analysis/plan.md) | v0.4.0, 1,728 tests | **Implemented** | Phases 0–5 shipped in v0.5.0 (API tokens, 2FA, webhooks, push, AI, imports) |
-| [v0.5.1-review-remediation/plan.md](v0.5.1-review-remediation/plan.md) | v0.5.0, 1,841 tests | **Active** | 14 findings from code review: 3 critical, 5 high, 4 medium, 2 low |
+| [v0.5.1-review-remediation/plan.md](v0.5.1-review-remediation/plan.md) | v0.5.0, 1,841 tests | **Implemented** | 14 findings fixed in v0.5.1 (2FA, encryption, SSRF, webhooks, etc.) |
+| [multi-expert-improvement-review/spec.md](multi-expert-improvement-review/spec.md) | v0.5.1, 1,885 tests | **Reference** | 9-expert panel: 45 recommendations, 25 prioritized items |
+| [multi-expert-improvement-review/plan.md](multi-expert-improvement-review/plan.md) | v0.5.1, 1,885 tests | **Active** | 6 phases, 12 tasks: export, goals, context menus, scheduler, frontend arch |

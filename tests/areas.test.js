@@ -1,10 +1,12 @@
-const { describe, it, beforeEach, after } = require('node:test');
+const { describe, it, before, beforeEach, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { cleanDb, teardown, makeArea, makeGoal, makeTask, agent } = require('./helpers');
+const { setup, cleanDb, teardown, makeArea, makeGoal, makeTask, agent, daysFromNow } = require('./helpers');
+
+before(() => setup());
+after(() => teardown());
 
 describe('Life Areas API', () => {
   beforeEach(() => cleanDb());
-  after(() => teardown());
 
   describe('GET /api/areas', () => {
     it('returns empty array when no areas exist', async () => {
@@ -135,5 +137,50 @@ describe('Life Areas API', () => {
     it('returns 400 for invalid ID', async () => {
       await agent().delete('/api/areas/abc').expect(400);
     });
+  });
+});
+
+// ─── Goal Progress Visualization ───
+describe('Goal progress fields', () => {
+  beforeEach(() => cleanDb());
+  it('GET goals includes progress_pct, overdue_count, days_until_due', async () => {
+    const area = makeArea();
+    const goal = makeGoal(area.id, { due_date: daysFromNow(10) });
+    makeTask(goal.id, { title: 'T1', status: 'done' });
+    makeTask(goal.id, { title: 'T2', status: 'todo' });
+    makeTask(goal.id, { title: 'T3', status: 'todo' });
+    const res = await agent().get(`/api/areas/${area.id}/goals`).expect(200);
+    const g = res.body[0];
+    assert.equal(g.total_tasks, 3);
+    assert.equal(g.done_tasks, 1);
+    assert.equal(g.progress_pct, 33);
+    assert.ok('overdue_count' in g);
+    assert.ok('days_until_due' in g);
+  });
+
+  it('goal with 0 tasks returns progress_pct=0', async () => {
+    const area = makeArea();
+    makeGoal(area.id);
+    const res = await agent().get(`/api/areas/${area.id}/goals`).expect(200);
+    assert.equal(res.body[0].progress_pct, 0);
+    assert.equal(res.body[0].overdue_count, 0);
+  });
+
+  it('goal with all done returns progress_pct=100', async () => {
+    const area = makeArea();
+    const goal = makeGoal(area.id);
+    makeTask(goal.id, { status: 'done' });
+    makeTask(goal.id, { status: 'done' });
+    const res = await agent().get(`/api/areas/${area.id}/goals`).expect(200);
+    assert.equal(res.body[0].progress_pct, 100);
+  });
+
+  it('goal with overdue tasks returns overdue_count > 0', async () => {
+    const area = makeArea();
+    const goal = makeGoal(area.id);
+    makeTask(goal.id, { title: 'Overdue', due_date: '2020-01-01', status: 'todo' });
+    makeTask(goal.id, { title: 'OK', status: 'todo' });
+    const res = await agent().get(`/api/areas/${area.id}/goals`).expect(200);
+    assert.equal(res.body[0].overdue_count, 1);
   });
 });

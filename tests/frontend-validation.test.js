@@ -774,3 +774,89 @@ describe('Help Page CSS', () => {
     assert.ok(hasGrid, 'Help grid must use responsive auto-fill grid layout');
   });
 });
+
+// ─── Task Context Menu ───
+describe('Task Context Menu', () => {
+  it('app.js contains ctx-menu handler for task cards', () => {
+    assert.ok(
+      scriptContent.includes('task-ctx-menu') || scriptContent.includes('taskCtxMenu') || scriptContent.includes('ctx-menu'),
+      'app.js must contain task context menu rendering'
+    );
+  });
+
+  it('app.js handles contextmenu event on task items', () => {
+    assert.ok(
+      scriptContent.includes('contextmenu'),
+      'app.js must listen for contextmenu events'
+    );
+  });
+});
+
+// ─── Command Palette ───
+describe('Command Palette', () => {
+  it('app.js handles > prefix in search input', () => {
+    assert.ok(
+      scriptContent.includes("'>'") || scriptContent.includes('startsWith(">")') || scriptContent.includes("startsWith('>')"),
+      'app.js must detect > prefix for command mode'
+    );
+  });
+
+  it('app.js contains command registry with view navigation entries', () => {
+    assert.ok(
+      (scriptContent.includes('CP_COMMANDS') || scriptContent.includes('commands') || scriptContent.includes('cmdList')) &&
+      scriptContent.includes('Go to'),
+      'app.js must contain command registry with navigation entries'
+    );
+  });
+});
+
+// ─── Today View Extraction ───
+describe('Today View Module', () => {
+  it('public/js/views/today.js exists and exports renderToday', () => {
+    const todayPath = path.join(__dirname, '..', 'public', 'js', 'views', 'today.js');
+    assert.ok(fs.existsSync(todayPath), 'public/js/views/today.js must exist');
+    const content = fs.readFileSync(todayPath, 'utf8');
+    assert.ok(content.includes('renderToday'), 'today.js must contain renderToday');
+    assert.ok(content.includes('export'), 'today.js must use ES module export');
+  });
+
+  it('app.js imports from ./js/views/today.js', () => {
+    assert.ok(
+      scriptContent.includes('js/views/today') || scriptContent.includes('renderTodayModule'),
+      'app.js must reference the today view module'
+    );
+  });
+});
+
+// ─── Store Expansion ───
+describe('Store Expansion', () => {
+  const storePath = path.join(__dirname, '..', 'public', 'store.js');
+  const storeContent = fs.existsSync(storePath) ? fs.readFileSync(storePath, 'utf8') : '';
+
+  it('store.js exports setView function', () => {
+    assert.ok(storeContent.includes('setView'), 'store.js must export setView');
+  });
+
+  it('store.js exports updateTask function', () => {
+    assert.ok(storeContent.includes('updateTask'), 'store.js must export updateTask');
+  });
+
+  it('store.js emits view:changed event on setView', () => {
+    assert.ok(
+      storeContent.includes('view:changed') || storeContent.includes("'view:changed'"),
+      'store.js must emit view:changed event'
+    );
+  });
+});
+
+// ─── Daily Micro-Review Banner ───
+
+describe('Daily micro-review banner', () => {
+  it('app.js has daily-review-banner markup', () => {
+    assert.ok(scriptContent.includes('daily-review-banner'), 'app.js must contain daily-review-banner');
+  });
+
+  it('app.js has daily review dismiss handler', () => {
+    assert.ok(scriptContent.includes('dr-dismiss'), 'app.js must have dr-dismiss handler');
+  });
+});

@@ -1,7 +1,7 @@
 # LifeFlow — Claude Code Configuration
 
-> **Last updated:** 27 March 2026 · **Version:** 0.5.0
-> **Metrics:** 1,841 tests | 76 test files | 185 API routes | 32 DB tables | ~14,000 LOC
+> **Last updated:** 27 March 2026 · **Version:** 0.6.0
+> **Metrics:** 1,931 tests | 78 test files | 190 API routes | 33 DB tables | ~14,500 LOC
 
 ## Project Overview
 
@@ -14,7 +14,7 @@ Includes authentication, habits, lists, focus timer, templates, automations, cus
 ```bash
 npm install
 node src/server.js          # http://localhost:3456
-npm test                    # 1,692 tests via node:test
+npm test                    # 1,931 tests via node:test
 # or with Docker:
 docker compose up -d
 ```
@@ -42,6 +42,7 @@ src/
   logger.js           — Pino structured logging
   errors.js           — AppError classes (NotFoundError, ValidationError, etc.)
   helpers.js          — Shared utilities (enrichTask, getNextPosition, etc.)
+  scheduler.js        — Background job scheduler (session cleanup, recurring spawn)
   db/
     index.js          — SQLite schema, 26 tables, inline migrations
     migrate.js        — SQL migration runner (_migrations table)
@@ -54,10 +55,10 @@ src/
     features.js       — Habits, templates, automations, settings (25 routes)
     filters.js        — Saved filters, smart lists (uses FiltersService)
     lists.js          — Custom lists + list items CRUD (22 routes)
-    productivity.js   — Inbox, notes, reviews, rules (18 routes)
+    productivity.js   — Inbox, notes, reviews (weekly + daily), rules (20 routes)
     stats.js          — Dashboard, streaks, heatmap, analytics (20 routes)
     tags.js           — Tags CRUD + stats (uses TagsService)
-    tasks.js          — Tasks CRUD, reorder, parse, board, calendar, table, timeline (28 routes)
+    tasks.js          — Tasks CRUD, reorder, parse, board, calendar, table, timeline, suggested, batch (30 routes)
   schemas/            — Zod validation schemas
     common.schema.js  — Shared validators (positiveInt, hexColor, idParam)
     tasks.schema.js   — Recurring field Zod validation
@@ -78,6 +79,7 @@ src/
     csrf.js           — CSRF token middleware
     errors.js         — Global error handler (AppError + legacy compat)
     validate.js       — Zod validation middleware + legacy validators
+    request-logger.js — HTTP request logging (method, path, status, duration)
 ```
 
 **Frontend (7,860 LOC):**
@@ -125,6 +127,7 @@ goal_milestones(id, goal_id→goals, title, done, position)
 inbox          (id, user_id, text, created_at)
 notes          (id, user_id, title, content, created_at, updated_at)
 weekly_reviews (id, user_id, week, wins, struggles, plan, created_at)
+daily_reviews  (id, user_id, date UNIQUE, note, completed_count, created_at)
 ```
 
 ### Productivity
@@ -159,11 +162,11 @@ See `docs/openapi.yaml` for full specification. Key modules:
 
 | Module | Routes | Covers |
 |--------|--------|--------|
-| `tasks.js` | 28 | CRUD, reorder, parse (NLP), board, calendar, table, timeline, my-day, search, overdue |
+| `tasks.js` | 30 | CRUD, reorder, parse (NLP), board, calendar, table, timeline, my-day, search, overdue, suggested, batch |
 | `features.js` | 34 | Habits, templates, automations, settings, AI, webhooks, push (34 routes) |
 | `lists.js` | 22 | Custom lists + list items CRUD |
 | `stats.js` | 20 | Dashboard, streaks, heatmap, activity, focus stats, analytics |
-| `productivity.js` | 18 | Focus timer, reminders, triage, comments, milestones |
+| `productivity.js` | 20 | Focus timer, reminders, triage, comments, milestones, daily review |
 | `areas.js` | 17 | Life Areas CRUD + reorder + goals association |
 | `tags.js` | 11 | Tags CRUD + usage stats |
 | `filters.js` | 7 | Saved filters + smart lists |
@@ -271,12 +274,12 @@ See `docs/openapi.yaml` for full specification. Key modules:
 ## Testing
 
 ```bash
-npm test                    # Run all 1,692 tests
+npm test                    # Run all 1,931 tests
 ```
 
 **Runner:** `node --test --test-force-exit` with `node:assert/strict` + `supertest`
 
-**60 test files** across these categories:
+**78 test files** across these categories:
 
 | Category | Files | Description |
 |----------|-------|-------------|
@@ -318,7 +321,7 @@ See `docs/DOCUMENTATION-AUDIT.md` for the full documentation review and proposed
 | Version bump | CLAUDE.md header, `package.json`, `docs/openapi.yaml` |
 
 **Update the CLAUDE.md header line counts** when LOC changes significantly (>5%):
-- Current: 1,841 tests | 76 test files | 185 routes | 32 tables | ~14,000 LOC
+- Current: 1,931 tests | 78 test files | 190 routes | 33 tables | ~14,500 LOC
 
 ## What Needs to Be Done (Roadmap)
 

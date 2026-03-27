@@ -74,13 +74,23 @@ module.exports = function(deps) {
       : [];
     const automation_rules = db.prepare('SELECT * FROM automation_rules WHERE user_id=?').all(req.userId);
     const saved_filters = db.prepare('SELECT * FROM saved_filters WHERE user_id=? ORDER BY position').all(req.userId);
+    const task_templates = db.prepare('SELECT * FROM task_templates WHERE user_id=?').all(req.userId);
+    const weekly_reviews = db.prepare('SELECT * FROM weekly_reviews WHERE user_id=? ORDER BY week_start DESC').all(req.userId);
+    const inbox = db.prepare('SELECT * FROM inbox WHERE user_id=? ORDER BY created_at').all(req.userId);
+    const badges = db.prepare('SELECT * FROM badges WHERE user_id=?').all(req.userId);
+    const settings = db.prepare('SELECT * FROM settings WHERE user_id=?').all(req.userId);
+    const goalIds = goals.map(g => g.id);
+    const goal_milestones = goalIds.length
+      ? db.prepare(`SELECT * FROM goal_milestones WHERE goal_id IN (${goalIds.map(() => '?').join(',')}) ORDER BY position`).all(...goalIds)
+      : [];
     res.setHeader('Content-Disposition', 'attachment; filename=lifeflow-export.json');
     if (audit) audit.log(req.userId, 'data_export', 'export', null, req);
     res.json({
       exportDate: new Date().toISOString(), areas, goals, tasks, tags,
       habits, habit_logs, focus_sessions, task_comments, task_deps,
       notes, lists, list_items, custom_field_defs, task_custom_values,
-      automation_rules, saved_filters,
+      automation_rules, saved_filters, task_templates, weekly_reviews,
+      inbox, badges, settings, goal_milestones,
     });
   });
 
@@ -115,6 +125,12 @@ module.exports = function(deps) {
       db.prepare('DELETE FROM lists WHERE user_id=?').run(req.userId);
       db.prepare('DELETE FROM automation_rules WHERE user_id=?').run(req.userId);
       db.prepare('DELETE FROM saved_filters WHERE user_id=?').run(req.userId);
+      db.prepare('DELETE FROM task_templates WHERE user_id=?').run(req.userId);
+      db.prepare('DELETE FROM weekly_reviews WHERE user_id=?').run(req.userId);
+      db.prepare('DELETE FROM inbox WHERE user_id=?').run(req.userId);
+      try { db.prepare('DELETE FROM badges WHERE user_id=?').run(req.userId); } catch(e) {}
+      db.prepare('DELETE FROM settings WHERE user_id=?').run(req.userId);
+      // goal_milestones cascade from goals delete
 
       // Map old IDs to new IDs
       const areaMap = {}, goalMap = {}, tagMap = {}, taskMap = {}, habitMap = {}, listMap = {}, fieldMap = {};
@@ -267,6 +283,60 @@ module.exports = function(deps) {
         const insFilter = db.prepare('INSERT INTO saved_filters (name, icon, color, filters, position, user_id) VALUES (?,?,?,?,?,?)');
         req.body.saved_filters.forEach(f => {
           insFilter.run(f.name, f.icon || '🔍', f.color || '#2563EB', f.filters || '{}', f.position || 0, req.userId);
+        });
+      }
+
+      // Task templates
+      if (Array.isArray(req.body.task_templates)) {
+        db.prepare('DELETE FROM task_templates WHERE user_id=?').run(req.userId);
+        const insTpl = db.prepare('INSERT INTO task_templates (name, description, icon, tasks, user_created, source_type, user_id) VALUES (?,?,?,?,?,?,?)');
+        req.body.task_templates.forEach(t => {
+          insTpl.run(t.name, t.description || '', t.icon || '📋', t.tasks || '[]', t.user_created || 0, t.source_type || 'task', req.userId);
+        });
+      }
+
+      // Weekly reviews
+      if (Array.isArray(req.body.weekly_reviews)) {
+        db.prepare('DELETE FROM weekly_reviews WHERE user_id=?').run(req.userId);
+        const insReview = db.prepare('INSERT INTO weekly_reviews (week_start, tasks_completed, tasks_created, top_accomplishments, reflection, next_week_priorities, rating, user_id) VALUES (?,?,?,?,?,?,?,?)');
+        req.body.weekly_reviews.forEach(r => {
+          insReview.run(r.week_start, r.tasks_completed || 0, r.tasks_created || 0, r.top_accomplishments || '[]', r.reflection || '', r.next_week_priorities || '[]', r.rating || null, req.userId);
+        });
+      }
+
+      // Inbox
+      if (Array.isArray(req.body.inbox)) {
+        db.prepare('DELETE FROM inbox WHERE user_id=?').run(req.userId);
+        const insInbox = db.prepare('INSERT INTO inbox (title, note, priority, user_id) VALUES (?,?,?,?)');
+        req.body.inbox.forEach(i => {
+          insInbox.run(i.title, i.note || '', i.priority || 0, req.userId);
+        });
+      }
+
+      // Badges
+      if (Array.isArray(req.body.badges)) {
+        try { db.prepare('DELETE FROM badges WHERE user_id=?').run(req.userId); } catch(e) {}
+        const insBadge = db.prepare('INSERT OR IGNORE INTO badges (type, earned_at, user_id) VALUES (?,?,?)');
+        req.body.badges.forEach(b => {
+          insBadge.run(b.type, b.earned_at || new Date().toISOString(), req.userId);
+        });
+      }
+
+      // Settings
+      if (Array.isArray(req.body.settings)) {
+        db.prepare('DELETE FROM settings WHERE user_id=?').run(req.userId);
+        const insSetting = db.prepare('INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (?,?,?)');
+        req.body.settings.forEach(s => {
+          insSetting.run(req.userId, s.key, s.value);
+        });
+      }
+
+      // Goal milestones
+      if (Array.isArray(req.body.goal_milestones)) {
+        const insMilestone = db.prepare('INSERT INTO goal_milestones (goal_id, title, done, position, completed_at) VALUES (?,?,?,?,?)');
+        req.body.goal_milestones.forEach(m => {
+          const newGoalId = goalMap[m.goal_id];
+          if (newGoalId) insMilestone.run(newGoalId, m.title, m.done || 0, m.position || 0, m.completed_at || null);
         });
       }
     });

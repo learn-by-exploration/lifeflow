@@ -72,6 +72,7 @@ function cleanDb() {
   try { db.exec('DELETE FROM api_tokens'); } catch(e) {}
   try { db.exec('DELETE FROM push_subscriptions'); } catch(e) {}
   try { db.exec('DELETE FROM webhooks'); } catch(e) {}
+  try { db.exec('DELETE FROM daily_reviews'); } catch(e) {}
 }
 
 function teardown() {

@@ -73,9 +73,14 @@ class AreasRepository {
       SELECT g.*,
         (SELECT COUNT(*) FROM tasks t WHERE t.goal_id=g.id) as total_tasks,
         (SELECT COUNT(*) FROM tasks t WHERE t.goal_id=g.id AND t.status='done') as done_tasks,
-        (SELECT COUNT(*) FROM tasks t WHERE t.goal_id=g.id AND t.status!='done') as pending_tasks
+        (SELECT COUNT(*) FROM tasks t WHERE t.goal_id=g.id AND t.status!='done') as pending_tasks,
+        (SELECT COUNT(*) FROM tasks t WHERE t.goal_id=g.id AND t.status!='done' AND t.due_date < date('now')) as overdue_count
       FROM goals g WHERE g.area_id=? AND g.user_id=? ORDER BY g.position
-    `).all(areaId, userId);
+    `).all(areaId, userId).map(g => ({
+      ...g,
+      progress_pct: g.total_tasks ? Math.round(100 * g.done_tasks / g.total_tasks) : 0,
+      days_until_due: g.due_date ? Math.round((new Date(g.due_date) - new Date()) / 86400000) : null,
+    }));
   }
 
   findGoalById(id, userId) {

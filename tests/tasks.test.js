@@ -782,4 +782,140 @@ describe('Tasks API', () => {
       assert.equal(res.body.tasks.length, 1);
     });
   });
+
+  // ─── Suggested tasks ───
+  describe('GET /api/tasks/suggested', () => {
+    it('returns up to 5 tasks', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      for (let i = 0; i < 8; i++) makeTask(goal.id, { title: `T${i}` });
+      const res = await agent().get('/api/tasks/suggested').expect(200);
+      assert.ok(Array.isArray(res.body));
+      assert.ok(res.body.length <= 5);
+    });
+
+    it('ranks overdue tasks higher than non-overdue', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id, { title: 'Future', due_date: daysFromNow(30) });
+      makeTask(goal.id, { title: 'Overdue', due_date: '2020-01-01' });
+      const res = await agent().get('/api/tasks/suggested').expect(200);
+      assert.equal(res.body[0].title, 'Overdue');
+    });
+
+    it('excludes tasks already in My Day', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id, { title: 'InMyDay', my_day: 1 });
+      makeTask(goal.id, { title: 'Not InMyDay' });
+      const res = await agent().get('/api/tasks/suggested').expect(200);
+      assert.ok(res.body.every(t => t.title !== 'InMyDay'));
+    });
+
+    it('returns empty array when all tasks are done', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id, { title: 'Done', status: 'done' });
+      const res = await agent().get('/api/tasks/suggested').expect(200);
+      assert.equal(res.body.length, 0);
+    });
+  });
+
+  // ─── Batch operations ───
+  describe('PATCH /api/tasks/batch', () => {
+    it('moves all tasks to new goal', async () => {
+      const area = makeArea();
+      const g1 = makeGoal(area.id, { title: 'G1' });
+      const g2 = makeGoal(area.id, { title: 'G2' });
+      const t1 = makeTask(g1.id);
+      const t2 = makeTask(g1.id);
+      const res = await agent().patch('/api/tasks/batch').send({
+        ids: [t1.id, t2.id], updates: { goal_id: g2.id }
+      }).expect(200);
+      assert.equal(res.body.updated, 2);
+    });
+
+    it('reschedules all tasks with due_date', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const t1 = makeTask(goal.id);
+      const t2 = makeTask(goal.id);
+      const res = await agent().patch('/api/tasks/batch').send({
+        ids: [t1.id, t2.id], updates: { due_date: '2026-04-01' }
+      }).expect(200);
+      assert.equal(res.body.updated, 2);
+    });
+
+    it('flags all tasks as My Day', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const t1 = makeTask(goal.id);
+      const t2 = makeTask(goal.id);
+      const res = await agent().patch('/api/tasks/batch').send({
+        ids: [t1.id, t2.id], updates: { my_day: 1 }
+      }).expect(200);
+      assert.equal(res.body.updated, 2);
+    });
+
+    it('adds tags to all tasks', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const t1 = makeTask(goal.id);
+      const t2 = makeTask(goal.id);
+      const tag = makeTag({ name: 'batch-tag' });
+      const res = await agent().patch('/api/tasks/batch').send({
+        ids: [t1.id, t2.id], add_tags: [tag.id]
+      }).expect(200);
+      assert.equal(res.body.updated, 2);
+    });
+
+    it('rejects with invalid task IDs', async () => {
+      await agent().patch('/api/tasks/batch').send({
+        ids: [99999], updates: { priority: 1 }
+      }).expect(400);
+    });
+  });
+
+  // ─── Recurring task management ───
+  describe('GET /api/tasks/recurring', () => {
+    it('returns only recurring tasks', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id, { title: 'Normal' });
+      makeTask(goal.id, { title: 'Daily', recurring: JSON.stringify({ type: 'daily' }) });
+      const res = await agent().get('/api/tasks/recurring').expect(200);
+      const items = res.body.items || res.body;
+      assert.ok(items.every(t => t.recurring !== null));
+      assert.ok(items.some(t => t.title === 'Daily'));
+    });
+  });
+
+  describe('POST /api/tasks/:id/skip', () => {
+    it('advances due_date to next occurrence', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const t = makeTask(goal.id, { title: 'Weekly', due_date: '2026-03-27', recurring: JSON.stringify({ type: 'weekly' }) });
+      const res = await agent().post(`/api/tasks/${t.id}/skip`).expect(200);
+      assert.ok(res.body.skipped);
+      assert.ok(res.body.next);
+      assert.notEqual(res.body.next.due_date, '2026-03-27');
+    });
+
+    it('rejects skip on non-recurring task', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const t = makeTask(goal.id, { title: 'Not recurring' });
+      await agent().post(`/api/tasks/${t.id}/skip`).expect(400);
+    });
+
+    it('recurring badge indicator present in task card HTML', async () => {
+      const fs = require('fs');
+      const path = require('path');
+      const appJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+      assert.ok(
+        appJs.includes('recurring') && (appJs.includes('repeat') || appJs.includes('🔁') || appJs.includes('loop')),
+        'app.js should have recurring indicator in task cards'
+      );
+    });
+  });
 });

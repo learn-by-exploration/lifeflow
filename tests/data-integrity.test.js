@@ -2,6 +2,9 @@ const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { setup, cleanDb, teardown, makeArea, makeGoal, makeTask, makeTag, linkTag, makeList, makeListItem, agent } = require('./helpers');
 
+let _db;
+before(() => { const s = setup(); _db = s.db; });
+
 before(() => setup());
 beforeEach(() => cleanDb());
 after(() => teardown());
@@ -207,5 +210,98 @@ describe('Circular dependency detection', () => {
     const res = await agent().get(`/api/tasks/${c.id}/deps`).expect(200);
     assert.equal(res.body.blockedBy.length, 1);
     assert.equal(res.body.blockedBy[0].id, b.id);
+  });
+});
+
+// ─── Phase 0: Export Completeness ───
+
+describe('Export includes task_templates', () => {
+  it('exports task_templates', async () => {
+    _db.prepare("INSERT INTO task_templates (name, tasks, user_id) VALUES (?, ?, 1)").run('My Template', '[{"title":"T1"}]');
+    const res = await agent().get('/api/export').expect(200);
+    assert.ok(Array.isArray(res.body.task_templates));
+    assert.equal(res.body.task_templates.length, 1);
+    assert.equal(res.body.task_templates[0].name, 'My Template');
+  });
+});
+
+describe('Export includes weekly_reviews', () => {
+  it('exports weekly_reviews', async () => {
+    _db.prepare("INSERT INTO weekly_reviews (week_start, reflection, user_id) VALUES (?, ?, 1)").run('2026-03-23', 'Good week');
+    const res = await agent().get('/api/export').expect(200);
+    assert.ok(Array.isArray(res.body.weekly_reviews));
+    assert.equal(res.body.weekly_reviews.length, 1);
+    assert.equal(res.body.weekly_reviews[0].reflection, 'Good week');
+  });
+});
+
+describe('Export includes inbox items', () => {
+  it('exports inbox', async () => {
+    _db.prepare("INSERT INTO inbox (title, user_id) VALUES (?, 1)").run('Quick thought');
+    const res = await agent().get('/api/export').expect(200);
+    assert.ok(Array.isArray(res.body.inbox));
+    assert.equal(res.body.inbox.length, 1);
+    assert.equal(res.body.inbox[0].title, 'Quick thought');
+  });
+});
+
+describe('Export includes goal_milestones', () => {
+  it('exports goal_milestones', async () => {
+    const area = makeArea();
+    const goal = makeGoal(area.id);
+    _db.prepare("INSERT INTO goal_milestones (goal_id, title, position) VALUES (?, ?, 0)").run(goal.id, 'Milestone 1');
+    const res = await agent().get('/api/export').expect(200);
+    assert.ok(Array.isArray(res.body.goal_milestones));
+    assert.equal(res.body.goal_milestones.length, 1);
+    assert.equal(res.body.goal_milestones[0].title, 'Milestone 1');
+  });
+});
+
+describe('Export includes user settings', () => {
+  it('exports settings', async () => {
+    _db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (1, ?, ?)").run('theme', 'midnight');
+    const res = await agent().get('/api/export').expect(200);
+    assert.ok(Array.isArray(res.body.settings));
+    assert.equal(res.body.settings.length, 1);
+    assert.equal(res.body.settings[0].key, 'theme');
+    assert.equal(res.body.settings[0].value, 'midnight');
+  });
+});
+
+describe('Export+Import full roundtrip', () => {
+  it('roundtrip preserves all exported tables', async () => {
+    // Create data for all tables
+    const area = makeArea({ name: 'RT Area' });
+    const goal = makeGoal(area.id, { title: 'RT Goal' });
+    const task = makeTask(goal.id, { title: 'RT Task' });
+    const tag = makeTag({ name: 'rt-tag' });
+    linkTag(task.id, tag.id);
+    _db.prepare("INSERT INTO task_templates (name, tasks, user_id) VALUES (?, ?, 1)").run('RT Template', '[]');
+    _db.prepare("INSERT INTO weekly_reviews (week_start, reflection, user_id) VALUES (?, ?, 1)").run('2026-03-23', 'Test');
+    _db.prepare("INSERT INTO inbox (title, user_id) VALUES (?, 1)").run('RT Inbox');
+    _db.prepare("INSERT INTO goal_milestones (goal_id, title, position) VALUES (?, ?, 0)").run(goal.id, 'RT MS');
+    _db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (1, ?, ?)").run('theme', 'ocean');
+
+    // Export
+    const exp = await agent().get('/api/export').expect(200);
+
+    // Import (destroys and re-creates)
+    await agent().post('/api/import').send({
+      confirm: 'DESTROY_ALL_DATA',
+      password: 'testpassword',
+      ...exp.body
+    }).expect(200);
+
+    // Verify roundtrip
+    const exp2 = await agent().get('/api/export').expect(200);
+    assert.equal(exp2.body.areas.length, exp.body.areas.length, 'areas count mismatch');
+    assert.equal(exp2.body.goals.length, exp.body.goals.length, 'goals count mismatch');
+    assert.equal(exp2.body.tasks.length, exp.body.tasks.length, 'tasks count mismatch');
+    assert.equal(exp2.body.tags.length, exp.body.tags.length, 'tags count mismatch');
+    assert.equal(exp2.body.task_templates.length, exp.body.task_templates.length, 'task_templates count mismatch');
+    assert.equal(exp2.body.weekly_reviews.length, exp.body.weekly_reviews.length, 'weekly_reviews count mismatch');
+    assert.equal(exp2.body.inbox.length, exp.body.inbox.length, 'inbox count mismatch');
+    assert.equal(exp2.body.goal_milestones.length, exp.body.goal_milestones.length, 'goal_milestones count mismatch');
+    assert.equal(exp2.body.settings.length, exp.body.settings.length, 'settings count mismatch');
   });
 });
