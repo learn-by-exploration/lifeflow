@@ -7,7 +7,8 @@ LifeFlow is a personal productivity app with a 4-level hierarchy (Life Area → 
 ## Features
 
 - **Deep hierarchy** — Life Areas → Goals → Tasks → Subtasks (most competitors cap at 2 levels)
-- **25+ views** — Today, Board (Kanban), Calendar, Weekly Plan, Eisenhower Matrix, Dashboard, Reports, and more
+- **25+ views** — Today, Board (Kanban), Calendar, Weekly Plan, Eisenhower Matrix, Day Planner, Dashboard, Reports, and more
+- **Collapsible sidebar** — Icon rail mode (`Ctrl+B`), tooltips, smooth transitions, desktop-only
 - **Habits & streaks** — Daily habit tracking with heatmaps and streak counters
 - **Focus timer** — Pomodoro (25/5/15min) with session history, stats, and per-task tracking
 - **Smart capture** — NLP parser extracts dates, priorities, and tags from natural text
@@ -61,12 +62,12 @@ src/
   middleware/            — Auth, CSRF, validation, errors
   services/             — Audit logging
 public/
-  app.js                — SPA frontend (5,369 lines)
+  app.js                — SPA frontend (5,471 lines)
   styles.css            — All styles + responsive breakpoints
   index.html            — SPA shell
   sw.js                 — Service Worker
 tests/
-  *.test.js             — 60 test files, 1,692 tests
+  *.test.js             — 60 test files, 1,634 tests
 docs/
   openapi.yaml          — Full API spec (2,892 lines)
   architecture.md       — System design & patterns
@@ -76,7 +77,7 @@ docs/
 ## Testing
 
 ```bash
-npm test                                    # All 1,692 tests
+npm test                                    # All 1,634 tests
 node --test tests/tasks.test.js             # Single file
 node --test --test-name-pattern "overdue"   # By name pattern
 ```

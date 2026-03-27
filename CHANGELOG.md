@@ -2,6 +2,37 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.3.0] - 2026-03-27
+
+### Collapsible Sidebar with Icon Rail
+- Sidebar collapses to 56px icon rail (click chevron or `Ctrl/Cmd+B`)
+- Logo/brand click navigates to Today view (home navigation)
+- CSS tooltips on hover for all icons in collapsed mode
+- Badges become 8px dot indicators when collapsed
+- Smooth 200ms width transition with `will-change`
+- Collapse state persisted in localStorage
+- Desktop-only — mobile hamburger behavior unchanged
+- Life Areas, Filters, Lists sections hidden in collapsed mode
+- Section group labels become thin dividers when collapsed
+- Default 📋 icon for lists without custom icon
+
+### Settings Panel Improvements (P0–P3)
+- Fixed toggle class mismatch (`set-slider` → `slider`)
+- Scrollable tab bar with `overflow-x:auto`
+- Touch-visible area/grocery reorder buttons (`@media(pointer:coarse)`)
+- ARIA roles (`tablist`, `tab`, `tabpanel`) on settings tabs
+- Auto-save debounce (800ms) for status/priority labels
+- Visual group separators between tab groups
+- Settings search filter input
+- Badge check throttled to 60s
+
+### UI Bug Fixes
+- Home button in settings breadcrumb
+- Error banner fix for area/goal/list modals (hidden by default, `.show` class)
+- Toggle switch left-shift fix (`display:inline-block` + `position:absolute`)
+- Tour updated for new sidebar groups (Execution/Planning/Reflection)
+- Day Planner chevron icons fixed (wrapped in `<span class="material-icons-round">`)
+
 ## [0.2.6] - 2026-03-26
 
 ### Mobile & Responsive UX Overhaul
