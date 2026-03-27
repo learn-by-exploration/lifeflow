@@ -123,6 +123,7 @@ app.use(require('./routes/filters')(deps));
 app.use(require('./routes/data')(deps));
 app.use(require('./routes/productivity')(deps));
 app.use(require('./routes/lists')(deps));
+app.use(require('./routes/custom-fields')(deps));
 
 // Serve share page
 app.get('/share/:token', (req, res) => {

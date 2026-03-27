@@ -1,6 +1,6 @@
 const { describe, it, beforeEach, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { cleanDb, teardown, makeArea, makeGoal, makeTask, makeTag, linkTag, agent, setup, daysFromNow } = require('./helpers');
+const { cleanDb, teardown, makeArea, makeGoal, makeTask, makeSubtask, makeTag, linkTag, agent, setup, daysFromNow } = require('./helpers');
 
 describe('Tasks API', () => {
   beforeEach(() => cleanDb());
@@ -271,6 +271,109 @@ describe('Tasks API', () => {
       assert.equal(tasks.body.length, 1); // Only original task
     });
 
+    it('copies subtasks to spawned recurring task', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const task = makeTask(goal.id, {
+        title: 'Clean house',
+        recurring: 'weekly',
+        due_date: '2025-07-01'
+      });
+      makeSubtask(task.id, { title: 'Kitchen', position: 0 });
+      makeSubtask(task.id, { title: 'Bathroom', position: 1 });
+      makeSubtask(task.id, { title: 'Bedroom', position: 2 });
+
+      await agent().put(`/api/tasks/${task.id}`).send({ status: 'done' }).expect(200);
+
+      const tasks = await agent().get(`/api/goals/${goal.id}/tasks`).expect(200);
+      const spawned = tasks.body.find(t => t.id !== task.id);
+      assert.ok(spawned, 'Spawned task should exist');
+      assert.equal(spawned.subtasks.length, 3);
+      assert.deepEqual(spawned.subtasks.map(s => s.title), ['Kitchen', 'Bathroom', 'Bedroom']);
+      spawned.subtasks.forEach(s => assert.equal(s.done, 0, 'Subtasks should be reset to undone'));
+    });
+
+    it('copies subtask notes to spawned recurring task', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const task = makeTask(goal.id, {
+        title: 'Weekly checklist',
+        recurring: 'weekly',
+        due_date: '2025-07-01'
+      });
+      makeSubtask(task.id, { title: 'Review PRs', position: 0 });
+      // Add note directly via DB since makeSubtask doesn't support note
+      const { db } = setup();
+      db.prepare('UPDATE subtasks SET note=? WHERE task_id=? AND title=?').run('Check all open PRs', task.id, 'Review PRs');
+
+      await agent().put(`/api/tasks/${task.id}`).send({ status: 'done' }).expect(200);
+
+      const tasks = await agent().get(`/api/goals/${goal.id}/tasks`).expect(200);
+      const spawned = tasks.body.find(t => t.id !== task.id);
+      assert.equal(spawned.subtasks.length, 1);
+      assert.equal(spawned.subtasks[0].note, 'Check all open PRs');
+    });
+
+    it('spawns recurring task with no subtasks without error', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const task = makeTask(goal.id, {
+        title: 'No subtasks recurring',
+        recurring: 'daily',
+        due_date: '2025-07-01'
+      });
+
+      await agent().put(`/api/tasks/${task.id}`).send({ status: 'done' }).expect(200);
+
+      const tasks = await agent().get(`/api/goals/${goal.id}/tasks`).expect(200);
+      const spawned = tasks.body.find(t => t.id !== task.id);
+      assert.ok(spawned, 'Spawned task should exist');
+      assert.equal(spawned.subtasks.length, 0);
+    });
+
+    it('copies subtasks when skipping recurring task', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const task = makeTask(goal.id, {
+        title: 'Skip with subs',
+        recurring: 'weekly',
+        due_date: '2025-07-01'
+      });
+      makeSubtask(task.id, { title: 'Step A', position: 0 });
+      makeSubtask(task.id, { title: 'Step B', position: 1 });
+
+      const res = await agent().post(`/api/tasks/${task.id}/skip`).expect(200);
+
+      assert.ok(res.body.next, 'Next task should exist');
+      assert.equal(res.body.next.subtasks.length, 2);
+      assert.deepEqual(res.body.next.subtasks.map(s => s.title), ['Step A', 'Step B']);
+      res.body.next.subtasks.forEach(s => assert.equal(s.done, 0));
+    });
+
+    it('preserves subtask positions in spawned recurring task', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const task = makeTask(goal.id, {
+        title: 'Ordered subs',
+        recurring: 'daily',
+        due_date: '2025-07-01'
+      });
+      makeSubtask(task.id, { title: 'Third', position: 2 });
+      makeSubtask(task.id, { title: 'First', position: 0 });
+      makeSubtask(task.id, { title: 'Second', position: 1 });
+
+      await agent().put(`/api/tasks/${task.id}`).send({ status: 'done' }).expect(200);
+
+      const tasks = await agent().get(`/api/goals/${goal.id}/tasks`).expect(200);
+      const spawned = tasks.body.find(t => t.id !== task.id);
+      const positions = spawned.subtasks.map(s => ({ title: s.title, position: s.position }));
+      assert.deepEqual(positions, [
+        { title: 'First', position: 0 },
+        { title: 'Second', position: 1 },
+        { title: 'Third', position: 2 }
+      ]);
+    });
+
     it('updates my_day flag', async () => {
       const area = makeArea();
       const goal = makeGoal(area.id);
@@ -362,6 +465,280 @@ describe('Tasks API', () => {
 
     it('returns 400 when items is missing', async () => {
       await agent().put('/api/tasks/reorder').send({}).expect(400);
+    });
+  });
+
+  describe('Recurring field validation', () => {
+    it('accepts simple recurring strings on create', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      for (const r of ['daily', 'weekly', 'biweekly', 'monthly', 'yearly', 'weekdays']) {
+        const res = await agent()
+          .post(`/api/goals/${goal.id}/tasks`)
+          .send({ title: `Task ${r}`, recurring: r, due_date: '2025-07-01' })
+          .expect(201);
+        assert.equal(res.body.recurring, r);
+      }
+    });
+
+    it('accepts every-N-days/weeks pattern on create', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const r1 = await agent().post(`/api/goals/${goal.id}/tasks`).send({ title: 'Every 3 days', recurring: 'every-3-days', due_date: '2025-07-01' }).expect(201);
+      assert.equal(r1.body.recurring, 'every-3-days');
+      const r2 = await agent().post(`/api/goals/${goal.id}/tasks`).send({ title: 'Every 2 weeks', recurring: 'every-2-weeks', due_date: '2025-07-01' }).expect(201);
+      assert.equal(r2.body.recurring, 'every-2-weeks');
+    });
+
+    it('accepts advanced JSON recurring config on create', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const cfg = { pattern: 'specific-days', days: [1, 3, 5] };
+      const res = await agent()
+        .post(`/api/goals/${goal.id}/tasks`)
+        .send({ title: 'MWF task', recurring: JSON.stringify(cfg), due_date: '2025-07-01' })
+        .expect(201);
+      const parsed = JSON.parse(res.body.recurring);
+      assert.equal(parsed.pattern, 'specific-days');
+      assert.deepEqual(parsed.days, [1, 3, 5]);
+    });
+
+    it('accepts object recurring config on create', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const res = await agent()
+        .post(`/api/goals/${goal.id}/tasks`)
+        .send({ title: 'With endAfter', recurring: { pattern: 'daily', endAfter: 10 }, due_date: '2025-07-01' })
+        .expect(201);
+      const parsed = JSON.parse(res.body.recurring);
+      assert.equal(parsed.pattern, 'daily');
+      assert.equal(parsed.endAfter, 10);
+    });
+
+    it('rejects invalid recurring string on create', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const res = await agent()
+        .post(`/api/goals/${goal.id}/tasks`)
+        .send({ title: 'Bad recurring', recurring: 'every-other-day', due_date: '2025-07-01' })
+        .expect(400);
+      assert.ok(res.body.error);
+    });
+
+    it('rejects invalid recurring JSON on create', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const res = await agent()
+        .post(`/api/goals/${goal.id}/tasks`)
+        .send({ title: 'Bad JSON', recurring: '{"pattern":"bogus"}', due_date: '2025-07-01' })
+        .expect(400);
+      assert.ok(res.body.error);
+    });
+
+    it('rejects recurring object with extra fields', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const res = await agent()
+        .post(`/api/goals/${goal.id}/tasks`)
+        .send({ title: 'Extra fields', recurring: { pattern: 'daily', evil: 'payload' }, due_date: '2025-07-01' })
+        .expect(400);
+      assert.ok(res.body.error);
+    });
+
+    it('rejects invalid recurring on update', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const task = makeTask(goal.id);
+      const res = await agent()
+        .put(`/api/tasks/${task.id}`)
+        .send({ recurring: 'not-valid' })
+        .expect(400);
+      assert.ok(res.body.error);
+    });
+
+    it('accepts null recurring to clear on update', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const task = makeTask(goal.id, { recurring: 'daily', due_date: '2025-07-01' });
+      const res = await agent()
+        .put(`/api/tasks/${task.id}`)
+        .send({ recurring: null })
+        .expect(200);
+      assert.equal(res.body.recurring, null);
+    });
+  });
+
+  describe('GET /api/tasks/table', () => {
+    it('returns tasks with total count', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id, { title: 'Task A', due_date: '2025-07-01' });
+      makeTask(goal.id, { title: 'Task B', due_date: '2025-07-02' });
+
+      const res = await agent().get('/api/tasks/table').expect(200);
+      assert.ok(Array.isArray(res.body.tasks));
+      assert.equal(res.body.total, 2);
+      assert.equal(res.body.tasks.length, 2);
+    });
+
+    it('sorts by priority DESC', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id, { title: 'Low', priority: 0 });
+      makeTask(goal.id, { title: 'Critical', priority: 3 });
+      makeTask(goal.id, { title: 'High', priority: 2 });
+
+      const res = await agent().get('/api/tasks/table?sort_by=priority&sort_dir=desc').expect(200);
+      assert.equal(res.body.tasks[0].title, 'Critical');
+      assert.equal(res.body.tasks[1].title, 'High');
+      assert.equal(res.body.tasks[2].title, 'Low');
+    });
+
+    it('sorts by due_date ASC with nulls last', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id, { title: 'No date' });
+      makeTask(goal.id, { title: 'Later', due_date: '2025-07-10' });
+      makeTask(goal.id, { title: 'Sooner', due_date: '2025-07-01' });
+
+      const res = await agent().get('/api/tasks/table?sort_by=due_date&sort_dir=asc').expect(200);
+      assert.equal(res.body.tasks[0].title, 'Sooner');
+      assert.equal(res.body.tasks[1].title, 'Later');
+      assert.equal(res.body.tasks[2].title, 'No date');
+    });
+
+    it('groups by area', async () => {
+      const a1 = makeArea({ name: 'Work' });
+      const a2 = makeArea({ name: 'Personal' });
+      const g1 = makeGoal(a1.id);
+      const g2 = makeGoal(a2.id);
+      makeTask(g1.id, { title: 'Work task 1' });
+      makeTask(g1.id, { title: 'Work task 2' });
+      makeTask(g2.id, { title: 'Personal task' });
+
+      const res = await agent().get('/api/tasks/table?group_by=area').expect(200);
+      assert.ok(Array.isArray(res.body.groups));
+      assert.equal(res.body.groups.length, 2);
+      const workGroup = res.body.groups.find(g => g.name === 'Work');
+      assert.ok(workGroup);
+      assert.equal(workGroup.count, 2);
+    });
+
+    it('filters by status', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id, { title: 'Todo', status: 'todo' });
+      makeTask(goal.id, { title: 'Done', status: 'done' });
+
+      const res = await agent().get('/api/tasks/table?status=todo').expect(200);
+      assert.equal(res.body.total, 1);
+      assert.equal(res.body.tasks[0].title, 'Todo');
+    });
+
+    it('filters by area_id', async () => {
+      const a1 = makeArea({ name: 'Work' });
+      const a2 = makeArea({ name: 'Home' });
+      const g1 = makeGoal(a1.id);
+      const g2 = makeGoal(a2.id);
+      makeTask(g1.id, { title: 'Work' });
+      makeTask(g2.id, { title: 'Home' });
+
+      const res = await agent().get(`/api/tasks/table?area_id=${a1.id}`).expect(200);
+      assert.equal(res.body.total, 1);
+      assert.equal(res.body.tasks[0].title, 'Work');
+    });
+
+    it('paginates with limit and offset', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      for (let i = 0; i < 5; i++) makeTask(goal.id, { title: `Task ${i}`, priority: i % 4 });
+
+      const res = await agent().get('/api/tasks/table?limit=2&offset=0').expect(200);
+      assert.equal(res.body.tasks.length, 2);
+      assert.equal(res.body.total, 5);
+
+      const res2 = await agent().get('/api/tasks/table?limit=2&offset=2').expect(200);
+      assert.equal(res2.body.tasks.length, 2);
+    });
+
+    it('returns empty for no matching tasks', async () => {
+      const res = await agent().get('/api/tasks/table?status=done').expect(200);
+      assert.deepEqual(res.body, { tasks: [], total: 0, groups: [] });
+    });
+
+    it('returns enriched tasks with tags and subtasks', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const task = makeTask(goal.id, { title: 'Enriched' });
+      const tag = makeTag({ name: 'table-tag' });
+      linkTag(task.id, tag.id);
+      makeSubtask(task.id, { title: 'Sub 1' });
+
+      const res = await agent().get('/api/tasks/table').expect(200);
+      assert.ok(res.body.tasks[0].tags.length >= 1);
+      assert.ok(res.body.tasks[0].subtasks.length >= 1);
+    });
+  });
+
+  describe('GET /api/tasks/timeline', () => {
+    it('returns tasks with due dates in range', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id, { title: 'In range', due_date: '2025-07-05' });
+      makeTask(goal.id, { title: 'Out of range', due_date: '2025-08-01' });
+      makeTask(goal.id, { title: 'No date' });
+
+      const res = await agent().get('/api/tasks/timeline?start=2025-07-01&end=2025-07-31').expect(200);
+      assert.ok(Array.isArray(res.body.tasks));
+      assert.equal(res.body.tasks.length, 1);
+      assert.equal(res.body.tasks[0].title, 'In range');
+    });
+
+    it('excludes tasks without due_date', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id, { title: 'No date' });
+
+      const res = await agent().get('/api/tasks/timeline?start=2025-07-01&end=2025-07-31').expect(200);
+      assert.equal(res.body.tasks.length, 0);
+    });
+
+    it('includes dependency data', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      const t1 = makeTask(goal.id, { title: 'Blocker', due_date: '2025-07-01' });
+      const t2 = makeTask(goal.id, { title: 'Blocked', due_date: '2025-07-05' });
+      const { db } = setup();
+      db.prepare('INSERT INTO task_deps (task_id, blocked_by_id) VALUES (?,?)').run(t2.id, t1.id);
+
+      const res = await agent().get('/api/tasks/timeline?start=2025-07-01&end=2025-07-31').expect(200);
+      const blocked = res.body.tasks.find(t => t.title === 'Blocked');
+      assert.ok(blocked.blocked_by.length >= 1);
+    });
+
+    it('returns tasks sorted by due_date', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id, { title: 'Later', due_date: '2025-07-10' });
+      makeTask(goal.id, { title: 'Earlier', due_date: '2025-07-02' });
+
+      const res = await agent().get('/api/tasks/timeline?start=2025-07-01&end=2025-07-31').expect(200);
+      assert.equal(res.body.tasks[0].title, 'Earlier');
+      assert.equal(res.body.tasks[1].title, 'Later');
+    });
+
+    it('returns 400 when start or end missing', async () => {
+      await agent().get('/api/tasks/timeline').expect(400);
+      await agent().get('/api/tasks/timeline?start=2025-07-01').expect(400);
+    });
+
+    it('includes completed tasks in range', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id, { title: 'Done task', due_date: '2025-07-05', status: 'done' });
+
+      const res = await agent().get('/api/tasks/timeline?start=2025-07-01&end=2025-07-31').expect(200);
+      assert.equal(res.body.tasks.length, 1);
     });
   });
 });

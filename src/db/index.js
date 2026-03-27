@@ -509,6 +509,30 @@ function initDatabase(dbDir) {
     ]), uid);
   }
 
+  // ─── Custom Fields tables ───
+  db.exec(`CREATE TABLE IF NOT EXISTS custom_field_defs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    field_type TEXT NOT NULL CHECK(field_type IN ('text','number','date','select')),
+    options TEXT DEFAULT NULL,
+    position INTEGER DEFAULT 0,
+    required INTEGER DEFAULT 0,
+    show_in_card INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, name)
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS task_custom_values (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL,
+    field_id INTEGER NOT NULL,
+    value TEXT,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (field_id) REFERENCES custom_field_defs(id) ON DELETE CASCADE,
+    UNIQUE(task_id, field_id)
+  )`);
+
   // ─── Run SQL migrations ───
   const runMigrations = require('./migrate');
   runMigrations(db);

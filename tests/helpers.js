@@ -52,6 +52,8 @@ function cleanDb() {
   db.exec('DELETE FROM notes');
   db.exec('DELETE FROM weekly_reviews');
   db.exec('DELETE FROM automation_rules');
+  db.exec('DELETE FROM task_custom_values');
+  db.exec('DELETE FROM custom_field_defs');
   db.exec('DELETE FROM task_tags');
   db.exec('DELETE FROM task_deps');
   db.exec('DELETE FROM subtasks');

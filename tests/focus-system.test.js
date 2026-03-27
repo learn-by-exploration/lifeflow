@@ -761,8 +761,6 @@ describe('Focus Timer State Variables', () => {
 
 describe('Multi-Technique Focus Sessions', () => {
   beforeEach(() => cleanDb());
-  after(() => teardown());
-  // teardown is only called here (the last DB-using suite)
 
   it('creating sessions with different types all work', async () => {
     const area = makeArea();
@@ -848,5 +846,95 @@ describe('Multi-Technique Focus Sessions', () => {
     assert.equal(res.body.intention, 'Build feature', 'intention preserved');
     assert.equal(res.body.focus_rating, 5, 'rating updated');
     assert.equal(res.body.reflection, 'Great!', 'reflection updated');
+  });
+});
+
+// ── Auto-link Pomodoro to actual_minutes ──
+describe('Focus session auto-updates task actual_minutes', () => {
+  beforeEach(() => cleanDb());
+  after(() => teardown());
+
+  it('adds focus duration to task actual_minutes on session end', async () => {
+    const area = makeArea();
+    const goal = makeGoal(area.id);
+    const task = makeTask(goal.id, { title: 'Timed task' });
+
+    // Start focus session
+    const sess = await agent()
+      .post('/api/focus')
+      .send({ task_id: task.id, duration_sec: 0, type: 'pomodoro' })
+      .expect(201);
+
+    // End session with 1500 sec (25 min)
+    await agent()
+      .put(`/api/focus/${sess.body.id}/end`)
+      .send({ duration_sec: 1500 })
+      .expect(200);
+
+    // Check task actual_minutes
+    const taskRes = await agent().get(`/api/goals/${goal.id}/tasks`).expect(200);
+    const updated = taskRes.body.find(t => t.id === task.id);
+    assert.equal(updated.actual_minutes, 25);
+  });
+
+  it('accumulates actual_minutes from multiple focus sessions', async () => {
+    const area = makeArea();
+    const goal = makeGoal(area.id);
+    const task = makeTask(goal.id, { title: 'Multi session task' });
+
+    // First session: 25 min
+    const s1 = await agent().post('/api/focus').send({ task_id: task.id, duration_sec: 0 }).expect(201);
+    await agent().put(`/api/focus/${s1.body.id}/end`).send({ duration_sec: 1500 }).expect(200);
+
+    // Second session: 10 min
+    const s2 = await agent().post('/api/focus').send({ task_id: task.id, duration_sec: 0 }).expect(201);
+    await agent().put(`/api/focus/${s2.body.id}/end`).send({ duration_sec: 600 }).expect(200);
+
+    const taskRes = await agent().get(`/api/goals/${goal.id}/tasks`).expect(200);
+    const updated = taskRes.body.find(t => t.id === task.id);
+    assert.equal(updated.actual_minutes, 35); // 25 + 10
+  });
+
+  it('does not update actual_minutes for zero duration session', async () => {
+    const area = makeArea();
+    const goal = makeGoal(area.id);
+    const task = makeTask(goal.id, { title: 'Zero duration' });
+
+    const sess = await agent().post('/api/focus').send({ task_id: task.id, duration_sec: 0 }).expect(201);
+    await agent().put(`/api/focus/${sess.body.id}/end`).send({ duration_sec: 0 }).expect(200);
+
+    const taskRes = await agent().get(`/api/goals/${goal.id}/tasks`).expect(200);
+    const updated = taskRes.body.find(t => t.id === task.id);
+    assert.equal(updated.actual_minutes, 0);
+  });
+
+  it('adds to existing actual_minutes value', async () => {
+    const area = makeArea();
+    const goal = makeGoal(area.id);
+    const task = makeTask(goal.id, { title: 'Has existing time' });
+    // Set initial actual_minutes via DB
+    const { db } = setup();
+    db.prepare('UPDATE tasks SET actual_minutes=10 WHERE id=?').run(task.id);
+
+    const sess = await agent().post('/api/focus').send({ task_id: task.id, duration_sec: 0 }).expect(201);
+    await agent().put(`/api/focus/${sess.body.id}/end`).send({ duration_sec: 1500 }).expect(200);
+
+    const taskRes = await agent().get(`/api/goals/${goal.id}/tasks`).expect(200);
+    const updated = taskRes.body.find(t => t.id === task.id);
+    assert.equal(updated.actual_minutes, 35); // 10 + 25
+  });
+
+  it('rounds duration to nearest minute', async () => {
+    const area = makeArea();
+    const goal = makeGoal(area.id);
+    const task = makeTask(goal.id, { title: 'Round test' });
+
+    const sess = await agent().post('/api/focus').send({ task_id: task.id, duration_sec: 0 }).expect(201);
+    // 89 seconds = 1.48 min → rounds to 1
+    await agent().put(`/api/focus/${sess.body.id}/end`).send({ duration_sec: 89 }).expect(200);
+
+    const taskRes = await agent().get(`/api/goals/${goal.id}/tasks`).expect(200);
+    const updated = taskRes.body.find(t => t.id === task.id);
+    assert.equal(updated.actual_minutes, 1);
   });
 });

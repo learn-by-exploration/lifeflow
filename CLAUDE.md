@@ -1,13 +1,13 @@
 # LifeFlow — Claude Code Configuration
 
 > **Last updated:** 27 March 2026 · **Version:** 0.3.0
-> **Metrics:** 1,692 tests | 60 test files | 157 API routes | 26 DB tables | ~12,000 LOC
+> **Metrics:** 1,701 tests | 61 test files | 166 API routes | 28 DB tables | ~13,000 LOC
 
 ## Project Overview
 
 Personal task planner with 4-level hierarchy: Life Area → Goal → Task → Subtask.
 Multi-user Express.js backend + vanilla JS SPA frontend. SQLite via better-sqlite3.
-Includes authentication, habits, lists, focus timer, templates, automations, and service worker.
+Includes authentication, habits, lists, focus timer, templates, automations, custom fields, and service worker.
 
 ## Quick Start
 
@@ -49,6 +49,7 @@ src/
   routes/
     areas.js          — Life Areas + Goals + Milestones (uses AreasService)
     auth.js           — Register, login, logout, session (5 routes)
+    custom-fields.js  — Custom field definitions + task values CRUD (6 routes)
     data.js           — Export, import, backup (6 routes)
     features.js       — Habits, templates, automations, settings (25 routes)
     filters.js        — Saved filters, smart lists (uses FiltersService)
@@ -56,9 +57,10 @@ src/
     productivity.js   — Inbox, notes, reviews, rules (18 routes)
     stats.js          — Dashboard, streaks, heatmap, analytics (20 routes)
     tags.js           — Tags CRUD + stats (uses TagsService)
-    tasks.js          — Tasks CRUD, reorder, parse, board, calendar (26 routes)
+    tasks.js          — Tasks CRUD, reorder, parse, board, calendar, table, timeline (28 routes)
   schemas/            — Zod validation schemas
     common.schema.js  — Shared validators (positiveInt, hexColor, idParam)
+    tasks.schema.js   — Recurring field Zod validation
     tags.schema.js    — Tag CRUD schemas
     filters.schema.js — Filter CRUD schemas
     areas.schema.js   — Area/Goal/Milestone schemas
@@ -142,17 +144,19 @@ lists          (id, user_id, name, type, icon, position, created_at)
 list_items     (id, list_id→lists, title, done, position, note)
 badges         (id, user_id, badge_type, earned_at)
 automation_rules (id, user_id, trigger, action, config JSON, enabled)
+custom_field_defs (id, user_id, name, field_type, options JSON, position, required, show_in_card)
+task_custom_values (id, task_id→tasks, field_id→custom_field_defs, value)
 ```
 
 All foreign keys use `ON DELETE CASCADE`.
 
-## API Routes (157 routes across 10 modules)
+## API Routes (166 routes across 11 modules)
 
 See `docs/openapi.yaml` for full specification. Key modules:
 
 | Module | Routes | Covers |
 |--------|--------|--------|
-| `tasks.js` | 26 | CRUD, reorder, parse (NLP), board, calendar, my-day, search, overdue |
+| `tasks.js` | 28 | CRUD, reorder, parse (NLP), board, calendar, table, timeline, my-day, search, overdue |
 | `features.js` | 25 | Habits, templates, automations, onboarding, inbox, notes, reviews |
 | `lists.js` | 22 | Custom lists + list items CRUD |
 | `stats.js` | 20 | Dashboard, streaks, heatmap, activity, focus stats, analytics |
@@ -160,6 +164,7 @@ See `docs/openapi.yaml` for full specification. Key modules:
 | `areas.js` | 17 | Life Areas CRUD + reorder + goals association |
 | `tags.js` | 11 | Tags CRUD + usage stats |
 | `filters.js` | 7 | Saved filters + smart lists |
+| `custom-fields.js` | 6 | Custom field definitions + task values CRUD |
 | `data.js` | 6 | Export, import, backup/restore |
 | `auth.js` | 5 | Register, login, logout, session check, demo mode |
 
@@ -180,9 +185,11 @@ See `docs/openapi.yaml` for full specification. Key modules:
 | — | Area | Goals grid for a life area |
 | — | Goal | Tasks for a specific goal (list/board tabs) |
 | — | Reports | 7-tab view: Overview, Activity, Habits, Focus, Analytics, Reviews, Notes |
-| — | Settings | 7 tabs: General, Appearance, Tags, Templates, Automations, Data, Shortcuts |
+| — | Settings | 8 tabs: General, Appearance, Tags, Templates, Automations, Custom Fields, Data, Shortcuts |
 | — | Inbox | Quick capture inbox |
 | — | Lists | Custom checklists/grocery/etc |
+| — | Table | Sortable/filterable/groupable task table with pagination |
+| — | Gantt | SVG timeline with task bars, today marker, area grouping |
 | — | Triage | Morning briefing / task triage |
 | — | Habits | Habit tracker with daily logging |
 
@@ -198,17 +205,22 @@ See `docs/openapi.yaml` for full specification. Key modules:
 - PWA manifest for add-to-homescreen
 
 ### Task Management
-- Recurring tasks (daily/weekly/monthly/yearly/weekdays/every-N-days/weeks)
+- Recurring tasks (daily/weekly/monthly/yearly/weekdays/every-N-days/weeks) with subtask copying on spawn
+- Recurring field Zod validation (JSON structure enforcement at API boundary)
 - NLP quick capture parser (dates, priorities, tags from natural text)
 - Task dependencies with blocked-by indicators
 - Task templates for common structures
 - Automation rules (trigger → action workflows)
+- Custom fields (text, number, date, select types) with per-task values
+- Table view with sortable columns, grouping, filtering, pagination
+- Gantt chart MVP (SVG timeline, task bars, today marker, area grouping)
 - Drag-and-drop reorder (list, board, weekly columns) + touch support
 - Multi-select with bulk complete/delete/set priority
 - Inline subtask expansion with drag reorder
 
 ### Productivity
 - Focus/Pomodoro timer (25/5/15 min, SVG ring, session tracking, history)
+- Auto-link focus session duration to task actual_minutes on completion
 - Habit tracker with daily logging and heatmaps
 - Streak counter + GitHub-style 365-day contribution heatmap
 - Notification bell with overdue/today/upcoming reminders
@@ -290,7 +302,7 @@ See `docs/DOCUMENTATION-AUDIT.md` for the full documentation review and proposed
 | Version bump | CLAUDE.md header, `package.json`, `docs/openapi.yaml` |
 
 **Update the CLAUDE.md header line counts** when LOC changes significantly (>5%):
-- Current: 1,692 tests | 60 test files | 157 routes | 26 tables | 11,699 LOC
+- Current: 1,701 tests | 61 test files | 166 routes | 28 tables | ~13,000 LOC
 
 ## What Needs to Be Done (Roadmap)
 
@@ -300,8 +312,7 @@ See `docs/DOCUMENTATION-AUDIT.md` for the full documentation review and proposed
 - **Documentation restructure** — See `docs/DOCUMENTATION-AUDIT.md`
 
 ### Medium Priority
-- **Gantt chart view** — Timeline view for tasks with due dates
-- **Time tracking** — Track total time spent per task (beyond Pomodoro sessions)
+- **Gantt chart V2** — Dependency arrows, drag-to-reschedule, zoom levels (MVP done)
 - **Attachment support** — File/image uploads on tasks
 
 ### Low Priority / Nice to Have

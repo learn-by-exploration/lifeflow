@@ -44,6 +44,10 @@ class RecurringService {
       const oldTags = db.prepare('SELECT tag_id FROM task_tags WHERE task_id=?').all(task.id);
       const insTag = db.prepare('INSERT OR IGNORE INTO task_tags (task_id,tag_id) VALUES (?,?)');
       oldTags.forEach(tt => insTag.run(r.lastInsertRowid, tt.tag_id));
+      // Copy subtasks to new task (reset done=0)
+      const oldSubs = db.prepare('SELECT title, note, position FROM subtasks WHERE task_id=? ORDER BY position').all(task.id);
+      const insSub = db.prepare('INSERT INTO subtasks (task_id, title, note, done, position) VALUES (?, ?, ?, 0, ?)');
+      oldSubs.forEach(s => insSub.run(r.lastInsertRowid, s.title, s.note || '', s.position));
       return r.lastInsertRowid;
     });
     return spawnTx();

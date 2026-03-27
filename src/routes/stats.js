@@ -169,6 +169,15 @@ router.put('/api/focus/:id/end', (req, res) => {
   db.prepare('UPDATE focus_sessions SET ended_at=CURRENT_TIMESTAMP, duration_sec=COALESCE(?,duration_sec) WHERE id=? AND user_id=?').run(
     duration_sec !== undefined ? duration_sec : null, id, req.userId
   );
+  // Auto-update task's actual_minutes with focus session duration
+  const finalDuration = duration_sec !== undefined ? duration_sec : ex.duration_sec;
+  if (ex.task_id && finalDuration > 0) {
+    const minutes = Math.round(finalDuration / 60);
+    if (minutes > 0) {
+      db.prepare('UPDATE tasks SET actual_minutes = COALESCE(actual_minutes, 0) + ? WHERE id=? AND user_id=?')
+        .run(minutes, ex.task_id, req.userId);
+    }
+  }
   res.json(db.prepare('SELECT * FROM focus_sessions WHERE id=? AND user_id=?').get(id, req.userId));
 });
 

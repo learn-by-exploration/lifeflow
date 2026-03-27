@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { isValidHHMM } = require('../middleware/validate');
 const RecurringService = require('../services/recurring.service');
+const { validateRecurring } = require('../schemas/tasks.schema');
 module.exports = function(deps) {
   const { db, rebuildSearchIndex, enrichTask, enrichTasks, getNextPosition, nextDueDate, executeRules, verifyGoalOwnership } = deps;
   const router = Router();
@@ -65,6 +66,16 @@ router.get('/api/tasks/calendar', (req, res) => {
     WHERE t.due_date BETWEEN ? AND ? AND t.user_id=? ORDER BY t.due_date, t.priority DESC
   `).all(start, end, req.userId)));
 });
+router.get('/api/tasks/timeline', (req, res) => {
+  const { start, end } = req.query;
+  if (!start || !end) return res.status(400).json({ error: 'start and end required' });
+  const tasks = enrichTasks(db.prepare(`
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.id as area_id
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.due_date BETWEEN ? AND ? AND t.user_id=? ORDER BY t.due_date, t.priority DESC
+  `).all(start, end, req.userId));
+  res.json({ tasks });
+});
 router.post('/api/goals/:goalId/tasks', (req, res) => {
   const goalId = Number(req.params.goalId);
   if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'Invalid ID' });
@@ -79,10 +90,16 @@ router.post('/api/goals/:goalId/tasks', (req, res) => {
   if (priority !== undefined && priority !== null && (typeof priority === 'boolean' || ![0,1,2,3].includes(Number(priority)))) return res.status(400).json({ error: 'Priority must be 0-3' });
   if (estimated_minutes !== undefined && estimated_minutes !== null && (typeof estimated_minutes !== 'number' || estimated_minutes < 0)) return res.status(400).json({ error: 'estimated_minutes must be a non-negative number' });
   if (list_id) { const lid = Number(list_id); if (!Number.isInteger(lid) || !db.prepare('SELECT id FROM lists WHERE id=? AND user_id=?').get(lid, req.userId)) return res.status(400).json({ error: 'Invalid list_id' }); }
+  let validatedRecurring = null;
+  if (recurring !== undefined && recurring !== null) {
+    const rv = validateRecurring(recurring);
+    if (!rv.valid) return res.status(400).json({ error: rv.error });
+    validatedRecurring = rv.value;
+  }
   const createTaskTx = db.transaction(() => {
     const pos = getNextPosition('tasks', 'goal_id', goalId);
     const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,time_block_start,time_block_end,estimated_minutes,list_id,user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
-      goalId,title.trim(),note||'',priority||0,due_date||null,due_time||null,recurring||null,assigned_to||'',my_day?1:0,pos,time_block_start||null,time_block_end||null,estimated_minutes||null,list_id?Number(list_id):null,req.userId
+      goalId,title.trim(),note||'',priority||0,due_date||null,due_time||null,validatedRecurring,assigned_to||'',my_day?1:0,pos,time_block_start||null,time_block_end||null,estimated_minutes||null,list_id?Number(list_id):null,req.userId
     );
     const taskId = r.lastInsertRowid;
     if (Array.isArray(tagIds)) {
@@ -165,6 +182,56 @@ router.get('/api/tasks/recurring', (req, res) => {
 });
 
 // Single task GET
+router.get('/api/tasks/table', (req, res) => {
+  const SORT_WHITELIST = ['title', 'due_date', 'priority', 'status', 'area', 'created_at'];
+  const sortBy = SORT_WHITELIST.includes(req.query.sort_by) ? req.query.sort_by : 'due_date';
+  const sortDir = req.query.sort_dir === 'desc' ? 'DESC' : 'ASC';
+  const groupBy = ['area', 'goal', 'status', 'priority', 'none'].includes(req.query.group_by) ? req.query.group_by : 'none';
+  const status = ['todo', 'doing', 'done'].includes(req.query.status) ? req.query.status : null;
+  const areaId = req.query.area_id ? Number(req.query.area_id) : null;
+  const limit = Math.min(Math.max(1, Number(req.query.limit) || 100), 500);
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+
+  let clauses = ['t.user_id=?'], params = [req.userId];
+  if (status) { clauses.push('t.status=?'); params.push(status); }
+  if (areaId && Number.isInteger(areaId)) { clauses.push('a.id=?'); params.push(areaId); }
+  const where = 'WHERE ' + clauses.join(' AND ');
+
+  // Map sort_by to SQL column
+  let orderCol;
+  if (sortBy === 'area') orderCol = 'a.name';
+  else if (sortBy === 'title') orderCol = 't.title';
+  else orderCol = `t.${sortBy}`;
+
+  // Nulls last for ASC, nulls first for DESC
+  const nullsOrder = sortDir === 'ASC'
+    ? `CASE WHEN ${orderCol} IS NULL THEN 1 ELSE 0 END, ${orderCol} ${sortDir}`
+    : `CASE WHEN ${orderCol} IS NULL THEN 1 ELSE 0 END, ${orderCol} ${sortDir}`;
+
+  const total = db.prepare(`SELECT COUNT(*) as c FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id ${where}`).get(...params).c;
+  const tasks = enrichTasks(db.prepare(`
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.id as area_id
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    ${where} ORDER BY ${nullsOrder} LIMIT ? OFFSET ?
+  `).all(...params, limit, offset));
+
+  let groups = [];
+  if (groupBy !== 'none') {
+    let groupCol, groupLabel;
+    if (groupBy === 'area') { groupCol = 'a.id'; groupLabel = 'a.name'; }
+    else if (groupBy === 'goal') { groupCol = 'g.id'; groupLabel = 'g.title'; }
+    else if (groupBy === 'status') { groupCol = 't.status'; groupLabel = 't.status'; }
+    else if (groupBy === 'priority') { groupCol = 't.priority'; groupLabel = 't.priority'; }
+    groups = db.prepare(`
+      SELECT ${groupLabel} as name, COUNT(*) as count
+      FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+      ${where} GROUP BY ${groupCol} ORDER BY count DESC
+    `).all(...params);
+  }
+
+  res.json({ tasks, total, groups });
+});
+
 router.get('/api/tasks/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
@@ -239,6 +306,12 @@ router.put('/api/tasks/:id', (req, res) => {
   if (due_time !== undefined && !isValidHHMM(due_time)) return res.status(400).json({ error: 'Invalid due_time format (HH:MM)' });
   if (estimated_minutes !== undefined && estimated_minutes !== null && (typeof estimated_minutes !== 'number' || estimated_minutes < 0)) return res.status(400).json({ error: 'estimated_minutes must be a non-negative number' });
   if (list_id !== undefined && list_id !== null) { const lid = Number(list_id); if (!Number.isInteger(lid) || !db.prepare('SELECT id FROM lists WHERE id=? AND user_id=?').get(lid, req.userId)) return res.status(400).json({ error: 'Invalid list_id' }); }
+  let validatedRecurring = recurring;
+  if (recurring !== undefined && recurring !== null) {
+    const rv = validateRecurring(recurring);
+    if (!rv.valid) return res.status(400).json({ error: rv.error });
+    validatedRecurring = rv.value;
+  }
   const completedAt = status==='done' && ex.status!=='done' ? new Date().toISOString() : (status && status!=='done' ? null : ex.completed_at);
   db.prepare(`UPDATE tasks SET title=COALESCE(?,title),note=COALESCE(?,note),status=COALESCE(?,status),
     priority=COALESCE(?,priority),due_date=?,due_time=?,recurring=?,assigned_to=COALESCE(?,assigned_to),
@@ -246,7 +319,7 @@ router.put('/api/tasks/:id', (req, res) => {
     time_block_start=?,time_block_end=?,estimated_minutes=?,actual_minutes=?,list_id=? WHERE id=?`).run(
     title||null, note!==undefined?note:null, status||null, priority!==undefined?priority:null,
     due_date!==undefined?due_date:ex.due_date, due_time!==undefined?due_time:ex.due_time,
-    recurring!==undefined?recurring:ex.recurring,
+    validatedRecurring!==undefined?validatedRecurring:ex.recurring,
     assigned_to!==undefined?assigned_to:null, my_day!==undefined?(my_day?1:0):null,
     position!==undefined?position:null, goal_id||null, completedAt,
     time_block_start!==undefined?time_block_start:ex.time_block_start, time_block_end!==undefined?time_block_end:ex.time_block_end,

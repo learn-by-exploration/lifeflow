@@ -616,7 +616,7 @@ function wireBalanceDismiss(c){
 let _tasksTab=localStorage.getItem('lf-tasksTab')||'list';
 async function renderTasksHub(){
   const c=$('ct');
-  const tabs=[{id:'list',label:'List',icon:'list'},{id:'board',label:'Board',icon:'view_kanban'},{id:'calendar',label:'Calendar',icon:'calendar_month'}];
+  const tabs=[{id:'list',label:'List',icon:'list'},{id:'board',label:'Board',icon:'view_kanban'},{id:'calendar',label:'Calendar',icon:'calendar_month'},{id:'table',label:'Table',icon:'table_chart'},{id:'gantt',label:'Gantt',icon:'view_timeline'}];
   let h='<div class="tasks-hub-tabs" style="display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--brd);padding-bottom:8px">';
   tabs.forEach(t=>{
     const act=_tasksTab===t.id;
@@ -629,10 +629,229 @@ async function renderTasksHub(){
   if(_tasksTab==='list')await renderAll(sub);
   else if(_tasksTab==='board')await renderGlobalBoard(sub);
   else if(_tasksTab==='calendar')await renderCal(sub);
+  else if(_tasksTab==='table')await renderTable(sub);
+  else if(_tasksTab==='gantt')await renderGantt(sub);
   // Wire tabs
   c.querySelectorAll('.th-tab').forEach(btn=>btn.addEventListener('click',()=>{
     _tasksTab=btn.dataset.thtab;localStorage.setItem('lf-tasksTab',_tasksTab);renderTasksHub();
   }));
+}
+
+// ─── GANTT CHART MVP ───
+async function renderGantt(ct){
+  // Compute date range: 2 weeks before and 4 weeks after today
+  const today=new Date();
+  const start=new Date(today);start.setDate(start.getDate()-14);
+  const end=new Date(today);end.setDate(end.getDate()+28);
+  const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const data=await api.get(`/api/tasks/timeline?start=${fmt(start)}&end=${fmt(end)}`);
+  const tasks=data.tasks||[];
+  // Layout constants
+  const dayW=40,rowH=32,headerH=44,taskListW=220,padTop=8;
+  const totalDays=Math.ceil((end-start)/(86400000))+1;
+  const svgW=totalDays*dayW;
+  const svgH=headerH+tasks.length*rowH+padTop;
+  // Group tasks by area
+  const areaMap={};tasks.forEach(t=>{const k=t.area_name||'No Area';(areaMap[k]=areaMap[k]||[]).push(t)});
+  const groupedTasks=[];
+  Object.keys(areaMap).sort().forEach(area=>{groupedTasks.push({type:'header',area});areaMap[area].forEach(t=>groupedTasks.push({type:'task',task:t}))});
+  const totalRows=groupedTasks.length;
+  const totalH=headerH+totalRows*rowH+padTop;
+  // Build HTML
+  let h=`<div class="gantt-wrap" style="display:flex;height:calc(100vh - 200px);overflow:hidden;border:1px solid var(--brd);border-radius:var(--rs)">`;
+  // Left panel: task list
+  h+=`<div class="gantt-tasks" style="width:${taskListW}px;overflow-y:auto;border-right:1px solid var(--brd);flex-shrink:0">`;
+  h+=`<div style="height:${headerH}px;padding:8px 12px;border-bottom:1px solid var(--brd);font-size:12px;font-weight:600;color:var(--txd);display:flex;align-items:flex-end">Tasks</div>`;
+  groupedTasks.forEach((r,i)=>{
+    const y=headerH+i*rowH;
+    if(r.type==='header'){
+      h+=`<div style="height:${rowH}px;padding:0 12px;display:flex;align-items:center;background:var(--bg2);font-size:11px;font-weight:600;color:var(--txd)">▾ ${esc(r.area)}</div>`;
+    } else {
+      const t=r.task;
+      const priColor=t.priority>=3?'var(--err)':t.priority>=2?'var(--warn)':'';
+      h+=`<div class="gantt-task-label" data-gtid="${t.id}" style="height:${rowH}px;padding:0 12px;display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;overflow:hidden;border-bottom:1px solid var(--brd)" title="${escA(t.title)}">`;
+      if(t.status==='done')h+=`<span class="material-icons-round" style="font-size:14px;color:var(--ok)">check_circle</span>`;
+      else h+=`<span class="material-icons-round" style="font-size:14px;color:var(--txd)">radio_button_unchecked</span>`;
+      h+=`<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${priColor?'color:'+priColor:''}">${esc(t.title)}</span></div>`;
+    }
+  });
+  h+=`</div>`;
+  // Right panel: SVG timeline
+  h+=`<div class="gantt-timeline" style="flex:1;overflow:auto;position:relative">`;
+  h+=`<svg width="${svgW}" height="${totalH}" xmlns="http://www.w3.org/2000/svg" style="font-family:Inter,sans-serif">`;
+  // Day headers
+  for(let i=0;i<totalDays;i++){
+    const d=new Date(start);d.setDate(d.getDate()+i);
+    const x=i*dayW;
+    const isWeekend=d.getDay()===0||d.getDay()===6;
+    const isToday=fmt(d)===fmt(today);
+    // Weekend background
+    if(isWeekend)h+=`<rect x="${x}" y="0" width="${dayW}" height="${totalH}" fill="var(--bg2)" opacity="0.5"/>`;
+    // Day separator line
+    h+=`<line x1="${x}" y1="${headerH}" x2="${x}" y2="${totalH}" stroke="var(--brd)" stroke-width="0.5"/>`;
+    // Day label
+    const dayLabel=d.toLocaleDateString('en-US',{weekday:'short'});
+    const dateLabel=d.getDate();
+    const monthLabel=d.getDate()===1||i===0?d.toLocaleDateString('en-US',{month:'short'})+' ':'';
+    h+=`<text x="${x+dayW/2}" y="16" text-anchor="middle" font-size="10" fill="${isToday?'var(--brand)':'var(--txd)'}" font-weight="${isToday?'700':'400'}">${monthLabel}${dateLabel}</text>`;
+    h+=`<text x="${x+dayW/2}" y="30" text-anchor="middle" font-size="9" fill="${isToday?'var(--brand)':'var(--txd)'}">${dayLabel}</text>`;
+  }
+  // Header separator
+  h+=`<line x1="0" y1="${headerH}" x2="${svgW}" y2="${headerH}" stroke="var(--brd)" stroke-width="1"/>`;
+  // Task bars
+  groupedTasks.forEach((r,i)=>{
+    const y=headerH+i*rowH+padTop;
+    if(r.type==='task'){
+      const t=r.task;
+      const dueDate=new Date(t.due_date+'T00:00:00');
+      const dayOffset=Math.floor((dueDate-start)/(86400000));
+      const estDays=t.estimated_minutes?Math.max(1,Math.ceil(t.estimated_minutes/480)):1; // 8h workday
+      const barX=dayOffset*dayW+2;
+      const barW=Math.max(estDays*dayW-4,dayW-4);
+      const barY=y+4;
+      const barH=rowH-12;
+      const color=t.goal_color||'var(--brand)';
+      const opacity=t.status==='done'?'0.4':'1';
+      // Bar
+      h+=`<rect class="gantt-bar" data-gbid="${t.id}" x="${barX}" y="${barY}" width="${barW}" height="${barH}" rx="4" fill="${color}" opacity="${opacity}" style="cursor:pointer"/>`;
+      // Progress fill if subtasks
+      if(t.subtask_total>0){
+        const pct=t.subtask_done/t.subtask_total;
+        if(pct>0){
+          h+=`<rect x="${barX}" y="${barY}" width="${Math.round(barW*pct)}" height="${barH}" rx="4" fill="${color}" opacity="${Number(opacity)*0.6}" style="pointer-events:none"/>`;
+        }
+      }
+      // Title text on bar if wide enough
+      if(barW>60){
+        h+=`<text x="${barX+6}" y="${barY+barH/2+4}" font-size="10" fill="#fff" style="pointer-events:none" clip-path="url(#clip-${t.id})">${esc(t.title.substring(0,20))}</text>`;
+      }
+    }
+  });
+  // Today marker
+  const todayOffset=Math.floor((today-start)/(86400000));
+  const todayX=todayOffset*dayW+dayW/2;
+  h+=`<line x1="${todayX}" y1="${headerH}" x2="${todayX}" y2="${totalH}" stroke="var(--err)" stroke-width="2" stroke-dasharray="4,4" opacity="0.7"/>`;
+  h+=`</svg></div></div>`;
+  ct.innerHTML=h;
+  // Wire click on task labels
+  ct.querySelectorAll('.gantt-task-label').forEach(el=>el.addEventListener('click',()=>{
+    const tid=Number(el.dataset.gtid);if(tid)openDP(tid);
+  }));
+  // Wire click on bars
+  ct.querySelectorAll('.gantt-bar').forEach(el=>el.addEventListener('click',()=>{
+    const tid=Number(el.dataset.gbid);if(tid)openDP(tid);
+  }));
+  // Sync scroll between task list and timeline
+  const tl=ct.querySelector('.gantt-timeline');
+  const tsList=ct.querySelector('.gantt-tasks');
+  if(tl&&tsList){
+    tl.addEventListener('scroll',()=>{tsList.scrollTop=tl.scrollTop});
+    tsList.addEventListener('scroll',()=>{tl.scrollTop=tsList.scrollTop});
+  }
+  // Scroll to today
+  if(tl){tl.scrollLeft=Math.max(0,todayX-tl.clientWidth/2)}
+}
+
+// ─── TABLE VIEW ───
+let _tvSort={col:'due_date',dir:'asc'},_tvGroup='none',_tvStatus='all',_tvAreaId='',_tvPage=0;
+async function renderTable(ct){
+  const limit=100;
+  const qs=`sort_by=${_tvSort.col}&sort_dir=${_tvSort.dir}&group_by=${_tvGroup}&limit=${limit}&offset=${_tvPage*limit}${_tvStatus!=='all'?'&status='+_tvStatus:''}${_tvAreaId?'&area_id='+_tvAreaId:''}`;
+  const data=await api.get('/api/tasks/table?'+qs);
+  const cols=[
+    {key:'title',label:'Title',sortable:true,flex:true},
+    {key:'area',label:'Area',sortable:true,w:'100px'},
+    {key:'goal_title',label:'Goal',sortable:false,w:'120px'},
+    {key:'due_date',label:'Due',sortable:true,w:'90px'},
+    {key:'priority',label:'Priority',sortable:true,w:'80px'},
+    {key:'status',label:'Status',sortable:true,w:'75px'},
+    {key:'tags',label:'Tags',sortable:false,w:'100px'},
+    {key:'estimated_minutes',label:'Est.',sortable:true,w:'50px'},
+    {key:'actual_minutes',label:'Act.',sortable:true,w:'50px'}
+  ];
+  const priLabels=['—','Normal','High','Critical'];
+  const priColors=['var(--txd)','var(--tx)','var(--warn)','var(--err)'];
+  // Filters bar
+  let h='<div class="tv-filters" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">';
+  h+=`<select class="tv-status-filter" style="padding:4px 8px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg2);color:var(--tx);font-size:12px">`;
+  ['all','todo','doing','done'].forEach(s=>h+=`<option value="${s}"${_tvStatus===s?' selected':''}>${s==='all'?'All Statuses':s.charAt(0).toUpperCase()+s.slice(1)}</option>`);
+  h+='</select>';
+  h+=`<select class="tv-group-filter" style="padding:4px 8px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg2);color:var(--tx);font-size:12px">`;
+  [['none','No Grouping'],['area','Group by Area'],['goal','Group by Goal'],['status','Group by Status'],['priority','Group by Priority']].forEach(([v,l])=>h+=`<option value="${v}"${_tvGroup===v?' selected':''}>${l}</option>`);
+  h+='</select>';
+  h+=`<span style="font-size:12px;color:var(--txd);margin-left:auto">${data.total} task${data.total!==1?'s':''}</span>`;
+  h+='</div>';
+  // Groups
+  if(_tvGroup!=='none'&&data.groups&&data.groups.length){
+    h+='<div class="tv-groups" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">';
+    data.groups.forEach(g=>h+=`<span style="font-size:11px;padding:3px 8px;border-radius:var(--rs);background:var(--bg2);color:var(--txd)">${esc(String(g.name))} (${g.count})</span>`);
+    h+='</div>';
+  }
+  // Table
+  h+='<div class="tv-wrap" style="overflow-x:auto"><table class="tv-table" style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>';
+  cols.forEach(c=>{
+    const isSorted=_tvSort.col===c.key;
+    const arrow=isSorted?(_tvSort.dir==='asc'?' ↑':' ↓'):'';
+    const cursor=c.sortable?'cursor:pointer':'';
+    const w=c.flex?'':'width:'+c.w+';min-width:'+c.w;
+    h+=`<th class="tv-th${c.sortable?' tv-sortable':''}" data-tvcol="${c.key}" style="text-align:left;padding:8px 6px;border-bottom:2px solid var(--brd);font-weight:600;color:var(--txd);${cursor};${w};white-space:nowrap">${c.label}${arrow}</th>`;
+  });
+  h+='</tr></thead><tbody>';
+  if(!data.tasks.length){
+    h+=`<tr><td colspan="${cols.length}" style="padding:32px;text-align:center;color:var(--txd)">No tasks found</td></tr>`;
+  }
+  data.tasks.forEach((t,i)=>{
+    const bg=i%2===0?'':'background:var(--bg2)';
+    const overdue=t.due_date&&t.due_date<new Date().toISOString().slice(0,10)&&t.status!=='done';
+    h+=`<tr class="tv-row" data-tvid="${t.id}" style="border-bottom:1px solid var(--brd);${bg};cursor:pointer">`;
+    // Title
+    h+=`<td style="padding:8px 6px;font-weight:500;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title)}</td>`;
+    // Area
+    h+=`<td style="padding:8px 6px;font-size:12px;color:var(--txd)">${t.area_icon||''} ${esc(t.area_name||'')}</td>`;
+    // Goal
+    h+=`<td style="padding:8px 6px;font-size:12px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${t.goal_color||'var(--txd)'};margin-right:4px;vertical-align:middle"></span>${esc(t.goal_title||'')}</td>`;
+    // Due
+    h+=`<td style="padding:8px 6px;font-size:12px;${overdue?'color:var(--err);font-weight:600':''}">${t.due_date?fmtDue(t.due_date):'—'}</td>`;
+    // Priority
+    h+=`<td style="padding:8px 6px;font-size:12px;color:${priColors[t.priority||0]}">${priLabels[t.priority||0]}</td>`;
+    // Status
+    const stBg=t.status==='done'?'var(--ok)':t.status==='doing'?'var(--brand)':'var(--txd)';
+    h+=`<td style="padding:8px 6px"><span style="font-size:10px;padding:2px 6px;border-radius:var(--rs);background:${stBg};color:#fff">${t.status}</span></td>`;
+    // Tags
+    h+=`<td style="padding:8px 6px">${(t.tags||[]).map(tg=>`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${tg.color||'var(--txd)'};margin-right:2px" title="${escA(tg.name)}"></span>`).join('')}</td>`;
+    // Est./Act.
+    h+=`<td style="padding:8px 6px;font-size:12px;color:var(--txd)">${t.estimated_minutes||'—'}</td>`;
+    h+=`<td style="padding:8px 6px;font-size:12px;color:var(--txd)">${t.actual_minutes||'—'}</td>`;
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  // Pagination
+  if(data.total>limit){
+    const totalPages=Math.ceil(data.total/limit);
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:12px;color:var(--txd)">`;
+    h+=`<span>Showing ${_tvPage*limit+1}–${Math.min((_tvPage+1)*limit,data.total)} of ${data.total}</span>`;
+    h+=`<div style="display:flex;gap:4px">`;
+    if(_tvPage>0)h+=`<button class="btn-c tv-prev" style="padding:4px 10px;font-size:12px">← Prev</button>`;
+    if(_tvPage<totalPages-1)h+=`<button class="btn-c tv-next" style="padding:4px 10px;font-size:12px">Next →</button>`;
+    h+='</div></div>';
+  }
+  ct.innerHTML=h;
+  // Wire events
+  ct.querySelectorAll('.tv-sortable').forEach(th=>th.addEventListener('click',()=>{
+    const col=th.dataset.tvcol;
+    if(_tvSort.col===col)_tvSort.dir=_tvSort.dir==='asc'?'desc':'asc';
+    else{_tvSort.col=col;_tvSort.dir='asc';}
+    _tvPage=0;renderTasksHub();
+  }));
+  ct.querySelectorAll('.tv-row').forEach(row=>row.addEventListener('click',()=>{
+    const tid=Number(row.dataset.tvid);if(tid)openDP(tid);
+  }));
+  const statusSel=ct.querySelector('.tv-status-filter');
+  if(statusSel)statusSel.addEventListener('change',()=>{_tvStatus=statusSel.value;_tvPage=0;renderTasksHub();});
+  const groupSel=ct.querySelector('.tv-group-filter');
+  if(groupSel)groupSel.addEventListener('change',()=>{_tvGroup=groupSel.value;_tvPage=0;renderTasksHub();});
+  const prevBtn=ct.querySelector('.tv-prev');if(prevBtn)prevBtn.addEventListener('click',e=>{e.stopPropagation();_tvPage--;renderTasksHub();});
+  const nextBtn=ct.querySelector('.tv-next');if(nextBtn)nextBtn.addEventListener('click',e=>{e.stopPropagation();_tvPage++;renderTasksHub();});
 }
 
 // ─── FOCUS HUB ───
@@ -1528,7 +1747,8 @@ function renderDPBody(){
     <label>Tags</label><div class="tg-wrap" id="tg-wrap"><div class="tgi" id="tgi"></div></div>
     <label>Subtasks</label><div class="sta"><input type="text" id="st-input" placeholder="Add subtask..."><button id="st-add">Add</button></div><div class="stl" id="stl"></div>
     <label>Dependencies</label><div id="dp-deps"></div>
-    <label>Comments</label><div class="sta"><input type="text" id="cmt-input" placeholder="Add a comment..."><button id="cmt-add">Post</button></div><div id="dp-comments"></div>`;
+    <label>Comments</label><div class="sta"><input type="text" id="cmt-input" placeholder="Add a comment..."><button id="cmt-add">Post</button></div><div id="dp-comments"></div>
+    <label>Custom Fields</label><div id="dp-cf"></div>`;
   $('dp-body').innerHTML=h;
   // Populate list picker
   const dpListSel=$('dp-list');
@@ -1542,6 +1762,7 @@ function renderDPBody(){
   renderSubtasks();
   renderDeps();
   renderComments();
+  renderDPCustomFields();
   $('st-add').addEventListener('click',addSubtask);
   $('st-input').addEventListener('keydown',e=>{if(e.key==='Enter')addSubtask()});
   $('cmt-add').addEventListener('click',addComment);
@@ -1580,6 +1801,36 @@ async function addComment(){
   const text=inp.value.trim();if(!text||!dpTask)return;
   await api.post('/api/tasks/'+dpTask.id+'/comments',{text});
   inp.value='';renderComments();
+}
+async function renderDPCustomFields(){
+  const el=$('dp-cf');if(!el||!dpTask)return;
+  try{
+    const [defs,vals]=await Promise.all([api.get('/api/custom-fields'),api.get('/api/tasks/'+dpTask.id+'/custom-fields')]);
+    if(!defs.length){el.innerHTML='<div style="font-size:11px;color:var(--txd);padding:4px 0">No custom fields defined — add them in Settings</div>';return}
+    const valMap={};vals.forEach(v=>{valMap[v.field_id]=v.value});
+    let h='<div style="display:flex;flex-direction:column;gap:6px">';
+    defs.forEach(d=>{
+      const val=valMap[d.id]||'';
+      h+=`<div style="display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:var(--txd);width:80px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escA(d.name)}">${esc(d.name)}</span>`;
+      if(d.field_type==='text')h+=`<input type="text" class="cf-val" data-cfid="${d.id}" value="${escA(val)}" style="flex:1;padding:4px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg2);color:var(--tx);font-size:12px" maxlength="500">`;
+      else if(d.field_type==='number')h+=`<input type="number" class="cf-val" data-cfid="${d.id}" value="${escA(val)}" style="flex:1;padding:4px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg2);color:var(--tx);font-size:12px">`;
+      else if(d.field_type==='date')h+=`<input type="date" class="cf-val" data-cfid="${d.id}" value="${escA(val)}" style="flex:1;padding:4px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg2);color:var(--tx);font-size:12px">`;
+      else if(d.field_type==='select'){
+        const opts=d.options?JSON.parse(d.options):[];
+        h+=`<select class="cf-val" data-cfid="${d.id}" style="flex:1;padding:4px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg2);color:var(--tx);font-size:12px"><option value="">—</option>${opts.map(o=>`<option value="${escA(o)}"${val===o?' selected':''}>${esc(o)}</option>`).join('')}</select>`;
+      }
+      h+='</div>';
+    });
+    h+='</div>';
+    el.innerHTML=h;
+    // Auto-save on blur/change
+    el.querySelectorAll('.cf-val').forEach(inp=>{
+      const ev=inp.tagName==='SELECT'?'change':'blur';
+      inp.addEventListener(ev,async()=>{
+        try{await api.put('/api/tasks/'+dpTask.id+'/custom-fields',{fields:[{field_id:Number(inp.dataset.cfid),value:inp.value||null}]});}catch(e){showToast(e.message||'Error','error')}
+      });
+    });
+  }catch(e){el.innerHTML=''}
 }
 function renderTagInput(){
   const wrap=$('tgi');
@@ -3291,6 +3542,68 @@ function vimMove(delta){
   vimHighlight(vimIdx);
 }
 
+// ─── CUSTOM FIELDS SETTINGS ───
+async function renderCustomFieldsSettings(c, tabsHtml){
+  const fields=await api.get('/api/custom-fields');
+  const TYPES=[{v:'text',l:'Text'},{v:'number',l:'Number'},{v:'date',l:'Date'},{v:'select',l:'Select'}];
+  let h=tabsHtml+`<div class="settings-grid"><section class="settings-section"><h3>Custom Fields</h3>
+  <p style="font-size:12px;color:var(--txd);margin-bottom:12px">Define custom fields that appear on all tasks.</p>`;
+  if(fields.length){
+    h+=`<div id="cf-list" style="display:flex;flex-direction:column;gap:6px">`;
+    fields.forEach(f=>{
+      const opts=f.options?JSON.parse(f.options):[];
+      h+=`<div class="cf-row" data-cfid="${f.id}" style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg2)">
+        <span style="font-size:13px;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</span>
+        <span style="font-size:11px;padding:2px 6px;border-radius:var(--rs);background:var(--brand);color:#fff">${f.field_type}</span>
+        ${f.field_type==='select'?`<span style="font-size:11px;color:var(--txd)">${opts.join(', ')}</span>`:''}
+        <label style="font-size:11px;color:var(--txd);display:flex;align-items:center;gap:3px"><input type="checkbox" class="cf-card-toggle" data-cfid="${f.id}" ${f.show_in_card?'checked':''}> Card</label>
+        <button class="btn-c cf-del" data-cfid="${f.id}" title="Delete" style="color:var(--dn)"><span class="material-icons-round" style="font-size:16px">delete</span></button>
+      </div>`;
+    });
+    h+=`</div>`;
+  } else {
+    h+=`<div style="padding:16px;text-align:center;color:var(--txd);font-size:12px">No custom fields defined yet.</div>`;
+  }
+  h+=`<div style="margin-top:12px;border-top:1px solid var(--brd);padding-top:12px">
+    <h4 style="font-size:13px;margin-bottom:8px">Add Field</h4>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <div><label style="font-size:11px;color:var(--txd)">Name</label><input type="text" id="cf-new-name" style="display:block;padding:6px 10px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg2);color:var(--tx);font-size:13px;width:150px" placeholder="Field name"></div>
+      <div><label style="font-size:11px;color:var(--txd)">Type</label><select id="cf-new-type" style="display:block;padding:6px 10px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg2);color:var(--tx);font-size:13px">${TYPES.map(t=>`<option value="${t.v}">${t.l}</option>`).join('')}</select></div>
+      <div id="cf-new-opts-wrap" style="display:none"><label style="font-size:11px;color:var(--txd)">Options (comma-separated)</label><input type="text" id="cf-new-opts" style="display:block;padding:6px 10px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg2);color:var(--tx);font-size:13px;width:200px" placeholder="Low, Medium, High"></div>
+      <button class="btn-s" id="cf-add-btn" style="padding:6px 14px;font-size:12px">+ Add</button>
+    </div>
+  </div>`;
+  h+=`</section></div>`;
+  c.innerHTML=h;
+  wireSettingsTabs();
+  // Show/hide options input for select type
+  const typeSelect=$('cf-new-type');
+  const optsWrap=$('cf-new-opts-wrap');
+  typeSelect?.addEventListener('change',()=>{optsWrap.style.display=typeSelect.value==='select'?'':'none';});
+  // Add field
+  $('cf-add-btn')?.addEventListener('click',async()=>{
+    const name=$('cf-new-name')?.value?.trim();
+    const field_type=typeSelect?.value;
+    if(!name)return showToast('Name required','error');
+    const body={name,field_type};
+    if(field_type==='select'){
+      const raw=$('cf-new-opts')?.value||'';
+      body.options=raw.split(',').map(s=>s.trim()).filter(Boolean);
+      if(!body.options.length)return showToast('Options required for select type','error');
+    }
+    try{await api.post('/api/custom-fields',body);renderSettings();}catch(e){showToast(e.message||'Error','error');}
+  });
+  // Delete
+  c.querySelectorAll('.cf-del').forEach(btn=>btn.addEventListener('click',async()=>{
+    if(!confirm('Delete this custom field and all its values?'))return;
+    await api.del('/api/custom-fields/'+btn.dataset.cfid);renderSettings();showToast('Field deleted');
+  }));
+  // Toggle show_in_card
+  c.querySelectorAll('.cf-card-toggle').forEach(cb=>cb.addEventListener('change',async()=>{
+    await api.put('/api/custom-fields/'+cb.dataset.cfid,{show_in_card:cb.checked});
+  }));
+}
+
 // ─── SETTINGS PAGE ───
 async function renderSettings(){
   await loadSettings();
@@ -3305,6 +3618,7 @@ async function renderSettings(){
     {id:'tags',label:'Tags',icon:'label',g:3},
     {id:'templates',label:'Templates',icon:'content_copy',g:4},
     {id:'automations',label:'Automations',icon:'auto_fix_high',g:4},
+    {id:'customfields',label:'Custom Fields',icon:'edit_note',g:4},
     {id:'badges',label:'Badges',icon:'emoji_events',g:5},
     {id:'data',label:'Data',icon:'storage',g:6},
     {id:'shortcuts',label:'Shortcuts',icon:'keyboard',g:6}
@@ -3354,6 +3668,10 @@ async function renderSettings(){
     await renderRules();
     c.insertAdjacentHTML('afterbegin',tabsHtml);
     wireSettingsTabs();
+    return;
+  }
+  if(window._settingsTab==='customfields'){
+    await renderCustomFieldsSettings(c, tabsHtml);
     return;
   }
   if(window._settingsTab==='areas'){

@@ -40,6 +40,14 @@ module.exports = function createHelpers(db) {
       const lph = listIds.map(() => '?').join(',');
       db.prepare(`SELECT id, name, icon, color FROM lists WHERE id IN (${lph})`).all(...listIds).forEach(l => { listMap[l.id] = l; });
     }
+    // Batch-load custom field values
+    const cfValues = db.prepare(`
+      SELECT v.task_id, v.field_id, v.value, d.name, d.field_type
+      FROM task_custom_values v JOIN custom_field_defs d ON v.field_id=d.id
+      WHERE v.task_id IN (${ph})
+    `).all(...ids);
+    const cfMap = {};
+    cfValues.forEach(r => { (cfMap[r.task_id] = cfMap[r.task_id] || []).push({ field_id: r.field_id, name: r.name, field_type: r.field_type, value: r.value }); });
     return tasks.map(t => {
       t.tags = tagMap[t.id] || [];
       t.subtasks = subMap[t.id] || [];
@@ -51,6 +59,7 @@ module.exports = function createHelpers(db) {
         t.list_icon = listMap[t.list_id].icon;
         t.list_color = listMap[t.list_id].color;
       }
+      t.custom_fields = cfMap[t.id] || [];
       return t;
     });
   }
