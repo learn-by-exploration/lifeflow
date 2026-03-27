@@ -1019,7 +1019,25 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .sa-row.archived{opacity:.7}
 .sa-row .btn-c{opacity:0;transition:opacity .15s}
 .sa-row:hover .btn-c{opacity:1}
-@media(pointer:coarse){.sa-row .btn-c{opacity:1}}
+@media(pointer:coarse){
+  .sa-row .btn-c{opacity:1}
+  /* Touch devices: enforce 44×44 minimum */
+  .tk{width:36px;height:36px;min-width:36px;min-height:36px}
+  .tk .material-icons-round{font-size:16px}
+  .stk{width:30px;height:30px;min-width:30px;min-height:30px}
+  .stk .material-icons-round{font-size:13px}
+  .ms-check{width:28px;height:28px;min-width:28px;min-height:28px}
+  .ni{padding:10px 11px;min-height:44px}
+  .sb-bot-icon,.sb-bot-help{min-height:44px}
+  .tp-dot{width:30px;height:30px}
+  .vt-btn{padding:12px 16px;min-height:44px}
+  .bell-btn{min-width:44px;min-height:44px}
+  .mb-tab{min-width:44px;min-height:44px;padding:6px 10px}
+  .ctx-item{padding:12px 14px;min-height:44px}
+  .tc{padding:12px 14px;min-height:48px}
+  .gc{min-height:56px;padding:14px}
+  .habit-check{width:48px;height:48px}
+}
 
 /* Task completion animation */
 .tc-completing{animation:taskComplete .4s ease-out}
@@ -1182,25 +1200,6 @@ body.demo-mode .ham{top:50px}
 .tk{width:28px;height:28px;min-width:28px;min-height:28px}
 .stk{width:24px;height:24px;min-width:24px;min-height:24px}
 .ms-check{width:24px;height:24px;min-width:24px;min-height:24px}
-@media(pointer:coarse){
-  /* Touch devices: enforce 44×44 minimum */
-  .tk{width:36px;height:36px;min-width:36px;min-height:36px}
-  .tk .material-icons-round{font-size:16px}
-  .stk{width:30px;height:30px;min-width:30px;min-height:30px}
-  .stk .material-icons-round{font-size:13px}
-  .ms-check{width:28px;height:28px;min-width:28px;min-height:28px}
-  .ni{padding:10px 11px;min-height:44px}
-  .sb-bot-icon,.sb-bot-help{min-height:44px}
-  .tp-dot{width:30px;height:30px}
-  .vt-btn{padding:12px 16px;min-height:44px}
-  .bell-btn{min-width:44px;min-height:44px}
-  .mb-tab{min-width:44px;min-height:44px;padding:6px 10px}
-  .ctx-item{padding:12px 14px;min-height:44px}
-  .tc{padding:12px 14px;min-height:48px}
-  .gc{min-height:56px;padding:14px}
-  .habit-check{width:48px;height:48px}
-}
-
 /* ── #11: Detail panel scroll smoothness (iOS) ── */
 .dp-body{-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .sr-results{-webkit-overflow-scrolling:touch}
