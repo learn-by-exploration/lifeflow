@@ -1,8 +1,10 @@
 const { Router } = require('express');
 const { isValidHHMM } = require('../middleware/validate');
+const RecurringService = require('../services/recurring.service');
 module.exports = function(deps) {
   const { db, rebuildSearchIndex, enrichTask, enrichTasks, getNextPosition, nextDueDate, executeRules, verifyGoalOwnership } = deps;
   const router = Router();
+  const recurringSvc = new RecurringService(db, deps);
 
 // ─── Tasks ───
 router.get('/api/goals/:goalId/tasks', (req, res) => {
@@ -208,7 +210,10 @@ router.put('/api/tasks/bulk', (req, res) => {
         db.prepare(`UPDATE tasks SET ${sets.join(',')} WHERE id=? AND user_id=?`).run(...vals, req.userId);
       }
       if (changes.add_tag_id) {
-        db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?,?)').run(id, Number(changes.add_tag_id));
+        const tagId = Number(changes.add_tag_id);
+        if (db.prepare('SELECT id FROM tags WHERE id=? AND user_id=?').get(tagId, req.userId)) {
+          db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?,?)').run(id, tagId);
+        }
       }
       if (changes.remove_tag_id) {
         db.prepare('DELETE FROM task_tags WHERE task_id=? AND tag_id=?').run(id, Number(changes.remove_tag_id));
@@ -250,29 +255,7 @@ router.put('/api/tasks/:id', (req, res) => {
   );
   // Recurring: spawn next task when completed
   if (status === 'done' && ex.status !== 'done' && ex.recurring) {
-    const nd = nextDueDate(ex.due_date, ex.recurring);
-    if (nd) {
-      // Increment occurrence count in recurring config for endAfter tracking
-      let newRecurring = ex.recurring;
-      try {
-        const rcfg = JSON.parse(ex.recurring);
-        if (rcfg && typeof rcfg === 'object') {
-          rcfg.count = (rcfg.count || 0) + 1;
-          newRecurring = JSON.stringify(rcfg);
-        }
-      } catch {}
-      const recurTx = db.transaction(() => {
-        const rpos = getNextPosition('tasks', 'goal_id', ex.goal_id);
-        const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,time_block_start,time_block_end,estimated_minutes,list_id,user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
-          ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.due_time, newRecurring, ex.assigned_to, 0, rpos, ex.time_block_start, ex.time_block_end, ex.estimated_minutes, ex.list_id, req.userId
-        );
-        // Copy tags to new task
-        const oldTags = db.prepare('SELECT tag_id FROM task_tags WHERE task_id=?').all(id);
-        const insTag = db.prepare('INSERT OR IGNORE INTO task_tags (task_id,tag_id) VALUES (?,?)');
-        oldTags.forEach(tt => insTag.run(r.lastInsertRowid, tt.tag_id));
-      });
-      recurTx();
-    }
+    recurringSvc.spawnNext(ex, req.userId);
   }
   // Execute automation rules on completion
   if (status === 'done' && ex.status !== 'done') {
@@ -376,9 +359,12 @@ router.put('/api/tasks/:id/deps', (req, res) => {
   if (!Array.isArray(blockedByIds)) return res.status(400).json({ error: 'blockedByIds array required' });
   // Prevent self-dependency
   const valid = blockedByIds.filter(bid => Number.isInteger(bid) && bid !== id);
+  // Verify all blockedByIds belong to the requesting user
+  const verifyOwner = db.prepare('SELECT id FROM tasks WHERE id=? AND user_id=?');
+  const owned = valid.filter(bid => verifyOwner.get(bid, req.userId));
   // Check for circular dependencies via DFS (with depth limit to prevent DoS)
   const MAX_DEPTH = 100;
-  for (const bid of valid) {
+  for (const bid of owned) {
     const visited = new Set();
     const stack = [bid];
     while (stack.length) {
@@ -393,7 +379,7 @@ router.put('/api/tasks/:id/deps', (req, res) => {
   }
   db.prepare('DELETE FROM task_deps WHERE task_id=? AND task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(id, req.userId);
   const ins = db.prepare('INSERT OR IGNORE INTO task_deps (task_id, blocked_by_id) VALUES (?, ?)');
-  valid.forEach(bid => ins.run(id, bid));
+  owned.forEach(bid => ins.run(id, bid));
   res.json({ ok: true, blockedBy: db.prepare('SELECT t.id, t.title, t.status FROM tasks t JOIN task_deps d ON t.id=d.blocked_by_id WHERE d.task_id=? AND t.user_id=?').all(id, req.userId) });
 });
 
@@ -460,24 +446,9 @@ router.post('/api/tasks/:id/skip', (req, res) => {
   // Mark as skipped (done but not actually completed)
   db.prepare("UPDATE tasks SET status='done', completed_at=? WHERE id=? AND user_id=?").run(new Date().toISOString(), id, req.userId);
   // Spawn next occurrence
-  const nd = nextDueDate(ex.due_date, ex.recurring);
-  if (!nd) return res.json({ skipped: id, next: null });
-  // Increment occurrence count in recurring config for endAfter tracking
-  let skipRecurring = ex.recurring;
-  try {
-    const rcfg = JSON.parse(ex.recurring);
-    if (rcfg && typeof rcfg === 'object') {
-      rcfg.count = (rcfg.count || 0) + 1;
-      skipRecurring = JSON.stringify(rcfg);
-    }
-  } catch {}
-  const spos = getNextPosition('tasks', 'goal_id', ex.goal_id);
-  const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(
-    ex.goal_id, ex.title, ex.note, ex.priority, nd, ex.due_time, skipRecurring, ex.assigned_to, 0, spos, req.userId
-  );
-  const oldTags = db.prepare('SELECT tag_id FROM task_tags WHERE task_id=?').all(id);
-  oldTags.forEach(tt => db.prepare('INSERT OR IGNORE INTO task_tags (task_id,tag_id) VALUES (?,?)').run(r.lastInsertRowid, tt.tag_id));
-  res.json({ skipped: id, next: enrichTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(r.lastInsertRowid)) });
+  const newId = recurringSvc.spawnNext(ex, req.userId);
+  if (!newId) return res.json({ skipped: id, next: null });
+  res.json({ skipped: id, next: enrichTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(newId)) });
 });
 
 // Move task to different goal

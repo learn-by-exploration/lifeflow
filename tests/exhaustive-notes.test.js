@@ -143,9 +143,8 @@ describe('Notes API – exhaustive coverage', () => {
 
   // ── DELETE /api/notes/:id ──────────────────────────────────────
 
-  it('deleting nonexistent note returns ok', async () => {
+  it('deleting nonexistent note returns 404', async () => {
     const res = await agent().delete('/api/notes/99999');
-    assert.equal(res.status, 200);
-    assert.deepEqual(res.body, { ok: true });
+    assert.equal(res.status, 404);
   });
 });

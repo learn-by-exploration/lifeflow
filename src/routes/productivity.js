@@ -37,7 +37,8 @@ router.put('/api/rules/:id', (req, res) => {
   res.json(db.prepare('SELECT * FROM automation_rules WHERE id=? AND user_id=?').get(id, req.userId));
 });
 router.delete('/api/rules/:id', (req, res) => {
-  db.prepare('DELETE FROM automation_rules WHERE id=? AND user_id=?').run(Number(req.params.id), req.userId);
+  const result = db.prepare('DELETE FROM automation_rules WHERE id=? AND user_id=?').run(Number(req.params.id), req.userId);
+  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });
 
@@ -66,7 +67,8 @@ router.put('/api/inbox/:id', (req, res) => {
 router.delete('/api/inbox/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  db.prepare('DELETE FROM inbox WHERE id=? AND user_id=?').run(id, req.userId);
+  const result = db.prepare('DELETE FROM inbox WHERE id=? AND user_id=?').run(id, req.userId);
+  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });
 // Triage: move inbox item to a goal as a task
@@ -80,11 +82,15 @@ router.post('/api/inbox/:id/triage', (req, res) => {
   const goalOwned = db.prepare('SELECT id FROM goals WHERE id=? AND user_id=?').get(gid, req.userId);
   if (!goalOwned) return res.status(403).json({ error: 'Goal not found or not owned by you' });
   const pos = getNextPosition('tasks', 'goal_id', gid);
-  const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,position,user_id) VALUES (?,?,?,?,?,?,?)').run(
-    gid, item.title, item.note, priority !== undefined ? priority : item.priority, due_date || null, pos, req.userId
-  );
-  db.prepare('DELETE FROM inbox WHERE id=? AND user_id=?').run(id, req.userId);
-  res.status(201).json(db.prepare('SELECT * FROM tasks WHERE id=?').get(r.lastInsertRowid));
+  const triageTx = db.transaction(() => {
+    const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,position,user_id) VALUES (?,?,?,?,?,?,?)').run(
+      gid, item.title, item.note, priority !== undefined ? priority : item.priority, due_date || null, pos, req.userId
+    );
+    db.prepare('DELETE FROM inbox WHERE id=? AND user_id=?').run(id, req.userId);
+    return r.lastInsertRowid;
+  });
+  const taskId = triageTx();
+  res.status(201).json(db.prepare('SELECT * FROM tasks WHERE id=?').get(taskId));
 });
 
 // ─── NOTES API ───
@@ -122,7 +128,8 @@ router.put('/api/notes/:id', (req, res) => {
 router.delete('/api/notes/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  db.prepare('DELETE FROM notes WHERE id=? AND user_id=?').run(id, req.userId);
+  const result = db.prepare('DELETE FROM notes WHERE id=? AND user_id=?').run(id, req.userId);
+  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });
 

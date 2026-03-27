@@ -51,10 +51,9 @@ describe('Misc API – exhaustive edge-case coverage', () => {
       assert.deepEqual(parsed[0].subtasks, ['Sub 1']);
     });
 
-    it('DELETE /api/templates/:id - deleting nonexistent template returns ok', async () => {
+    it('DELETE /api/templates/:id - deleting nonexistent template returns 404', async () => {
       const res = await agent().delete('/api/templates/999999');
-      assert.equal(res.status, 200);
-      assert.equal(res.body.ok, true);
+      assert.equal(res.status, 404);
     });
   });
 

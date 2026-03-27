@@ -98,10 +98,9 @@ describe('Inbox API – exhaustive coverage', () => {
 
   // ── DELETE /api/inbox/:id ───────────────────────────────────────
 
-  it('deleting nonexistent ID returns ok (no error)', async () => {
+  it('deleting nonexistent ID returns 404', async () => {
     const res = await agent().delete('/api/inbox/99999');
-    assert.equal(res.status, 200);
-    assert.deepEqual(res.body, { ok: true });
+    assert.equal(res.status, 404);
   });
 
   // ── POST /api/inbox/:id/triage ──────────────────────────────────

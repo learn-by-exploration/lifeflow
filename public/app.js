@@ -336,10 +336,13 @@ function renderAreas(){
 async function render(){
   $('vt').style.display=(currentView==='goal')?'flex':'none';
   hideMultiSelectBar();selectedIds.clear();msMode=false;document.body.classList.remove('ms-mode');
+  // Clean up scoped event listeners from previous render
+  if(window.Events)Events.cleanupAll();
   // Show loading state for slow networks
   const ct=$('ct');if(ct&&!ct.innerHTML.trim())ct.classList.add('loading');
   // Persist last view
   if(!['area','goal','filter','smartlist','help','lists','listdetail'].includes(currentView))localStorage.setItem('lf-lastView',currentView);
+  try{
   if(currentView==='myday')await renderMyDay();
   else if(currentView==='tasks')await renderTasksHub();
   else if(currentView==='focus')await renderFocusHub();
@@ -371,6 +374,10 @@ async function render(){
   else if(currentView==='filter')await renderSavedFilter();
   else if(currentView==='area')await renderArea();
   else if(currentView==='goal')await renderGoal();
+  }catch(err){
+    console.error('[LifeFlow] Render error ('+currentView+'):', err);
+    if(typeof showToast==='function')showToast('Something went wrong loading this view','error');
+  }
   // Remove loading state
   if(ct)ct.classList.remove('loading');
   updateBC();
@@ -2192,7 +2199,7 @@ function renderCommands(filter){
   const cmds=f?CP_COMMANDS.filter(c=>c.label.toLowerCase().includes(f)):CP_COMMANDS;
   if(!cmds.length){$('sr-results').innerHTML='<div class="sr-empty">No matching commands</div>';srIdx=-1;return}
   $('sr-results').innerHTML='<div class="cp-mode-label"><span class="material-icons-round">terminal</span>Commands</div>'+
-    cmds.map((c,i)=>`<div class="sr-item" data-cmd="${c.id}"><span class="material-icons-round cp-icon">${c.icon}</span><div class="sr-ti">${esc(c.label)}</div>${c.key?'<span class="cp-key">'+esc(c.key)+'</span>':''}</div>`).join('');
+    cmds.map((c,i)=>`<div class="sr-item" role="option" data-cmd="${c.id}"><span class="material-icons-round cp-icon">${c.icon}</span><div class="sr-ti">${esc(c.label)}</div>${c.key?'<span class="cp-key">'+esc(c.key)+'</span>':''}</div>`).join('');
   srIdx=-1;
   $('sr-results').querySelectorAll('.sr-item').forEach(it=>it.addEventListener('click',()=>{
     const cmd=CP_COMMANDS.find(c=>c.id===it.dataset.cmd);if(cmd)cmd.action();
@@ -2243,7 +2250,7 @@ function runSearch(){
     if(globalResults.length){
       const typeIcons={note:'note',goal:'flag',comment:'comment',inbox:'inbox'};
       html+='<div class="cp-mode-label"><span class="material-icons-round">search</span>Other Results</div>';
-      html+=globalResults.slice(0,5).map(r=>`<div class="sr-item sr-global" data-type="${r.type}" data-id="${r.source_id}">
+      html+=globalResults.slice(0,5).map(r=>`<div class="sr-item sr-global" role="option" data-type="${r.type}" data-id="${r.source_id}">
         <span class="material-icons-round cp-icon">${typeIcons[r.type]||'article'}</span>
         <div><div class="sr-ti">${r.title||r.snippet||'Untitled'}</div>
         <div class="sr-mt">${r.type}${r.context?' · '+esc(r.context):''}</div></div></div>`).join('')}
@@ -2251,7 +2258,7 @@ function runSearch(){
     const r=taskResults;
     html+=r.map((t,i)=>{
       const od=isOD(t.due_date)&&t.status!=='done';
-      return`<div class="sr-item ${i===srIdx?'sel':''}" data-id="${t.id}">
+      return`<div class="sr-item ${i===srIdx?'sel':''}" role="option" data-id="${t.id}">
         <div class="tk" style="width:14px;height:14px;border-width:1.5px;${t.status==='done'?'background:var(--ok);border-color:var(--ok)':''}"><span class="material-icons-round" style="font-size:9px;${t.status==='done'?'display:block':'display:none'}">check</span></div>
         <div class="sr-ti">${esc(t.title)}</div>
         <div class="sr-mt">${esc(t.area_icon||'')} ${esc(t.area_name||'')} › ${esc(t.goal_title||'')}${t.due_date?' · '+(od?'<span style="color:var(--err)">':'')+fmtDue(t.due_date)+(od?'</span>':''):''}</div>

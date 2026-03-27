@@ -433,8 +433,8 @@ function initDatabase(dbDir) {
         FROM task_comments tc JOIN tasks t ON tc.task_id=t.id`).all()) {
         ins.run('comment', c.id, c.user_id, '', c.text || '', c.task_title);
       }
-      for (const i of db.prepare('SELECT id, title, note FROM inbox').all()) {
-        ins.run('inbox', i.id, null, i.title, i.note || '', '');
+      for (const i of db.prepare('SELECT id, title, note, user_id FROM inbox').all()) {
+        ins.run('inbox', i.id, i.user_id, i.title, i.note || '', '');
       }
       for (const li of db.prepare('SELECT li.id, li.title, li.note, l.user_id, l.name as list_name FROM list_items li JOIN lists l ON li.list_id=l.id').all()) {
         ins.run('list', li.id, li.user_id, li.title, li.note || '', li.list_name);
@@ -444,40 +444,44 @@ function initDatabase(dbDir) {
   }
   rebuildSearchIndex();
 
-  // ─── Seed default data ───
+  // ─── Seed default data for user 1 (if first boot and user exists) ───
   const cnt = db.prepare('SELECT COUNT(*) as c FROM life_areas').get();
-  if (cnt.c === 0) {
-    const ins = db.prepare('INSERT INTO life_areas (name,icon,color,position) VALUES (?,?,?,?)');
-    ins.run('Health','💪','#22C55E',0);
-    ins.run('Career','💼','#2563EB',1);
-    ins.run('Home','🏠','#F59E0B',2);
-    ins.run('Family','👨‍👩‍👧‍👦','#EF4444',3);
-    ins.run('Finance','💰','#7C3AED',4);
-    ins.run('Learning','📚','#0F766E',5);
+  const firstUser = db.prepare('SELECT id FROM users ORDER BY id LIMIT 1').get();
+  if (cnt.c === 0 && firstUser) {
+    const uid = firstUser.id;
+    const ins = db.prepare('INSERT INTO life_areas (name,icon,color,position,user_id) VALUES (?,?,?,?,?)');
+    ins.run('Health','💪','#22C55E',0,uid);
+    ins.run('Career','💼','#2563EB',1,uid);
+    ins.run('Home','🏠','#F59E0B',2,uid);
+    ins.run('Family','👨‍👩‍👧‍👦','#EF4444',3,uid);
+    ins.run('Finance','💰','#7C3AED',4,uid);
+    ins.run('Learning','📚','#0F766E',5,uid);
   }
   const tc = db.prepare('SELECT COUNT(*) as c FROM tags').get();
-  if (tc.c === 0) {
-    const it = db.prepare('INSERT INTO tags (name,color) VALUES (?,?)');
-    it.run('urgent','#EF4444'); it.run('blocked','#F59E0B'); it.run('quick-win','#22C55E');
-    it.run('research','#7C3AED'); it.run('waiting','#64748B');
+  if (tc.c === 0 && firstUser) {
+    const uid = firstUser.id;
+    const it = db.prepare('INSERT INTO tags (name,color,user_id) VALUES (?,?,?)');
+    it.run('urgent','#EF4444',uid); it.run('blocked','#F59E0B',uid); it.run('quick-win','#22C55E',uid);
+    it.run('research','#7C3AED',uid); it.run('waiting','#64748B',uid);
   }
   const tmplC = db.prepare('SELECT COUNT(*) as c FROM task_templates').get();
-  if (tmplC.c === 0) {
-    const it = db.prepare('INSERT INTO task_templates (name, description, icon, tasks) VALUES (?, ?, ?, ?)');
+  if (tmplC.c === 0 && firstUser) {
+    const uid = firstUser.id;
+    const it = db.prepare('INSERT INTO task_templates (name, description, icon, tasks, user_id) VALUES (?, ?, ?, ?, ?)');
     it.run('Sprint Planning', 'Agile sprint setup checklist', '🏃', JSON.stringify([
       { title: 'Review previous sprint retro', priority: 1, subtasks: [] },
       { title: 'Groom & estimate backlog', priority: 2, subtasks: ['Clarify acceptance criteria', 'Break down large tickets', 'Add story point estimates'] },
       { title: 'Set sprint goal', priority: 2, subtasks: [] },
       { title: 'Assign stories to team', priority: 1, subtasks: [] },
       { title: 'Schedule sprint ceremonies', priority: 1, subtasks: ['Daily standup', 'Mid-sprint check-in', 'Sprint review', 'Retro'] }
-    ]));
+    ]), uid);
     it.run('Weekly Review', 'GTD-style weekly review', '📅', JSON.stringify([
       { title: 'Clear inbox to zero', priority: 2, subtasks: [] },
       { title: 'Review calendar (next 2 weeks)', priority: 1, subtasks: [] },
       { title: 'Review waiting-for list', priority: 1, subtasks: [] },
       { title: 'Review someday/maybe', priority: 0, subtasks: [] },
       { title: 'Define next week\'s top 3 priorities', priority: 3, subtasks: [] }
-    ]));
+    ]), uid);
     it.run('Bug Fix', 'Systematic debugging workflow', '🐛', JSON.stringify([
       { title: 'Reproduce the bug', priority: 2, subtasks: ['Document steps to reproduce', 'Identify environment/browser'] },
       { title: 'Identify root cause', priority: 2, subtasks: [] },
@@ -485,14 +489,14 @@ function initDatabase(dbDir) {
       { title: 'Implement fix', priority: 2, subtasks: [] },
       { title: 'Verify fix + run test suite', priority: 1, subtasks: [] },
       { title: 'Update docs if needed', priority: 0, subtasks: [] }
-    ]));
+    ]), uid);
     it.run('Content Creation', 'Blog post or article pipeline', '✍️', JSON.stringify([
       { title: 'Research & outline', priority: 1, subtasks: ['Gather references', 'Create outline structure'] },
       { title: 'Write first draft', priority: 2, subtasks: [] },
       { title: 'Edit & proofread', priority: 1, subtasks: [] },
       { title: 'Add images / formatting', priority: 0, subtasks: [] },
       { title: 'Publish & share', priority: 1, subtasks: ['Publish on platform', 'Share on social media'] }
-    ]));
+    ]), uid);
     it.run('Project Launch', 'Ship a feature or product', '🚀', JSON.stringify([
       { title: 'Finalize scope & requirements', priority: 3, subtasks: [] },
       { title: 'Complete implementation', priority: 3, subtasks: [] },
@@ -502,7 +506,7 @@ function initDatabase(dbDir) {
       { title: 'Deploy to staging', priority: 1, subtasks: [] },
       { title: 'Deploy to production', priority: 1, subtasks: [] },
       { title: 'Monitor post-launch', priority: 1, subtasks: [] }
-    ]));
+    ]), uid);
   }
 
   // ─── Run SQL migrations ───

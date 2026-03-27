@@ -173,13 +173,13 @@
 <!-- Search overlay -->
 <div class="sr-ov" id="sr-ov" role="dialog" aria-modal="true" aria-label="Search and command palette">
   <div class="sr-box">
-    <div style="position:relative"><span class="material-icons-round sr-icon">search</span><input class="sr-inp" id="sr-inp" placeholder="Search tasks, notes, subtasks..." autocomplete="off"></div>
+    <div style="position:relative"><span class="material-icons-round sr-icon">search</span><label for="sr-inp" class="sr-only">Search</label><input class="sr-inp" id="sr-inp" placeholder="Search tasks, notes, subtasks..." autocomplete="off"></div>
     <div style="display:flex;gap:6px;margin:6px 0 2px;flex-wrap:wrap">
       <select id="sr-area" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx2);border-radius:var(--rs)"><option value="">All Areas</option></select>
       <select id="sr-goal" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx2);border-radius:var(--rs)"><option value="">All Goals</option></select>
       <select id="sr-status" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx2);border-radius:var(--rs)"><option value="">Any Status</option><option value="todo">To Do</option><option value="done">Done</option></select>
     </div>
-    <div class="sr-results" id="sr-results"></div>
+    <div class="sr-results" id="sr-results" role="listbox" aria-label="Search results"></div>
     <div class="sr-hint"><span>↑↓ Navigate · Enter Select · Esc Close</span><span>Type &gt; for commands</span></div>
   </div>
 </div>
@@ -188,7 +188,7 @@
 <div class="qc-ov" id="qc-ov" role="dialog" aria-modal="true" aria-label="Quick Capture">
   <div class="qc-box">
     <h3><span class="material-icons-round" style="font-size:18px;color:var(--brand)">bolt</span>Quick Capture</h3>
-    <input type="text" id="qc-title" placeholder="Buy groceries tomorrow p2 #errands" required aria-required="true" maxlength="200" autocomplete="off"><span class="field-err" id="qc-title-err" role="alert"></span>
+    <label for="qc-title" class="sr-only">Task title</label><input type="text" id="qc-title" placeholder="Buy groceries tomorrow p2 #errands" required aria-required="true" maxlength="200" autocomplete="off"><span class="field-err" id="qc-title-err" role="alert"></span>
     <div style="font-size:10px;color:var(--txd);margin:-6px 0 4px;padding:0 2px">Tip: use dates (<b>tomorrow</b>, <b>monday</b>), priority (<b>p1</b>-<b>p3</b>), and tags (<b>#tag</b>) inline</div>
     <div id="qc-nlp-preview" style="font-size:11px;color:var(--tx2);margin:0 0 8px;padding:0 2px;min-height:16px"></div>
     <label for="qc-goal" style="display:block;font-size:11px;color:var(--txd);margin-bottom:3px;font-weight:500">Goal</label>
@@ -252,11 +252,11 @@
       <div id="ft-plan-technique" style="font-size:13px;color:var(--tx2);margin:4px 0 10px;cursor:pointer" title="Change technique"></div>
       <h3 style="color:#fff;margin:4px 0 4px;font-size:16px">Plan Your Session</h3>
       <label style="font-size:11px;color:var(--txd);display:block;margin-bottom:4px;text-align:left">What will you accomplish?</label>
-      <input type="text" id="ft-intention" placeholder="e.g. Finish the login form validation" style="width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,.15);border-radius:8px;background:rgba(255,255,255,.06);color:#fff;font-size:13px;box-sizing:border-box;margin-bottom:10px;font-family:inherit">
+      <input type="text" id="ft-intention" aria-label="Focus intention" placeholder="e.g. Finish the login form validation" style="width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,.15);border-radius:8px;background:rgba(255,255,255,.06);color:#fff;font-size:13px;box-sizing:border-box;margin-bottom:10px;font-family:inherit">
       <label style="font-size:11px;color:var(--txd);display:block;margin-bottom:4px;text-align:left">Session steps <span style="opacity:.6">(optionally loaded from subtasks)</span></label>
       <div id="ft-plan-steps" style="margin-bottom:10px;text-align:left;max-height:140px;overflow-y:auto"></div>
       <div style="display:flex;gap:6px;margin-bottom:12px">
-        <input type="text" id="ft-step-input" placeholder="Add a step..." style="flex:1;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(255,255,255,.04);color:#fff;font-size:12px;font-family:inherit">
+        <input type="text" id="ft-step-input" aria-label="Add a step" placeholder="Add a step..." style="flex:1;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(255,255,255,.04);color:#fff;font-size:12px;font-family:inherit">
         <button class="ft-btn" id="ft-step-add" style="padding:8px 14px;font-size:12px">Add</button>
       </div>
       <div id="ft-timebox-row" style="display:none;margin-bottom:12px">
@@ -316,7 +316,7 @@
         <button class="ft-rate" data-rate="5" title="In the zone">🔥</button>
       </div>
       <label style="font-size:11px;color:var(--txd);display:block;margin-bottom:4px;margin-top:12px;text-align:left">Quick note (optional)</label>
-      <input type="text" id="ft-reflection" placeholder="Any blockers or wins?" style="width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(255,255,255,.04);color:#fff;font-size:12px;box-sizing:border-box;font-family:inherit;margin-bottom:16px">
+      <label for="ft-reflection" class="sr-only">Session reflection</label><input type="text" id="ft-reflection" placeholder="Any blockers or wins?" style="width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(255,255,255,.04);color:#fff;font-size:12px;box-sizing:border-box;font-family:inherit;margin-bottom:16px">
       <div class="ft-btns">
         <button class="ft-btn primary" id="ft-reflect-done">Done</button>
         <button class="ft-btn" id="ft-reflect-continue">Keep Going</button>
@@ -446,6 +446,8 @@
 <!-- Toast container -->
 <div class="toast-wrap" id="toast-wrap"></div>
 
+<script src="js/events.js"></script>
+<script src="js/errors.js"></script>
 <script src="store.js"></script>
 <script src="app.js"></script>
 </body>

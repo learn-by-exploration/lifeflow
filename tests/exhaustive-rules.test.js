@@ -139,10 +139,9 @@ describe('Automation Rules API – exhaustive coverage', () => {
 
   // ── DELETE /api/rules/:id ─────────────────────────────────────────
 
-  it('deleting nonexistent rule still returns ok', async () => {
+  it('deleting nonexistent rule returns 404', async () => {
     const res = await agent().delete('/api/rules/99999');
-    assert.equal(res.status, 200);
-    assert.deepEqual(res.body, { ok: true });
+    assert.equal(res.status, 404);
   });
 
   // ── Rule execution on task completion ─────────────────────────────
