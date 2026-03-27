@@ -378,6 +378,9 @@ function initDatabase(dbDir) {
     try { db.exec(`CREATE INDEX idx_${tbl}_user ON ${tbl}(user_id)`); } catch(e) { /* already exists */ }
   }
 
+  // ─── Multi-user assignment column ───
+  try { db.exec('ALTER TABLE tasks ADD COLUMN assigned_to_user_id INTEGER REFERENCES users(id)'); } catch(e) { /* already exists */ }
+
   // ─── Migrate settings to composite PK (user_id, key) for multi-user ───
   const settingsInfo = db.prepare("PRAGMA table_info(settings)").all();
   const keyCol = settingsInfo.find(c => c.name === 'key' && c.pk === 1);
@@ -508,6 +511,43 @@ function initDatabase(dbDir) {
       { title: 'Monitor post-launch', priority: 1, subtasks: [] }
     ]), uid);
   }
+
+  // ─── API Tokens table ───
+  db.exec(`CREATE TABLE IF NOT EXISTS api_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    token_hash TEXT NOT NULL,
+    last_used_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`);
+
+  // ─── Push Subscriptions table ───
+  db.exec(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    endpoint TEXT NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, endpoint)
+  )`);
+
+  // ─── Webhooks table ───
+  db.exec(`CREATE TABLE IF NOT EXISTS webhooks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    url TEXT NOT NULL,
+    events TEXT NOT NULL DEFAULT '[]',
+    secret TEXT NOT NULL,
+    active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`);
 
   // ─── Custom Fields tables ───
   db.exec(`CREATE TABLE IF NOT EXISTS custom_field_defs (

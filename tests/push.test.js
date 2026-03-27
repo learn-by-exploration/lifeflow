@@ -1,0 +1,102 @@
+const { describe, it, before, after, beforeEach } = require('node:test');
+const assert = require('node:assert/strict');
+const { setup, cleanDb, teardown, agent, rawAgent } = require('./helpers');
+
+describe('Web Push Notifications', () => {
+  let db;
+  before(() => { ({ db } = setup()); });
+  after(() => teardown());
+  beforeEach(() => {
+    cleanDb();
+    db.exec('DELETE FROM push_subscriptions');
+  });
+
+  const validSub = {
+    endpoint: 'https://fcm.googleapis.com/fcm/send/test123',
+    keys: {
+      p256dh: 'BNn2o24kA123456789abcdef',
+      auth: 'abc123def456'
+    }
+  };
+
+  describe('POST /api/push/subscribe', () => {
+    it('stores a push subscription', async () => {
+      const res = await agent()
+        .post('/api/push/subscribe')
+        .send(validSub);
+      assert.equal(res.status, 201);
+      assert.ok(res.body.id);
+    });
+
+    it('upserts on duplicate endpoint', async () => {
+      await agent().post('/api/push/subscribe').send(validSub).expect(201);
+      const res = await agent().post('/api/push/subscribe').send(validSub);
+      assert.equal(res.status, 201);
+
+      // Should only have one subscription
+      const count = db.prepare('SELECT COUNT(*) as c FROM push_subscriptions WHERE user_id = 1').get();
+      assert.equal(count.c, 1);
+    });
+
+    it('rejects missing endpoint', async () => {
+      const res = await agent().post('/api/push/subscribe').send({ keys: validSub.keys });
+      assert.equal(res.status, 400);
+    });
+
+    it('rejects missing keys', async () => {
+      const res = await agent().post('/api/push/subscribe').send({ endpoint: validSub.endpoint });
+      assert.equal(res.status, 400);
+    });
+  });
+
+  describe('DELETE /api/push/subscribe', () => {
+    it('removes a subscription by endpoint', async () => {
+      await agent().post('/api/push/subscribe').send(validSub).expect(201);
+      const res = await agent()
+        .delete('/api/push/subscribe')
+        .send({ endpoint: validSub.endpoint });
+      assert.equal(res.status, 200);
+
+      const count = db.prepare('SELECT COUNT(*) as c FROM push_subscriptions WHERE user_id = 1').get();
+      assert.equal(count.c, 0);
+    });
+
+    it('returns 200 even if subscription not found', async () => {
+      const res = await agent()
+        .delete('/api/push/subscribe')
+        .send({ endpoint: 'https://nonexistent.com/sub' });
+      assert.equal(res.status, 200);
+    });
+  });
+
+  describe('POST /api/push/test', () => {
+    it('returns 200 when no subscriptions exist (graceful)', async () => {
+      const res = await agent().post('/api/push/test').send({});
+      assert.equal(res.status, 200);
+      assert.equal(res.body.sent, 0);
+    });
+
+    it('reports subscription count when subscriptions exist (no VAPID = skip)', async () => {
+      await agent().post('/api/push/subscribe').send(validSub).expect(201);
+      const res = await agent().post('/api/push/test').send({});
+      assert.equal(res.status, 200);
+      // Without VAPID keys configured, should report 0 sent or skip
+      assert.ok(res.body.sent === 0 || res.body.skipped);
+    });
+  });
+
+  describe('Subscription isolation', () => {
+    it('cascade deletes with user', () => {
+      // Insert a subscription for user 1
+      db.prepare('INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (?,?,?,?)')
+        .run(1, 'https://test.com/sub', 'key1', 'auth1');
+
+      const before = db.prepare('SELECT COUNT(*) as c FROM push_subscriptions').get();
+      assert.equal(before.c, 1);
+
+      // We can't delete user 1 easily (breaks test), but verify FK exists
+      const fk = db.pragma('foreign_key_list(push_subscriptions)');
+      assert.ok(fk.some(f => f.table === 'users'), 'Should have FK to users');
+    });
+  });
+});

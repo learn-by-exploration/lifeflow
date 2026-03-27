@@ -50,8 +50,27 @@ self.addEventListener('fetch', event => {
   }
 
   // API calls: always go straight to the network — never cache dynamic data
+  // For write operations, notify client if offline so mutations can be queued
   if (request.url.includes('/api/')) {
-    return; // let browser handle it, no SW involvement
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method)) {
+      event.respondWith(
+        fetch(request).catch(() => {
+          // Notify client about the failed mutation for offline queueing
+          self.clients.matchAll().then(cls => {
+            cls.forEach(c => c.postMessage({
+              type: 'mutation-failed',
+              method: request.method,
+              url: request.url
+            }));
+          });
+          return new Response(JSON.stringify({ error: 'Offline — mutation queued' }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        })
+      );
+    }
+    return; // GET requests pass through normally
   }
 
   // Local static assets: network-first so updates are always picked up,

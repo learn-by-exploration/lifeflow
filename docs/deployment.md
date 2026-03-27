@@ -100,6 +100,26 @@ sudo systemctl enable --now lifeflow
 | `PORT` | `3456` | HTTP server port |
 | `DB_DIR` | Project root | Directory for `lifeflow.db` |
 | `NODE_ENV` | — | Set to `production` for production |
+| `BASE_URL` | — | External URL (e.g. `https://lifeflow.example.com`) for share links, iCal feeds |
+| `TRUST_PROXY` | — | Set to `1` when behind a reverse proxy to trust `X-Forwarded-*` headers |
+| `ALLOWED_ORIGINS` | — | Comma-separated origins for CORS (e.g. `https://app.example.com,https://other.example.com`) |
+
+## HTTPS / Reverse Proxy
+
+LifeFlow should run behind a reverse proxy for production. The proxy handles TLS termination, and LifeFlow listens on HTTP internally.
+
+**Required configuration when behind a proxy:**
+
+```bash
+TRUST_PROXY=1           # Trust X-Forwarded-Proto, X-Forwarded-For headers
+BASE_URL=https://lifeflow.example.com  # Used for share links, iCal feeds
+```
+
+When `TRUST_PROXY=1` is set:
+- `req.secure` correctly reports `true` for HTTPS connections
+- Session cookies get the `Secure` flag via `X-Forwarded-Proto: https`
+- Rate limiting uses the real client IP from `X-Forwarded-For`
+- HSTS headers are sent (31536000 seconds / 1 year)
 
 ## Reverse Proxy
 

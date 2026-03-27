@@ -164,6 +164,157 @@ module.exports = function(deps) {
     res.json({ ok: true });
   });
 
+  // ─── TOTP 2FA ───
+
+  // Setup 2FA — generates secret, returns QR URI
+  router.post('/api/auth/2fa/setup', (req, res) => {
+    if (!req.userId) return res.status(401).json({ error: 'Authentication required' });
+
+    // Generate 20-byte secret encoded as base32
+    const secret = crypto.randomBytes(20);
+    const base32Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let base32 = '';
+    let bits = 0, value = 0;
+    for (const byte of secret) {
+      value = (value << 8) | byte;
+      bits += 8;
+      while (bits >= 5) {
+        base32 += base32Chars[(value >>> (bits - 5)) & 31];
+        bits -= 5;
+      }
+    }
+    if (bits > 0) base32 += base32Chars[(value << (5 - bits)) & 31];
+
+    // Store pending secret (not yet verified)
+    db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (?, 'totp_pending_secret', ?)")
+      .run(req.userId, base32);
+
+    const user = db.prepare('SELECT email FROM users WHERE id = ?').get(req.userId);
+    const issuer = 'LifeFlow';
+    const otpauth_uri = `otpauth://totp/${issuer}:${encodeURIComponent(user.email)}?secret=${base32}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;
+
+    res.json({ secret: base32, otpauth_uri });
+  });
+
+  // Verify TOTP token to enable 2FA
+  router.post('/api/auth/2fa/verify', (req, res) => {
+    if (!req.userId) return res.status(401).json({ error: 'Authentication required' });
+
+    const { token } = req.body;
+    if (!token || typeof token !== 'string' || !/^\d{6}$/.test(token)) {
+      return res.status(400).json({ error: 'Invalid token format (6 digits required)' });
+    }
+
+    const pending = db.prepare("SELECT value FROM settings WHERE user_id = ? AND key = 'totp_pending_secret'").get(req.userId);
+    if (!pending) return res.status(400).json({ error: 'No 2FA setup in progress' });
+
+    // Verify TOTP — check current and adjacent time steps
+    const secret = pending.value;
+    const generated = generateTOTP(secret);
+    if (token !== generated) {
+      return res.status(400).json({ error: 'Invalid token' });
+    }
+
+    // Enable 2FA: move secret from pending to active
+    db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (?, 'totp_secret', ?)").run(req.userId, secret);
+    db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (?, 'totp_enabled', '1')").run(req.userId);
+    db.prepare("DELETE FROM settings WHERE user_id = ? AND key = 'totp_pending_secret'").run(req.userId);
+
+    res.json({ enabled: true });
+  });
+
+  // Disable 2FA
+  router.delete('/api/auth/2fa', (req, res) => {
+    if (!req.userId) return res.status(401).json({ error: 'Authentication required' });
+
+    db.prepare("DELETE FROM settings WHERE user_id = ? AND key IN ('totp_secret', 'totp_enabled', 'totp_pending_secret')").run(req.userId);
+    res.json({ enabled: false });
+  });
+
+  // Check 2FA status
+  router.get('/api/auth/2fa/status', (req, res) => {
+    if (!req.userId) return res.status(401).json({ error: 'Authentication required' });
+
+    const enabled = db.prepare("SELECT value FROM settings WHERE user_id = ? AND key = 'totp_enabled'").get(req.userId);
+    res.json({ enabled: enabled?.value === '1' });
+  });
+
+  // ─── List Users (for assignment picker) ───
+  router.get('/api/users', (req, res) => {
+    if (!req.userId) return res.status(401).json({ error: 'Authentication required' });
+    const users = db.prepare('SELECT id, display_name, created_at FROM users').all();
+    res.json(users);
+  });
+
+  // ─── API Token Management ───
+
+  // Create a new API token
+  router.post('/api/auth/tokens', (req, res) => {
+    if (!req.userId) return res.status(401).json({ error: 'Authentication required' });
+
+    const { name, expires_in_days } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Token name is required' });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const expiresAt = expires_in_days
+      ? new Date(Date.now() + expires_in_days * 86400000).toISOString()
+      : null;
+
+    const result = db.prepare(
+      'INSERT INTO api_tokens (user_id, name, token_hash, expires_at) VALUES (?, ?, ?, ?)'
+    ).run(req.userId, name.trim().slice(0, 100), tokenHash, expiresAt);
+
+    res.status(201).json({
+      id: Number(result.lastInsertRowid),
+      name: name.trim().slice(0, 100),
+      token,
+      expires_at: expiresAt,
+      created_at: new Date().toISOString()
+    });
+  });
+
+  // List tokens (no hashes exposed)
+  router.get('/api/auth/tokens', (req, res) => {
+    if (!req.userId) return res.status(401).json({ error: 'Authentication required' });
+
+    const tokens = db.prepare(
+      'SELECT id, name, last_used_at, created_at, expires_at FROM api_tokens WHERE user_id = ? ORDER BY created_at DESC'
+    ).all(req.userId);
+    res.json(tokens);
+  });
+
+  // Rename a token
+  router.put('/api/auth/tokens/:id', (req, res) => {
+    if (!req.userId) return res.status(401).json({ error: 'Authentication required' });
+
+    const { name } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Token name is required' });
+    }
+
+    const token = db.prepare('SELECT id FROM api_tokens WHERE id = ? AND user_id = ?')
+      .get(req.params.id, req.userId);
+    if (!token) return res.status(404).json({ error: 'Token not found' });
+
+    db.prepare('UPDATE api_tokens SET name = ? WHERE id = ?').run(name.trim().slice(0, 100), token.id);
+    res.json({ id: token.id, name: name.trim().slice(0, 100) });
+  });
+
+  // Revoke (delete) a token
+  router.delete('/api/auth/tokens/:id', (req, res) => {
+    if (!req.userId) return res.status(401).json({ error: 'Authentication required' });
+
+    const token = db.prepare('SELECT id FROM api_tokens WHERE id = ? AND user_id = ?')
+      .get(req.params.id, req.userId);
+    if (!token) return res.status(404).json({ error: 'Token not found' });
+
+    db.prepare('DELETE FROM api_tokens WHERE id = ?').run(token.id);
+    res.json({ ok: true });
+  });
+
   return router;
 };
 
@@ -180,4 +331,37 @@ function buildCookie(sid, ttlSeconds, req) {
     parts.push('Secure');
   }
   return parts.join('; ');
+}
+
+/**
+ * Generate a TOTP code (RFC 6238) from a base32-encoded secret.
+ */
+function generateTOTP(base32Secret, timeStep = 30) {
+  // Decode base32
+  const base32Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = 0, value = 0;
+  const bytes = [];
+  for (const c of base32Secret.toUpperCase()) {
+    const idx = base32Chars.indexOf(c);
+    if (idx < 0) continue;
+    value = (value << 5) | idx;
+    bits += 5;
+    if (bits >= 8) {
+      bytes.push((value >>> (bits - 8)) & 0xFF);
+      bits -= 8;
+    }
+  }
+  const key = Buffer.from(bytes);
+
+  // Calculate counter from current time
+  const counter = Math.floor(Date.now() / 1000 / timeStep);
+  const counterBuf = Buffer.alloc(8);
+  counterBuf.writeUInt32BE(Math.floor(counter / 0x100000000), 0);
+  counterBuf.writeUInt32BE(counter & 0xFFFFFFFF, 4);
+
+  // HMAC-SHA1
+  const hmac = crypto.createHmac('sha1', key).update(counterBuf).digest();
+  const offset = hmac[hmac.length - 1] & 0xF;
+  const otp = ((hmac[offset] & 0x7F) << 24 | hmac[offset + 1] << 16 | hmac[offset + 2] << 8 | hmac[offset + 3]) % 1000000;
+  return otp.toString().padStart(6, '0');
 }

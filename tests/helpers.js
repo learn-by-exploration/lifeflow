@@ -69,6 +69,9 @@ function cleanDb() {
   db.exec('DELETE FROM list_items');
   db.exec('DELETE FROM lists');
   try { db.exec('DELETE FROM badges'); } catch(e) {}
+  try { db.exec('DELETE FROM api_tokens'); } catch(e) {}
+  try { db.exec('DELETE FROM push_subscriptions'); } catch(e) {}
+  try { db.exec('DELETE FROM webhooks'); } catch(e) {}
 }
 
 function teardown() {

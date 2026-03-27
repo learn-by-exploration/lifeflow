@@ -338,5 +338,92 @@ module.exports = function(deps) {
     res.send(ical);
   });
 
+  // ─── External Importers ───
+
+  // Import from Todoist JSON export
+  router.post('/api/import/todoist', (req, res) => {
+    const { items, projects } = req.body;
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.json({ imported: 0, message: 'No items to import' });
+    }
+
+    const importTx = db.transaction(() => {
+      // Create a default area + goal for imported Todoist tasks
+      const areaResult = db.prepare('INSERT INTO life_areas (name, icon, color, position, user_id) VALUES (?,?,?,?,?)')
+        .run('Todoist Import', '📥', '#6366F1', 0, req.userId);
+      const areaId = areaResult.lastInsertRowid;
+
+      // Map Todoist projects → goals
+      const goalMap = {};
+      if (Array.isArray(projects)) {
+        for (const p of projects) {
+          const gr = db.prepare('INSERT INTO goals (area_id, title, color, status, position, user_id) VALUES (?,?,?,?,?,?)')
+            .run(areaId, String(p.name || 'Imported').slice(0, 200), '#6366F1', 'active', 0, req.userId);
+          goalMap[p.id] = gr.lastInsertRowid;
+        }
+      }
+      // Default goal for unmatched items
+      const defGoal = db.prepare('INSERT INTO goals (area_id, title, color, status, position, user_id) VALUES (?,?,?,?,?,?)')
+        .run(areaId, 'Imported Tasks', '#6366F1', 'active', 0, req.userId);
+      const defaultGoalId = defGoal.lastInsertRowid;
+
+      let count = 0;
+      for (const item of items) {
+        const goalId = goalMap[item.project_id] || defaultGoalId;
+        const priority = item.priority === 4 ? 3 : item.priority === 3 ? 2 : item.priority === 2 ? 1 : 0;
+        const status = item.checked ? 'done' : 'todo';
+        const dueDate = item.due?.date || null;
+        db.prepare('INSERT INTO tasks (goal_id, title, status, priority, due_date, position, user_id) VALUES (?,?,?,?,?,?,?)')
+          .run(goalId, String(item.content || '').slice(0, 500), status, priority, dueDate, count, req.userId);
+        count++;
+      }
+      return count;
+    });
+
+    const imported = importTx();
+    res.json({ imported, message: `Imported ${imported} tasks from Todoist` });
+  });
+
+  // Import from Trello JSON export
+  router.post('/api/import/trello', (req, res) => {
+    const { cards, lists: trelloLists } = req.body;
+    if (!cards || !Array.isArray(cards) || cards.length === 0) {
+      return res.json({ imported: 0, message: 'No cards to import' });
+    }
+
+    const importTx = db.transaction(() => {
+      const areaResult = db.prepare('INSERT INTO life_areas (name, icon, color, position, user_id) VALUES (?,?,?,?,?)')
+        .run('Trello Import', '📋', '#0079BF', 0, req.userId);
+      const areaId = areaResult.lastInsertRowid;
+
+      // Map Trello lists → goals
+      const goalMap = {};
+      if (Array.isArray(trelloLists)) {
+        for (const l of trelloLists) {
+          const gr = db.prepare('INSERT INTO goals (area_id, title, color, status, position, user_id) VALUES (?,?,?,?,?,?)')
+            .run(areaId, String(l.name || 'List').slice(0, 200), '#0079BF', 'active', 0, req.userId);
+          goalMap[l.id] = gr.lastInsertRowid;
+        }
+      }
+      const defGoal = db.prepare('INSERT INTO goals (area_id, title, color, status, position, user_id) VALUES (?,?,?,?,?,?)')
+        .run(areaId, 'Imported Cards', '#0079BF', 'active', 0, req.userId);
+      const defaultGoalId = defGoal.lastInsertRowid;
+
+      let count = 0;
+      for (const card of cards) {
+        const goalId = goalMap[card.idList] || defaultGoalId;
+        const status = card.closed ? 'done' : 'todo';
+        const dueDate = card.due ? card.due.slice(0, 10) : null;
+        db.prepare('INSERT INTO tasks (goal_id, title, note, status, due_date, position, user_id) VALUES (?,?,?,?,?,?,?)')
+          .run(goalId, String(card.name || '').slice(0, 500), String(card.desc || '').slice(0, 5000), status, dueDate, count, req.userId);
+        count++;
+      }
+      return count;
+    });
+
+    const imported = importTx();
+    res.json({ imported, message: `Imported ${imported} cards from Trello` });
+  });
+
   return router;
 };

@@ -260,14 +260,15 @@ module.exports = function(deps) {
 
   // ─── SHARING ───
   router.post('/api/lists/:id/share', (req, res) => {
+    const config = require('../config');
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
     const ex = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(id, req.userId);
     if (!ex) return res.status(404).json({ error: 'List not found' });
-    if (ex.share_token) return res.json({ token: ex.share_token, url: '/share/' + ex.share_token });
+    if (ex.share_token) return res.json({ token: ex.share_token, url: (config.baseUrl || '') + '/share/' + ex.share_token });
     const token = crypto.randomBytes(12).toString('hex');
     db.prepare('UPDATE lists SET share_token=? WHERE id=? AND user_id=?').run(token, id, req.userId);
-    res.json({ token, url: '/share/' + token });
+    res.json({ token, url: (config.baseUrl || '') + '/share/' + token });
   });
 
   router.delete('/api/lists/:id/share', (req, res) => {

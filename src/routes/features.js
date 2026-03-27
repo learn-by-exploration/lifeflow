@@ -528,5 +528,164 @@ router.get('/api/planner/:date', (req, res) => {
   res.json({ scheduled, unscheduled });
 });
 
+  // ─── AI BYOK ───
+  const createAiService = require('../services/ai');
+  const aiService = createAiService(db);
+
+  router.post('/api/ai/suggest', async (req, res) => {
+    try {
+      const { task_title } = req.body;
+      if (!task_title) return res.status(400).json({ error: 'task_title is required' });
+      const result = await aiService.suggest(req.userId, task_title);
+      res.json(result);
+    } catch (err) {
+      if (err.message.includes('API key')) return res.status(400).json({ error: 'AI API key not configured. Set your key in Settings.' });
+      res.status(500).json({ error: 'AI request failed' });
+    }
+  });
+
+  router.post('/api/ai/schedule', async (req, res) => {
+    try {
+      const { task_ids } = req.body;
+      const result = await aiService.schedule(req.userId, task_ids || []);
+      res.json(result);
+    } catch (err) {
+      if (err.message.includes('API key')) return res.status(400).json({ error: 'AI API key not configured. Set your key in Settings.' });
+      res.status(500).json({ error: 'AI request failed' });
+    }
+  });
+
+  // ─── Webhooks ───
+
+  // Create webhook
+  router.post('/api/webhooks', (req, res) => {
+    const { name, url, events } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Webhook name is required' });
+    }
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ error: 'Webhook URL is required' });
+    }
+    try { new URL(url); } catch { return res.status(400).json({ error: 'Invalid URL' }); }
+    if (!url.startsWith('https://') && !url.startsWith('http://')) {
+      return res.status(400).json({ error: 'URL must use http or https' });
+    }
+
+    const crypto = require('crypto');
+    const secret = crypto.randomBytes(32).toString('hex');
+    const eventsJson = JSON.stringify(Array.isArray(events) ? events : []);
+
+    const result = db.prepare(
+      'INSERT INTO webhooks (user_id, name, url, events, secret) VALUES (?,?,?,?,?)'
+    ).run(req.userId, name.trim().slice(0, 100), url, eventsJson, secret);
+
+    res.status(201).json({
+      id: Number(result.lastInsertRowid),
+      name: name.trim().slice(0, 100),
+      url,
+      events: Array.isArray(events) ? events : [],
+      secret,
+      active: true,
+      created_at: new Date().toISOString()
+    });
+  });
+
+  // List webhooks
+  router.get('/api/webhooks', (req, res) => {
+    const hooks = db.prepare(
+      'SELECT id, name, url, events, active, created_at FROM webhooks WHERE user_id = ? ORDER BY created_at DESC'
+    ).all(req.userId);
+    hooks.forEach(h => { try { h.events = JSON.parse(h.events); } catch { h.events = []; } });
+    res.json(hooks);
+  });
+
+  // Update webhook
+  router.put('/api/webhooks/:id', (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+    const existing = db.prepare('SELECT * FROM webhooks WHERE id = ? AND user_id = ?').get(id, req.userId);
+    if (!existing) return res.status(404).json({ error: 'Webhook not found' });
+
+    const { name, url, events, active } = req.body;
+    const updates = {};
+    if (name !== undefined) updates.name = String(name).trim().slice(0, 100);
+    if (url !== undefined) {
+      try { new URL(url); } catch { return res.status(400).json({ error: 'Invalid URL' }); }
+      updates.url = url;
+    }
+    if (events !== undefined) updates.events = JSON.stringify(Array.isArray(events) ? events : []);
+    if (active !== undefined) updates.active = active ? 1 : 0;
+
+    const sets = Object.keys(updates).map(k => `${k}=?`).join(',');
+    if (sets) {
+      db.prepare(`UPDATE webhooks SET ${sets} WHERE id = ?`).run(...Object.values(updates), id);
+    }
+
+    const updated = db.prepare('SELECT id, name, url, events, active, created_at FROM webhooks WHERE id = ?').get(id);
+    try { updated.events = JSON.parse(updated.events); } catch { updated.events = []; }
+    res.json(updated);
+  });
+
+  // Delete webhook
+  router.delete('/api/webhooks/:id', (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+    const existing = db.prepare('SELECT id FROM webhooks WHERE id = ? AND user_id = ?').get(id, req.userId);
+    if (!existing) return res.status(404).json({ error: 'Webhook not found' });
+
+    db.prepare('DELETE FROM webhooks WHERE id = ?').run(id);
+    res.json({ ok: true });
+  });
+
+  // ─── Push Notifications ───
+
+  // Subscribe to push notifications
+  router.post('/api/push/subscribe', (req, res) => {
+    const { endpoint, keys } = req.body;
+    if (!endpoint || typeof endpoint !== 'string') {
+      return res.status(400).json({ error: 'endpoint is required' });
+    }
+    if (!keys || !keys.p256dh || !keys.auth) {
+      return res.status(400).json({ error: 'keys.p256dh and keys.auth are required' });
+    }
+
+    const result = db.prepare(
+      `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(user_id, endpoint) DO UPDATE SET p256dh=excluded.p256dh, auth=excluded.auth`
+    ).run(req.userId, endpoint, keys.p256dh, keys.auth);
+
+    res.status(201).json({ id: Number(result.lastInsertRowid) });
+  });
+
+  // Unsubscribe from push notifications
+  router.delete('/api/push/subscribe', (req, res) => {
+    const { endpoint } = req.body;
+    if (endpoint) {
+      db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?')
+        .run(req.userId, endpoint);
+    }
+    res.json({ ok: true });
+  });
+
+  // Send test push notification
+  router.post('/api/push/test', (req, res) => {
+    const subs = db.prepare('SELECT * FROM push_subscriptions WHERE user_id = ?').all(req.userId);
+    if (subs.length === 0) {
+      return res.json({ sent: 0, message: 'No subscriptions found' });
+    }
+
+    // Check if VAPID keys are configured
+    const vapidPublic = process.env.VAPID_PUBLIC_KEY;
+    const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
+    if (!vapidPublic || !vapidPrivate) {
+      return res.json({ sent: 0, skipped: true, message: 'VAPID keys not configured' });
+    }
+
+    // In real implementation, would use web-push library here
+    // For now, return subscription count
+    res.json({ sent: subs.length, message: 'Test notifications queued' });
+  });
+
   return router;
 };

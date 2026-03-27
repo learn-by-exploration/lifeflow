@@ -16,6 +16,11 @@ const createAuditLogger = require('./services/audit');
 const app = express();
 const PORT = config.port;
 
+// ─── Trust proxy when behind reverse proxy (Nginx, Caddy, etc.) ───
+if (config.trustProxy) {
+  app.set('trust proxy', 1);
+}
+
 const { db, rebuildSearchIndex } = initDatabase(config.dbDir);
 const helpers = createHelpers(db);
 const deps = { db, dbDir: config.dbDir, rebuildSearchIndex, ...helpers };
@@ -57,8 +62,20 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// ─── CORS (same-origin by default) ───
-app.use(cors({ origin: false }));
+// ─── CORS (same-origin by default, configurable via ALLOWED_ORIGINS) ───
+if (config.allowedOrigins.length > 0) {
+  app.use(cors({
+    origin: function(origin, callback) {
+      // Allow requests with no origin (same-origin, curl, mobile apps)
+      if (!origin) return callback(null, true);
+      if (config.allowedOrigins.includes(origin)) return callback(null, true);
+      callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true
+  }));
+} else {
+  app.use(cors({ origin: false }));
+}
 
 // ─── Rate limiting (skipped in test to avoid false blocks) ───
 if (!config.isTest) {
@@ -110,7 +127,8 @@ app.use(require('./routes/auth')(deps));
 
 // ─── Destructive endpoint protection (require password re-entry) ───
 app.use('/api/import', express.json({ limit: '10mb' }));
-app.use('/api/import', requirePassword);
+// Only require password for the main import endpoint (full data restore), not for external importers
+app.post('/api/import', requirePassword);
 app.use('/api/demo/reset', requirePassword);
 
 // ─── Route modules ───

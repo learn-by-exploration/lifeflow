@@ -1,7 +1,7 @@
 # LifeFlow — Claude Code Configuration
 
-> **Last updated:** 27 March 2026 · **Version:** 0.3.0
-> **Metrics:** 1,701 tests | 61 test files | 166 API routes | 28 DB tables | ~13,000 LOC
+> **Last updated:** 27 March 2026 · **Version:** 0.5.0
+> **Metrics:** 1,841 tests | 76 test files | 185 API routes | 32 DB tables | ~14,000 LOC
 
 ## Project Overview
 
@@ -146,6 +146,9 @@ badges         (id, user_id, badge_type, earned_at)
 automation_rules (id, user_id, trigger, action, config JSON, enabled)
 custom_field_defs (id, user_id, name, field_type, options JSON, position, required, show_in_card)
 task_custom_values (id, task_id→tasks, field_id→custom_field_defs, value)
+api_tokens     (id, user_id→users, name, token_hash, last_used_at, created_at, expires_at)
+push_subscriptions (id, user_id→users, endpoint, p256dh, auth, created_at)
+webhooks       (id, user_id→users, name, url, events JSON, secret, active, created_at)
 ```
 
 All foreign keys use `ON DELETE CASCADE`.
@@ -157,7 +160,7 @@ See `docs/openapi.yaml` for full specification. Key modules:
 | Module | Routes | Covers |
 |--------|--------|--------|
 | `tasks.js` | 28 | CRUD, reorder, parse (NLP), board, calendar, table, timeline, my-day, search, overdue |
-| `features.js` | 25 | Habits, templates, automations, onboarding, inbox, notes, reviews |
+| `features.js` | 34 | Habits, templates, automations, settings, AI, webhooks, push (34 routes) |
 | `lists.js` | 22 | Custom lists + list items CRUD |
 | `stats.js` | 20 | Dashboard, streaks, heatmap, activity, focus stats, analytics |
 | `productivity.js` | 18 | Focus timer, reminders, triage, comments, milestones |
@@ -165,8 +168,8 @@ See `docs/openapi.yaml` for full specification. Key modules:
 | `tags.js` | 11 | Tags CRUD + usage stats |
 | `filters.js` | 7 | Saved filters + smart lists |
 | `custom-fields.js` | 6 | Custom field definitions + task values CRUD |
-| `data.js` | 6 | Export, import, backup/restore |
-| `auth.js` | 5 | Register, login, logout, session check, demo mode |
+| `data.js` | 8 | Export, import, backup, iCal, Todoist/Trello import (8 routes) |
+| `auth.js` | 14 | Register, login, logout, session, tokens, 2FA, users (14 routes) |
 
 ## Frontend Views (25+)
 
@@ -200,9 +203,13 @@ See `docs/openapi.yaml` for full specification. Key modules:
 ### Core
 - 4-level hierarchy: Life Area → Goal → Task → Subtask
 - Multi-user authentication (bcrypt, sessions, CSRF)
+- API token authentication (Bearer tokens, SHA-256 hashed)
+- TOTP 2FA (RFC 6238, setup/verify/disable)
 - 8 themes (midnight, charcoal, nord, ocean, forest, rose, sunset, light) + auto-detect via prefers-color-scheme
-- Service Worker with network-first caching, offline support, update notifications
+- Service Worker with network-first caching, offline mutation queue, update notifications
 - PWA manifest for add-to-homescreen
+- Configurable CORS (ALLOWED_ORIGINS env var)
+- Trust proxy support for reverse proxy deployments
 
 ### Task Management
 - Recurring tasks (daily/weekly/monthly/yearly/weekdays/every-N-days/weeks) with subtask copying on spawn
@@ -213,7 +220,8 @@ See `docs/openapi.yaml` for full specification. Key modules:
 - Automation rules (trigger → action workflows)
 - Custom fields (text, number, date, select types) with per-task values
 - Table view with sortable columns, grouping, filtering, pagination
-- Gantt chart MVP (SVG timeline, task bars, today marker, area grouping)
+- Gantt chart V2 (SVG timeline, task bars, dependency arrows via blocked_by, progress fill, today marker, area grouping)
+- Multi-user task assignment (assigned_to_user_id)
 - Drag-and-drop reorder (list, board, weekly columns) + touch support
 - Multi-select with bulk complete/delete/set priority
 - Inline subtask expansion with drag reorder
@@ -223,9 +231,17 @@ See `docs/openapi.yaml` for full specification. Key modules:
 - Auto-link focus session duration to task actual_minutes on completion
 - Habit tracker with daily logging and heatmaps
 - Streak counter + GitHub-style 365-day contribution heatmap
+- Web Push notifications (subscribe, test, overdue/reminder triggers)
 - Notification bell with overdue/today/upcoming reminders
 - Morning briefing / triage workflow
 - Weekly reviews
+
+### Integrations
+- Outbound webhooks (HMAC-SHA256 signed, configurable events, fire-and-forget)
+- AI BYOK (bring your own key — task suggestions, scheduling via encrypted API key)
+- Todoist JSON import (maps projects → goals, items → tasks)
+- Trello JSON import (maps lists → goals, cards → tasks)
+- iCal export (VCALENDAR with RRULE for recurring)
 
 ### UX
 - Toast notifications with undo (area + goal deletion restore)
@@ -302,7 +318,7 @@ See `docs/DOCUMENTATION-AUDIT.md` for the full documentation review and proposed
 | Version bump | CLAUDE.md header, `package.json`, `docs/openapi.yaml` |
 
 **Update the CLAUDE.md header line counts** when LOC changes significantly (>5%):
-- Current: 1,701 tests | 61 test files | 166 routes | 28 tables | ~13,000 LOC
+- Current: 1,841 tests | 76 test files | 185 routes | 32 tables | ~14,000 LOC
 
 ## What Needs to Be Done (Roadmap)
 

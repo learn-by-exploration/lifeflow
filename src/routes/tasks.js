@@ -74,6 +74,11 @@ router.get('/api/tasks/timeline', (req, res) => {
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.due_date BETWEEN ? AND ? AND t.user_id=? ORDER BY t.due_date, t.priority DESC
   `).all(start, end, req.userId));
+  // Add blocked_by arrays for dependency arrows
+  const depStmt = db.prepare('SELECT blocked_by_id FROM task_deps WHERE task_id = ?');
+  for (const t of tasks) {
+    t.blocked_by = depStmt.all(t.id).map(d => d.blocked_by_id);
+  }
   res.json({ tasks });
 });
 router.post('/api/goals/:goalId/tasks', (req, res) => {
@@ -298,7 +303,7 @@ router.put('/api/tasks/:id', (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const ex = db.prepare('SELECT * FROM tasks WHERE id=? AND user_id=?').get(id, req.userId);
   if (!ex) return res.status(404).json({ error: 'Not found' });
-  const { title, note, status, priority, due_date, due_time, recurring, assigned_to, my_day, position, goal_id, time_block_start, time_block_end, estimated_minutes, actual_minutes, list_id } = req.body;
+  const { title, note, status, priority, due_date, due_time, recurring, assigned_to, assigned_to_user_id, my_day, position, goal_id, time_block_start, time_block_end, estimated_minutes, actual_minutes, list_id } = req.body;
   if (status !== undefined && status !== null && !['todo','doing','done'].includes(status)) return res.status(400).json({ error: 'Invalid status (must be todo, doing, or done)' });
   if (priority !== undefined && priority !== null && (typeof priority === 'boolean' || ![0,1,2,3].includes(Number(priority)))) return res.status(400).json({ error: 'Priority must be 0-3' });
   if (title !== undefined && title !== null && (typeof title !== 'string' || !title.trim())) return res.status(400).json({ error: 'Title must be a non-empty string' });
@@ -306,6 +311,11 @@ router.put('/api/tasks/:id', (req, res) => {
   if (due_time !== undefined && !isValidHHMM(due_time)) return res.status(400).json({ error: 'Invalid due_time format (HH:MM)' });
   if (estimated_minutes !== undefined && estimated_minutes !== null && (typeof estimated_minutes !== 'number' || estimated_minutes < 0)) return res.status(400).json({ error: 'estimated_minutes must be a non-negative number' });
   if (list_id !== undefined && list_id !== null) { const lid = Number(list_id); if (!Number.isInteger(lid) || !db.prepare('SELECT id FROM lists WHERE id=? AND user_id=?').get(lid, req.userId)) return res.status(400).json({ error: 'Invalid list_id' }); }
+  // Validate assigned_to_user_id if provided
+  if (assigned_to_user_id !== undefined && assigned_to_user_id !== null) {
+    const targetUser = db.prepare('SELECT id FROM users WHERE id = ?').get(assigned_to_user_id);
+    if (!targetUser) return res.status(400).json({ error: 'Assigned user not found' });
+  }
   let validatedRecurring = recurring;
   if (recurring !== undefined && recurring !== null) {
     const rv = validateRecurring(recurring);
@@ -316,7 +326,8 @@ router.put('/api/tasks/:id', (req, res) => {
   db.prepare(`UPDATE tasks SET title=COALESCE(?,title),note=COALESCE(?,note),status=COALESCE(?,status),
     priority=COALESCE(?,priority),due_date=?,due_time=?,recurring=?,assigned_to=COALESCE(?,assigned_to),
     my_day=COALESCE(?,my_day),position=COALESCE(?,position),goal_id=COALESCE(?,goal_id),completed_at=?,
-    time_block_start=?,time_block_end=?,estimated_minutes=?,actual_minutes=?,list_id=? WHERE id=?`).run(
+    time_block_start=?,time_block_end=?,estimated_minutes=?,actual_minutes=?,list_id=?,
+    assigned_to_user_id=? WHERE id=?`).run(
     title||null, note!==undefined?note:null, status||null, priority!==undefined?priority:null,
     due_date!==undefined?due_date:ex.due_date, due_time!==undefined?due_time:ex.due_time,
     validatedRecurring!==undefined?validatedRecurring:ex.recurring,
@@ -324,7 +335,8 @@ router.put('/api/tasks/:id', (req, res) => {
     position!==undefined?position:null, goal_id||null, completedAt,
     time_block_start!==undefined?time_block_start:ex.time_block_start, time_block_end!==undefined?time_block_end:ex.time_block_end,
     estimated_minutes!==undefined?estimated_minutes:ex.estimated_minutes, actual_minutes!==undefined?actual_minutes:ex.actual_minutes,
-    list_id!==undefined?(list_id?Number(list_id):null):ex.list_id, id
+    list_id!==undefined?(list_id?Number(list_id):null):ex.list_id,
+    assigned_to_user_id!==undefined?assigned_to_user_id:ex.assigned_to_user_id, id
   );
   // Recurring: spawn next task when completed
   if (status === 'done' && ex.status !== 'done' && ex.recurring) {
