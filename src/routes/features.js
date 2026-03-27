@@ -557,6 +557,36 @@ router.get('/api/planner/:date', (req, res) => {
 
   // ─── Webhooks ───
 
+  const WEBHOOK_EVENTS = ['*', 'task.created', 'task.updated', 'task.completed', 'task.deleted',
+    'goal.created', 'goal.completed', 'habit.logged', 'focus.completed'];
+
+  // SSRF protection — block private/reserved IPs
+  function isPrivateUrl(urlString) {
+    try {
+      const parsed = new URL(urlString);
+      const hostname = parsed.hostname.replace(/^\[|\]$/g, ''); // strip brackets from IPv6
+      if (hostname === 'localhost' || hostname.endsWith('.local')) return true;
+      if (hostname === '0.0.0.0' || hostname === '::1' || hostname === '::') return true;
+      // IPv4 private ranges
+      const ipv4Match = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+      if (ipv4Match) {
+        const [, a, b] = ipv4Match.map(Number);
+        if (a === 127) return true;                        // 127.0.0.0/8
+        if (a === 10) return true;                         // 10.0.0.0/8
+        if (a === 172 && b >= 16 && b <= 31) return true;  // 172.16.0.0/12
+        if (a === 192 && b === 168) return true;           // 192.168.0.0/16
+        if (a === 169 && b === 254) return true;           // 169.254.0.0/16 (link-local/cloud metadata)
+        if (a === 0) return true;                          // 0.0.0.0/8
+      }
+      // IPv6 mapped IPv4 (::ffff:127.x.x.x)
+      if (/^::ffff:\d+\.\d+\.\d+\.\d+$/i.test(hostname)) {
+        const mapped = hostname.replace(/^::ffff:/i, '');
+        return isPrivateUrl(`http://${mapped}`);
+      }
+      return false;
+    } catch { return true; }
+  }
+
   // Create webhook
   router.post('/api/webhooks', (req, res) => {
     const { name, url, events } = req.body;
@@ -570,10 +600,18 @@ router.get('/api/planner/:date', (req, res) => {
     if (!url.startsWith('https://') && !url.startsWith('http://')) {
       return res.status(400).json({ error: 'URL must use http or https' });
     }
+    if (isPrivateUrl(url)) {
+      return res.status(400).json({ error: 'Webhook URL must not point to private/internal networks' });
+    }
+
+    const eventList = Array.isArray(events) ? events : [];
+    if (eventList.some(e => !WEBHOOK_EVENTS.includes(e))) {
+      return res.status(400).json({ error: 'Invalid event type', allowed: WEBHOOK_EVENTS });
+    }
 
     const crypto = require('crypto');
     const secret = crypto.randomBytes(32).toString('hex');
-    const eventsJson = JSON.stringify(Array.isArray(events) ? events : []);
+    const eventsJson = JSON.stringify(eventList);
 
     const result = db.prepare(
       'INSERT INTO webhooks (user_id, name, url, events, secret) VALUES (?,?,?,?,?)'
@@ -588,6 +626,11 @@ router.get('/api/planner/:date', (req, res) => {
       active: true,
       created_at: new Date().toISOString()
     });
+  });
+
+  // List valid webhook event types
+  router.get('/api/webhooks/events', (req, res) => {
+    res.json(WEBHOOK_EVENTS);
   });
 
   // List webhooks
@@ -611,9 +654,18 @@ router.get('/api/planner/:date', (req, res) => {
     if (name !== undefined) updates.name = String(name).trim().slice(0, 100);
     if (url !== undefined) {
       try { new URL(url); } catch { return res.status(400).json({ error: 'Invalid URL' }); }
+      if (isPrivateUrl(url)) {
+        return res.status(400).json({ error: 'Webhook URL must not point to private/internal networks' });
+      }
       updates.url = url;
     }
-    if (events !== undefined) updates.events = JSON.stringify(Array.isArray(events) ? events : []);
+    if (events !== undefined) {
+      const eventList = Array.isArray(events) ? events : [];
+      if (eventList.some(e => !WEBHOOK_EVENTS.includes(e))) {
+        return res.status(400).json({ error: 'Invalid event type', allowed: WEBHOOK_EVENTS });
+      }
+      updates.events = JSON.stringify(eventList);
+    }
     if (active !== undefined) updates.active = active ? 1 : 0;
 
     const sets = Object.keys(updates).map(k => `${k}=?`).join(',');
@@ -679,12 +731,11 @@ router.get('/api/planner/:date', (req, res) => {
     const vapidPublic = process.env.VAPID_PUBLIC_KEY;
     const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
     if (!vapidPublic || !vapidPrivate) {
-      return res.json({ sent: 0, skipped: true, message: 'VAPID keys not configured' });
+      return res.json({ sent: 0, pending: subs.length, message: 'VAPID keys not configured — subscriptions stored for future use' });
     }
 
-    // In real implementation, would use web-push library here
-    // For now, return subscription count
-    res.json({ sent: subs.length, message: 'Test notifications queued' });
+    // Push sending not yet implemented — report honestly
+    res.json({ sent: 0, pending: subs.length, message: 'Push sending not yet implemented — subscriptions stored for future use' });
   });
 
   return router;

@@ -43,8 +43,19 @@ const Store=(()=>{
   function setView(v){set('currentView',v);emit('view:changed',v)}
 
   // ─── Offline Mutation Queue ───
+  // Restore queue from localStorage on init
+  try {
+    const saved = typeof localStorage !== 'undefined' && localStorage.getItem('lf_mutation_queue');
+    if (saved) { try { _mutationQueue.push(...JSON.parse(saved)); } catch {} }
+  } catch {}
+
+  function _persistQueue() {
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem('lf_mutation_queue', JSON.stringify(_mutationQueue)); } catch {}
+  }
+
   function queueMutation(method,url,body){
     _mutationQueue.push({method,url,body,timestamp:Date.now()});
+    _persistQueue();
     emit('queue:changed',{size:_mutationQueue.length});
   }
   function getQueueSize(){return _mutationQueue.length}
@@ -62,10 +73,11 @@ const Store=(()=>{
         else{failed++;break}
       }catch(e){failed++;break}
     }
+    _persistQueue();
     emit('queue:changed',{size:_mutationQueue.length});
     return{synced,failed};
   }
-  function clearQueue(){_mutationQueue.length=0;emit('queue:changed',{size:0})}
+  function clearQueue(){_mutationQueue.length=0;_persistQueue();emit('queue:changed',{size:0})}
 
   return{get,set,getAll,on,off,emit,getSettings,getSetting,setSettings,getView,setView,queueMutation,getQueueSize,getQueue,syncQueue,clearQueue};
 })();

@@ -3,6 +3,7 @@
  * Fire-and-forget with 5s timeout, HMAC-SHA256 signature.
  */
 const crypto = require('crypto');
+const logger = require('../logger');
 
 module.exports = function createWebhookService(db) {
   /**
@@ -17,7 +18,11 @@ module.exports = function createWebhookService(db) {
     ).all(userId);
 
     for (const hook of hooks) {
-      const events = JSON.parse(hook.events || '[]');
+      let events;
+      try { events = JSON.parse(hook.events || '[]'); } catch {
+        logger.warn({ webhookId: hook.id }, 'Webhook has malformed events JSON, skipping');
+        continue;
+      }
       if (!events.includes(event) && !events.includes('*')) continue;
 
       const body = JSON.stringify({ event, payload, timestamp: new Date().toISOString() });
@@ -39,7 +44,7 @@ module.exports = function createWebhookService(db) {
         });
         clearTimeout(timeout);
       } catch (err) {
-        // Log but don't throw — fire-and-forget
+        logger.warn({ err: err.message, webhookId: hook.id, event, url: hook.url }, 'Webhook delivery failed');
       }
     }
   }

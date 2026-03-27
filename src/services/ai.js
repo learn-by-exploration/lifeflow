@@ -9,21 +9,34 @@ module.exports = function createAiService(db) {
   const ALGORITHM = 'aes-256-gcm';
 
   function encrypt(text) {
-    if (!ENCRYPTION_KEY) return text;
-    const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+    if (!ENCRYPTION_KEY) throw new Error('AI_ENCRYPTION_KEY environment variable is required for storing API keys');
+    const salt = crypto.randomBytes(16);
+    const key = crypto.scryptSync(ENCRYPTION_KEY, salt, 32);
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
     let encrypted = cipher.update(text, 'utf8', 'hex');
     encrypted += cipher.final('hex');
     const tag = cipher.getAuthTag().toString('hex');
-    return iv.toString('hex') + ':' + tag + ':' + encrypted;
+    return salt.toString('hex') + ':' + iv.toString('hex') + ':' + tag + ':' + encrypted;
   }
 
   function decrypt(encrypted) {
-    if (!ENCRYPTION_KEY) return encrypted;
-    const [ivHex, tagHex, data] = encrypted.split(':');
-    if (!ivHex || !tagHex || !data) return null;
-    const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+    if (!ENCRYPTION_KEY) throw new Error('AI_ENCRYPTION_KEY environment variable is required for storing API keys');
+    const parts = encrypted.split(':');
+    if (parts.length === 3) {
+      // Legacy format (no salt): iv:tag:data — use fixed salt for backward compat
+      const [ivHex, tagHex, data] = parts;
+      if (!ivHex || !tagHex || !data) return null;
+      const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+      const decipher = crypto.createDecipheriv(ALGORITHM, key, Buffer.from(ivHex, 'hex'));
+      decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
+      let decrypted = decipher.update(data, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      return decrypted;
+    }
+    const [saltHex, ivHex, tagHex, data] = parts;
+    if (!saltHex || !ivHex || !tagHex || !data) return null;
+    const key = crypto.scryptSync(ENCRYPTION_KEY, Buffer.from(saltHex, 'hex'), 32);
     const decipher = crypto.createDecipheriv(ALGORITHM, key, Buffer.from(ivHex, 'hex'));
     decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
     let decrypted = decipher.update(data, 'hex', 'utf8');
@@ -42,6 +55,8 @@ module.exports = function createAiService(db) {
     if (!apiKey) throw new Error('No AI API key configured');
     // Would call external AI API — return structured suggestion
     return {
+      stub: true,
+      message: 'AI integration not yet implemented — showing example data',
       subtasks: [
         { title: `Research ${taskTitle}` },
         { title: `Plan ${taskTitle}` },
@@ -55,7 +70,7 @@ module.exports = function createAiService(db) {
     const apiKey = getUserApiKey(userId);
     if (!apiKey) throw new Error('No AI API key configured');
     // Would call external AI API — return schedule suggestions
-    return { suggestions: [] };
+    return { stub: true, message: 'AI integration not yet implemented — showing example data', suggestions: [] };
   }
 
   return { suggest, schedule, encrypt, decrypt, getUserApiKey };

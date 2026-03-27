@@ -80,8 +80,8 @@ describe('Web Push Notifications', () => {
       await agent().post('/api/push/subscribe').send(validSub).expect(201);
       const res = await agent().post('/api/push/test').send({});
       assert.equal(res.status, 200);
-      // Without VAPID keys configured, should report 0 sent or skip
-      assert.ok(res.body.sent === 0 || res.body.skipped);
+      assert.equal(res.body.sent, 0);
+      assert.ok(res.body.pending >= 1, 'Should report pending count');
     });
   });
 

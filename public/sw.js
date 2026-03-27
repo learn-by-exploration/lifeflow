@@ -53,21 +53,25 @@ self.addEventListener('fetch', event => {
   // For write operations, notify client if offline so mutations can be queued
   if (request.url.includes('/api/')) {
     if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method)) {
+      const clonedReq = request.clone();
       event.respondWith(
-        fetch(request).catch(() => {
-          // Notify client about the failed mutation for offline queueing
-          self.clients.matchAll().then(cls => {
-            cls.forEach(c => c.postMessage({
-              type: 'mutation-failed',
-              method: request.method,
-              url: request.url
-            }));
-          });
-          return new Response(JSON.stringify({ error: 'Offline — mutation queued' }), {
-            status: 503,
-            headers: { 'Content-Type': 'application/json' }
-          });
-        })
+        clonedReq.text().catch(() => null).then(bodyText =>
+          fetch(request).catch(() => {
+            // Notify client about the failed mutation for offline queueing
+            self.clients.matchAll().then(cls => {
+              cls.forEach(c => c.postMessage({
+                type: 'mutation-failed',
+                method: request.method,
+                url: request.url,
+                body: bodyText
+              }));
+            });
+            return new Response(JSON.stringify({ error: 'Offline — mutation queued' }), {
+              status: 503,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          })
+        )
       );
     }
     return; // GET requests pass through normally

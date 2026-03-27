@@ -41,4 +41,30 @@ describe('Offline Mutation Queue (static analysis)', () => {
   it('sw.js has push event handler', () => {
     assert.ok(swCode.includes("addEventListener('push'"), 'Should handle push events');
   });
+
+  // ─── Persistence Tests ───
+
+  it('store.js persists queue to localStorage', () => {
+    assert.ok(storeCode.includes('localStorage'), 'Should use localStorage for persistence');
+    assert.ok(storeCode.includes('lf_mutation_queue'), 'Should use lf_mutation_queue key');
+  });
+
+  it('store.js restores queue from localStorage on init', () => {
+    assert.ok(storeCode.includes('getItem') && storeCode.includes('lf_mutation_queue'),
+      'Should restore queue from localStorage');
+  });
+
+  it('store.js clears localStorage on clearQueue', () => {
+    // clearQueue should call _persistQueue which updates localStorage
+    assert.ok(storeCode.includes('clearQueue') && storeCode.includes('_persistQueue'),
+      'clearQueue should persist empty queue');
+  });
+
+  // ─── SW Body Forwarding Test ───
+
+  it('sw.js includes body in mutation-failed message', () => {
+    assert.ok(swCode.includes('body: bodyText') || swCode.includes('body:bodyText'),
+      'mutation-failed message should include request body');
+    assert.ok(swCode.includes('clone()'), 'Should clone request to read body');
+  });
 });

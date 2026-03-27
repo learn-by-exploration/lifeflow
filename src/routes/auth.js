@@ -71,7 +71,7 @@ module.exports = function(deps) {
 
   // ─── Login ───
   router.post('/api/auth/login', (req, res) => {
-    const { email, password, remember } = req.body;
+    const { email, password, remember, totp_token } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -86,6 +86,27 @@ module.exports = function(deps) {
     if (!user || !valid) {
       if (audit) audit.log(null, 'login_failed', 'auth', null, req, trimmedEmail);
       return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // ─── 2FA enforcement ───
+    const totpEnabled = db.prepare("SELECT value FROM settings WHERE user_id = ? AND key = 'totp_enabled'").get(user.id);
+    if (totpEnabled && totpEnabled.value === '1') {
+      if (!totp_token) {
+        return res.status(403).json({ error: '2FA token required', requires_2fa: true });
+      }
+      const secretRow = db.prepare("SELECT value FROM settings WHERE user_id = ? AND key = 'totp_secret'").get(user.id);
+      if (!secretRow) {
+        return res.status(500).json({ error: '2FA misconfigured' });
+      }
+      // Check current and adjacent time steps (±1) for 30-second drift tolerance
+      const secret = secretRow.value;
+      const currentToken = generateTOTP(secret);
+      const prevToken = generateTOTP(secret, 30, -1);
+      const nextToken = generateTOTP(secret, 30, 1);
+      if (totp_token !== currentToken && totp_token !== prevToken && totp_token !== nextToken) {
+        if (audit) audit.log(null, 'login_2fa_failed', 'auth', null, req, trimmedEmail);
+        return res.status(401).json({ error: 'Invalid 2FA token' });
+      }
     }
 
     // Update last_login
@@ -210,8 +231,10 @@ module.exports = function(deps) {
 
     // Verify TOTP — check current and adjacent time steps
     const secret = pending.value;
-    const generated = generateTOTP(secret);
-    if (token !== generated) {
+    const currentToken = generateTOTP(secret);
+    const prevToken = generateTOTP(secret, 30, -1);
+    const nextToken = generateTOTP(secret, 30, 1);
+    if (token !== currentToken && token !== prevToken && token !== nextToken) {
       return res.status(400).json({ error: 'Invalid token' });
     }
 
@@ -242,7 +265,7 @@ module.exports = function(deps) {
   // ─── List Users (for assignment picker) ───
   router.get('/api/users', (req, res) => {
     if (!req.userId) return res.status(401).json({ error: 'Authentication required' });
-    const users = db.prepare('SELECT id, display_name, created_at FROM users').all();
+    const users = db.prepare('SELECT id, display_name FROM users').all();
     res.json(users);
   });
 
@@ -336,7 +359,7 @@ function buildCookie(sid, ttlSeconds, req) {
 /**
  * Generate a TOTP code (RFC 6238) from a base32-encoded secret.
  */
-function generateTOTP(base32Secret, timeStep = 30) {
+function generateTOTP(base32Secret, timeStep = 30, counterOffset = 0) {
   // Decode base32
   const base32Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
   let bits = 0, value = 0;
@@ -353,8 +376,8 @@ function generateTOTP(base32Secret, timeStep = 30) {
   }
   const key = Buffer.from(bytes);
 
-  // Calculate counter from current time
-  const counter = Math.floor(Date.now() / 1000 / timeStep);
+  // Calculate counter from current time with optional offset
+  const counter = Math.floor(Date.now() / 1000 / timeStep) + counterOffset;
   const counterBuf = Buffer.alloc(8);
   counterBuf.writeUInt32BE(Math.floor(counter / 0x100000000), 0);
   counterBuf.writeUInt32BE(counter & 0xFFFFFFFF, 4);

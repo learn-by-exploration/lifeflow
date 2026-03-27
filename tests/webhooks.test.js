@@ -98,4 +98,96 @@ describe('Outbound Webhooks', () => {
       assert.equal(typeof webhookService, 'function');
     });
   });
+
+  describe('SSRF protection', () => {
+    it('rejects localhost URL', async () => {
+      const res = await agent().post('/api/webhooks')
+        .send({ name: 'SSRF', url: 'http://127.0.0.1/hook', events: ['task.created'] });
+      assert.equal(res.status, 400);
+    });
+
+    it('rejects cloud metadata URL', async () => {
+      const res = await agent().post('/api/webhooks')
+        .send({ name: 'SSRF', url: 'http://169.254.169.254/latest/meta-data', events: ['task.created'] });
+      assert.equal(res.status, 400);
+    });
+
+    it('rejects private network URL', async () => {
+      const res = await agent().post('/api/webhooks')
+        .send({ name: 'SSRF', url: 'http://192.168.1.1/hook', events: ['task.created'] });
+      assert.equal(res.status, 400);
+    });
+
+    it('rejects IPv6 loopback URL', async () => {
+      const res = await agent().post('/api/webhooks')
+        .send({ name: 'SSRF', url: 'http://[::1]/hook', events: ['task.created'] });
+      assert.equal(res.status, 400);
+    });
+
+    it('allows public URL', async () => {
+      const res = await agent().post('/api/webhooks')
+        .send({ name: 'Public', url: 'https://example.com/hook', events: ['task.created'] });
+      assert.equal(res.status, 201);
+    });
+  });
+
+  describe('Webhook secret handling', () => {
+    it('POST /api/webhooks returns secret on creation', async () => {
+      const res = await agent().post('/api/webhooks')
+        .send({ name: 'Secret Test', url: 'https://example.com/hook', events: ['task.created'] });
+      assert.equal(res.status, 201);
+      assert.ok(res.body.secret, 'Creation response should include secret');
+    });
+
+    it('GET /api/webhooks does NOT expose secret', async () => {
+      await agent().post('/api/webhooks')
+        .send({ name: 'Secret Hidden', url: 'https://example.com/hook', events: ['task.created'] });
+      const res = await agent().get('/api/webhooks');
+      assert.equal(res.status, 200);
+      for (const h of res.body) {
+        assert.equal(h.secret, undefined, 'List response should not include secret');
+      }
+    });
+  });
+
+  describe('Webhook service resilience', () => {
+    it('fireWebhook with unreachable URL does not throw', async () => {
+      db.prepare('INSERT INTO webhooks (user_id, name, url, events, secret, active) VALUES (?,?,?,?,?,?)')
+        .run(1, 'Bad', 'http://192.0.2.1:1/hook', '["task.created"]', 'secret123', 1);
+      const createWebhookService = require('../src/services/webhook');
+      const svc = createWebhookService(db);
+      // Should not throw
+      await svc.fireWebhook(1, 'task.created', { id: 1 });
+    });
+
+    it('fireWebhook with malformed events JSON does not throw', async () => {
+      db.prepare('INSERT INTO webhooks (user_id, name, url, events, secret, active) VALUES (?,?,?,?,?,?)')
+        .run(1, 'Malformed', 'https://example.com/hook', 'not-json', 'secret123', 1);
+      const createWebhookService = require('../src/services/webhook');
+      const svc = createWebhookService(db);
+      await svc.fireWebhook(1, 'task.created', { id: 1 });
+    });
+  });
+
+  describe('Webhook event validation', () => {
+    it('accepts valid event names', async () => {
+      const res = await agent().post('/api/webhooks')
+        .send({ name: 'Valid', url: 'https://example.com/hook', events: ['task.created', 'task.completed'] });
+      assert.equal(res.status, 201);
+    });
+
+    it('rejects invalid event names', async () => {
+      const res = await agent().post('/api/webhooks')
+        .send({ name: 'Invalid', url: 'https://example.com/hook', events: ['invalid.event'] });
+      assert.equal(res.status, 400);
+      assert.ok(res.body.allowed, 'Should return allowed event list');
+    });
+
+    it('GET /api/webhooks/events lists valid event types', async () => {
+      const res = await agent().get('/api/webhooks/events').expect(200);
+      assert.ok(Array.isArray(res.body));
+      assert.ok(res.body.includes('task.created'));
+      assert.ok(res.body.includes('*'));
+    });
+  });
 });

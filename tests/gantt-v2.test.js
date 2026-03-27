@@ -63,4 +63,26 @@ describe('Gantt V2 — Timeline API', () => {
     assert.equal(task.subtask_done, 1);
     assert.equal(task.subtask_total, 2);
   });
+
+  it('batched dependency query populates blocked_by for multiple tasks', async () => {
+    const area = makeArea();
+    const goal = makeGoal(area.id);
+    const t1 = makeTask(goal.id, { title: 'T1', due_date: '2026-04-01' });
+    const t2 = makeTask(goal.id, { title: 'T2', due_date: '2026-04-02' });
+    const t3 = makeTask(goal.id, { title: 'T3', due_date: '2026-04-03' });
+    // T2 blocked by T1, T3 blocked by T1 and T2
+    db.prepare('INSERT INTO task_deps (task_id, blocked_by_id) VALUES (?, ?)').run(t2.id, t1.id);
+    db.prepare('INSERT INTO task_deps (task_id, blocked_by_id) VALUES (?, ?)').run(t3.id, t1.id);
+    db.prepare('INSERT INTO task_deps (task_id, blocked_by_id) VALUES (?, ?)').run(t3.id, t2.id);
+
+    const res = await agent().get('/api/tasks/timeline?start=2026-01-01&end=2026-12-31').expect(200);
+    const tasks = res.body.tasks;
+    const taskMap = Object.fromEntries(tasks.map(t => [t.id, t]));
+
+    assert.deepEqual(taskMap[t1.id].blocked_by, []);
+    assert.deepEqual(taskMap[t2.id].blocked_by, [t1.id]);
+    assert.ok(taskMap[t3.id].blocked_by.includes(t1.id));
+    assert.ok(taskMap[t3.id].blocked_by.includes(t2.id));
+    assert.equal(taskMap[t3.id].blocked_by.length, 2);
+  });
 });

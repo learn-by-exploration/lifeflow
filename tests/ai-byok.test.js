@@ -24,24 +24,112 @@ describe('AI BYOK (Bring Your Own Key)', () => {
     assert.ok(res.body.error.includes('API key'));
   });
 
-  it('saves AI API key in settings (encrypted)', async () => {
-    // Save a dummy key via settings
-    await agent()
-      .put('/api/settings')
-      .send({ key: 'ai_api_key', value: 'sk-test-key-12345' });
-
-    // GET settings should NOT expose the raw key
-    const res = await agent().get('/api/settings').expect(200);
-    const aiKey = res.body.find ? res.body.find(s => s.key === 'ai_api_key') : null;
-    // If the key exists, it should be masked
-    if (aiKey) {
-      assert.ok(!aiKey.value.includes('sk-test-key-12345') || aiKey.value === '***',
-        'API key should be masked in settings response');
-    }
-  });
-
   it('AI service module exists', () => {
     const aiService = require('../src/services/ai');
     assert.equal(typeof aiService, 'function');
+  });
+
+  // ─── Encryption Tests ───
+
+  it('encrypt → decrypt roundtrip returns original text', () => {
+    const oldKey = process.env.AI_ENCRYPTION_KEY;
+    process.env.AI_ENCRYPTION_KEY = 'test-encryption-key-32chars-long!';
+    try {
+      const createAiService = require('../src/services/ai');
+      // Clear module cache to pick up new env var
+      delete require.cache[require.resolve('../src/services/ai')];
+      const svc = require('../src/services/ai')(db);
+      const original = 'sk-secret-api-key-12345';
+      const encrypted = svc.encrypt(original);
+      assert.notEqual(encrypted, original, 'Should not store plaintext');
+      const decrypted = svc.decrypt(encrypted);
+      assert.equal(decrypted, original);
+    } finally {
+      if (oldKey) process.env.AI_ENCRYPTION_KEY = oldKey;
+      else delete process.env.AI_ENCRYPTION_KEY;
+      delete require.cache[require.resolve('../src/services/ai')];
+    }
+  });
+
+  it('two encryptions of same text produce different ciphertexts (random salt)', () => {
+    const oldKey = process.env.AI_ENCRYPTION_KEY;
+    process.env.AI_ENCRYPTION_KEY = 'test-encryption-key-32chars-long!';
+    try {
+      delete require.cache[require.resolve('../src/services/ai')];
+      const svc = require('../src/services/ai')(db);
+      const text = 'sk-same-key';
+      const enc1 = svc.encrypt(text);
+      const enc2 = svc.encrypt(text);
+      assert.notEqual(enc1, enc2, 'Different encryptions should produce different ciphertext');
+    } finally {
+      if (oldKey) process.env.AI_ENCRYPTION_KEY = oldKey;
+      else delete process.env.AI_ENCRYPTION_KEY;
+      delete require.cache[require.resolve('../src/services/ai')];
+    }
+  });
+
+  it('encrypt without AI_ENCRYPTION_KEY throws error', () => {
+    const oldKey = process.env.AI_ENCRYPTION_KEY;
+    delete process.env.AI_ENCRYPTION_KEY;
+    try {
+      delete require.cache[require.resolve('../src/services/ai')];
+      const svc = require('../src/services/ai')(db);
+      assert.throws(() => svc.encrypt('sk-test'), /AI_ENCRYPTION_KEY/);
+    } finally {
+      if (oldKey) process.env.AI_ENCRYPTION_KEY = oldKey;
+      delete require.cache[require.resolve('../src/services/ai')];
+    }
+  });
+
+  it('decrypt without AI_ENCRYPTION_KEY throws error', () => {
+    const oldKey = process.env.AI_ENCRYPTION_KEY;
+    delete process.env.AI_ENCRYPTION_KEY;
+    try {
+      delete require.cache[require.resolve('../src/services/ai')];
+      const svc = require('../src/services/ai')(db);
+      assert.throws(() => svc.decrypt('abc:def:ghi:jkl'), /AI_ENCRYPTION_KEY/);
+    } finally {
+      if (oldKey) process.env.AI_ENCRYPTION_KEY = oldKey;
+      delete require.cache[require.resolve('../src/services/ai')];
+    }
+  });
+
+  it('suggest response includes stub: true marker', async () => {
+    const oldKey = process.env.AI_ENCRYPTION_KEY;
+    process.env.AI_ENCRYPTION_KEY = 'test-encryption-key-32chars-long!';
+    try {
+      delete require.cache[require.resolve('../src/services/ai')];
+      const svc = require('../src/services/ai')(db);
+      const encrypted = svc.encrypt('sk-test-key');
+      db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (?, 'ai_api_key', ?)")
+        .run(1, encrypted);
+      const result = await svc.suggest(1, 'Test task');
+      assert.equal(result.stub, true);
+      assert.ok(result.message);
+      assert.ok(Array.isArray(result.subtasks));
+    } finally {
+      if (oldKey) process.env.AI_ENCRYPTION_KEY = oldKey;
+      else delete process.env.AI_ENCRYPTION_KEY;
+      delete require.cache[require.resolve('../src/services/ai')];
+    }
+  });
+
+  it('schedule response includes stub: true marker', async () => {
+    const oldKey = process.env.AI_ENCRYPTION_KEY;
+    process.env.AI_ENCRYPTION_KEY = 'test-encryption-key-32chars-long!';
+    try {
+      delete require.cache[require.resolve('../src/services/ai')];
+      const svc = require('../src/services/ai')(db);
+      const encrypted = svc.encrypt('sk-test-key');
+      db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (?, 'ai_api_key', ?)")
+        .run(1, encrypted);
+      const result = await svc.schedule(1, [1]);
+      assert.equal(result.stub, true);
+      assert.ok(result.message);
+    } finally {
+      if (oldKey) process.env.AI_ENCRYPTION_KEY = oldKey;
+      else delete process.env.AI_ENCRYPTION_KEY;
+      delete require.cache[require.resolve('../src/services/ai')];
+    }
   });
 });

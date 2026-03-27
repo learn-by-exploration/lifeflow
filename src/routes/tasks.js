@@ -74,10 +74,18 @@ router.get('/api/tasks/timeline', (req, res) => {
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.due_date BETWEEN ? AND ? AND t.user_id=? ORDER BY t.due_date, t.priority DESC
   `).all(start, end, req.userId));
-  // Add blocked_by arrays for dependency arrows
-  const depStmt = db.prepare('SELECT blocked_by_id FROM task_deps WHERE task_id = ?');
-  for (const t of tasks) {
-    t.blocked_by = depStmt.all(t.id).map(d => d.blocked_by_id);
+  // Add blocked_by arrays for dependency arrows (batched query)
+  if (tasks.length > 0) {
+    const placeholders = tasks.map(() => '?').join(',');
+    const allDeps = db.prepare(
+      `SELECT task_id, blocked_by_id FROM task_deps WHERE task_id IN (${placeholders})`
+    ).all(...tasks.map(t => t.id));
+    const depMap = new Map();
+    for (const d of allDeps) {
+      if (!depMap.has(d.task_id)) depMap.set(d.task_id, []);
+      depMap.get(d.task_id).push(d.blocked_by_id);
+    }
+    for (const t of tasks) t.blocked_by = depMap.get(t.id) || [];
   }
   res.json({ tasks });
 });
