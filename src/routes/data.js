@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const path = require('path');
 const fs = require('fs');
+const logger = require('../logger');
 
 module.exports = function(deps) {
   const { db, enrichTasks, dbDir, audit } = deps;
@@ -25,9 +26,9 @@ module.exports = function(deps) {
   }
 
   // Backup on startup (for default user)
-  try { runBackup(1); } catch(e) { console.error('Backup failed:', e.message); }
+  try { runBackup(1); } catch(e) { logger.error({ err: e }, 'Startup backup failed'); }
   // Backup every 24h
-  setInterval(() => { try { runBackup(1); } catch(e) { console.error('Backup failed:', e.message); } }, 24 * 60 * 60 * 1000);
+  setInterval(() => { try { runBackup(1); } catch(e) { logger.error({ err: e }, 'Scheduled backup failed'); } }, 24 * 60 * 60 * 1000);
 
   router.post('/api/backup', (req, res) => {
     const fname = runBackup(req.userId);
@@ -126,7 +127,7 @@ module.exports = function(deps) {
       if (audit) audit.log(req.userId, 'data_import', 'import', null, req);
       res.json({ ok: true, message: 'Import successful' });
     } catch (e) {
-      console.error('Import failed:', e.message);
+      logger.error({ err: e }, 'Data import failed');
       res.status(500).json({ error: 'Import failed' });
     }
   });

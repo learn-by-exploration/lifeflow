@@ -1,7 +1,7 @@
 # LifeFlow — Claude Code Configuration
 
 > **Last updated:** 27 March 2026 · **Version:** 0.3.0
-> **Metrics:** 1,634 tests | 60 test files | 157 API routes | 26 DB tables | 10,687 LOC
+> **Metrics:** 1,692 tests | 60 test files | 157 API routes | 26 DB tables | ~12,000 LOC
 
 ## Project Overview
 
@@ -25,33 +25,57 @@ docker compose up -d
 |----------|---------|-------------|
 | `PORT` | `3456` | Server port |
 | `DB_DIR` | Project root | Directory for `lifeflow.db` |
+| `NODE_ENV` | `development` | Environment (development/production/test) |
+| `LOG_LEVEL` | `info` | Pino log level (silent/error/warn/info/debug) |
+| `RATE_LIMIT_MAX` | `200` | Max requests per window |
+| `SHUTDOWN_TIMEOUT_MS` | `10000` | Graceful shutdown timeout |
+
+See `.env.example` for all variables.
 
 ## Architecture
 
-**Backend (3,839 LOC):**
+**Backend:**
 ```
 src/
-  server.js           — Express app entry, middleware setup (174 lines)
-  helpers.js          — Shared utilities (146 lines)
-  db/index.js         — SQLite schema, 26 tables, migrations (511 lines)
+  server.js           — Express app entry, middleware, graceful shutdown
+  config.js           — Centralized config (dotenv, Object.freeze)
+  logger.js           — Pino structured logging
+  errors.js           — AppError classes (NotFoundError, ValidationError, etc.)
+  helpers.js          — Shared utilities (enrichTask, getNextPosition, etc.)
+  db/
+    index.js          — SQLite schema, 26 tables, inline migrations
+    migrate.js        — SQL migration runner (_migrations table)
+    migrations/       — Versioned SQL migration files
   routes/
-    areas.js          — Life Areas CRUD + reorder (202 lines, 17 routes)
-    auth.js           — Register, login, logout, session (183 lines, 5 routes)
-    data.js           — Export, import, backup (193 lines, 6 routes)
-    features.js       — Habits, templates, automations, onboarding, inbox, notes, reviews (530 lines, 25 routes)
-    filters.js        — Saved filters, smart lists (134 lines, 7 routes)
-    lists.js          — Custom lists + list items CRUD (328 lines, 22 routes)
-    productivity.js   — Focus timer, reminders, triage, comments, milestones (207 lines, 18 routes)
-    stats.js          — Dashboard, streaks, heatmap, activity, analytics (385 lines, 20 routes)
-    tags.js           — Tags CRUD + stats (125 lines, 11 routes)
-    tasks.js          — Tasks CRUD, reorder, parse, board, calendar (437 lines, 26 routes)
+    areas.js          — Life Areas + Goals + Milestones (uses AreasService)
+    auth.js           — Register, login, logout, session (5 routes)
+    data.js           — Export, import, backup (6 routes)
+    features.js       — Habits, templates, automations, settings (25 routes)
+    filters.js        — Saved filters, smart lists (uses FiltersService)
+    lists.js          — Custom lists + list items CRUD (22 routes)
+    productivity.js   — Inbox, notes, reviews, rules (18 routes)
+    stats.js          — Dashboard, streaks, heatmap, analytics (20 routes)
+    tags.js           — Tags CRUD + stats (uses TagsService)
+    tasks.js          — Tasks CRUD, reorder, parse, board, calendar (26 routes)
+  schemas/            — Zod validation schemas
+    common.schema.js  — Shared validators (positiveInt, hexColor, idParam)
+    tags.schema.js    — Tag CRUD schemas
+    filters.schema.js — Filter CRUD schemas
+    areas.schema.js   — Area/Goal/Milestone schemas
+  repositories/       — Data access layer (prepared statements)
+    tags.repository.js
+    filters.repository.js
+    areas.repository.js
+  services/           — Business logic layer
+    audit.js          — Audit logging
+    tags.service.js
+    filters.service.js
+    areas.service.js
   middleware/
-    auth.js           — Session-based authentication guard (91 lines)
-    csrf.js           — CSRF token middleware (63 lines)
-    errors.js         — Error handler (26 lines)
-    validate.js       — Input validation (49 lines)
-  services/
-    audit.js          — Audit logging service (55 lines)
+    auth.js           — Session-based authentication guard
+    csrf.js           — CSRF token middleware
+    errors.js         — Global error handler (AppError + legacy compat)
+    validate.js       — Zod validation middleware + legacy validators
 ```
 
 **Frontend (7,860 LOC):**
@@ -67,9 +91,12 @@ public/
   landing.css         — Landing page styles (68 lines)
   share.html          — Shared task view (170 lines)
   manifest.json       — PWA manifest
+  js/                 — ES module extractions (progressive migration)
+    api.js            — API client with CSRF, auth redirect, error handling
+    utils.js          — Pure utilities (esc, fmtDue, renderMd, etc.)
 ```
 
-**Stack:** Node.js 22, Express 5, better-sqlite3 (WAL mode, foreign keys ON), bcryptjs, helmet, cors, vanilla JS, Inter font, Material Icons Round
+**Stack:** Node.js 22, Express 5, better-sqlite3 (WAL mode, foreign keys ON), bcryptjs, helmet, cors, dotenv, pino, zod, vanilla JS, Inter font, Material Icons Round
 
 **No build step.** Edit files, restart server (`node src/server.js`), hard-refresh browser (`Ctrl+Shift+R`).
 

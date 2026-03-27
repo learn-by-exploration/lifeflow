@@ -505,6 +505,10 @@ function initDatabase(dbDir) {
     ]));
   }
 
+  // ─── Run SQL migrations ───
+  const runMigrations = require('./migrate');
+  runMigrations(db);
+
   return { db, rebuildSearchIndex };
 }
 

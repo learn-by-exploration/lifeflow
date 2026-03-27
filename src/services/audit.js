@@ -38,7 +38,8 @@ module.exports = function createAuditLogger(db) {
       );
     } catch (e) {
       // Never let audit failures break application flow
-      console.error('Audit log error:', e.message);
+      const logger = require('../logger');
+      logger.warn({ err: e }, 'Audit log write failed');
     }
   }
 
@@ -47,7 +48,8 @@ module.exports = function createAuditLogger(db) {
     try {
       db.prepare("DELETE FROM audit_log WHERE created_at < datetime('now', '-90 days')").run();
     } catch (e) {
-      console.error('Audit purge error:', e.message);
+      const logger = require('../logger');
+      logger.warn({ err: e }, 'Audit purge failed');
     }
   }
 

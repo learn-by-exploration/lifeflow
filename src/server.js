@@ -4,6 +4,7 @@ const fs = require('fs');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
+const config = require('./config');
 const initDatabase = require('./db');
 const createHelpers = require('./helpers');
 const createAuthMiddleware = require('./middleware/auth');
@@ -11,15 +12,13 @@ const { createRequirePassword } = require('./middleware/auth');
 const errorHandler = require('./middleware/errors');
 const createCsrfMiddleware = require('./middleware/csrf');
 const createAuditLogger = require('./services/audit');
-const pkg = require('../package.json');
 
 const app = express();
-const PORT = process.env.PORT || 3456;
+const PORT = config.port;
 
-const dbDir = process.env.DB_DIR || path.join(__dirname, '..');
-const { db, rebuildSearchIndex } = initDatabase(dbDir);
+const { db, rebuildSearchIndex } = initDatabase(config.dbDir);
 const helpers = createHelpers(db);
-const deps = { db, dbDir, rebuildSearchIndex, ...helpers };
+const deps = { db, dbDir: config.dbDir, rebuildSearchIndex, ...helpers };
 
 // ─── Audit logger ───
 const audit = createAuditLogger(db);
@@ -62,11 +61,10 @@ app.use('/api', (req, res, next) => {
 app.use(cors({ origin: false }));
 
 // ─── Rate limiting (skipped in test to avoid false blocks) ───
-const isTest = process.env.NODE_ENV === 'test';
-if (!isTest) {
+if (!config.isTest) {
   const globalLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 200,
+    windowMs: config.rateLimit.windowMs,
+    max: config.rateLimit.max,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many requests, please try again later' }
@@ -74,9 +72,9 @@ if (!isTest) {
   app.use('/api/', globalLimiter);
 }
 
-const authLimiter = isTest ? (req, res, next) => next() : rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
+const authLimiter = config.isTest ? (req, res, next) => next() : rateLimit({
+  windowMs: config.auth.authLimitWindowMs,
+  max: config.auth.authLimitMax,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many authentication attempts, please try again later' }
@@ -93,7 +91,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // ─── CSRF Protection ───
 const csrfProtection = createCsrfMiddleware();
-if (!isTest) {
+if (!config.isTest) {
   app.use('/api', csrfProtection);
 }
 
@@ -133,13 +131,25 @@ app.get('/share/:token', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'share.html'));
 });
 
-// ─── Health check ───
+// ─── Health & readiness checks ───
 app.get('/health', (req, res) => {
   let dbOk = false;
   try { db.prepare('SELECT 1').get(); dbOk = true; } catch {}
   const status = dbOk ? 'ok' : 'error';
   const code = dbOk ? 200 : 503;
-  res.status(code).json({ status, dbOk });
+  res.status(code).json({
+    status,
+    version: config.version,
+    uptime: Math.floor(process.uptime()),
+    dbOk,
+  });
+});
+
+app.get('/ready', (req, res) => {
+  let dbOk = false;
+  try { db.prepare('SELECT 1').get(); dbOk = true; } catch {}
+  if (!dbOk) return res.status(503).json({ ready: false });
+  res.json({ ready: true });
 });
 
 // ─── Login page (accessible without auth) ───
@@ -166,8 +176,32 @@ app.get('/{*splat}', (req, res) => {
 app.use(errorHandler);
 
 // Export for testing; start server only when run directly
+const logger = require('./logger');
+
 if (require.main === module) {
-  app.listen(PORT, () => console.log(`\n  LifeFlow running at http://localhost:${PORT}\n`));
+  const server = app.listen(PORT, () => logger.info({ port: PORT, version: config.version }, 'LifeFlow started'));
+
+  // ─── Graceful shutdown ───
+  let shuttingDown = false;
+  function shutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info({ signal }, 'Shutdown signal received, draining connections...');
+    server.close(() => {
+      logger.info('HTTP server closed');
+      try { db.close(); } catch {}
+      logger.info('Database closed');
+      process.exit(0);
+    });
+    // Force exit after timeout
+    setTimeout(() => {
+      logger.warn('Forcing shutdown after timeout');
+      try { db.close(); } catch {}
+      process.exit(1);
+    }, config.shutdownTimeoutMs || 10000);
+  }
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 module.exports = { app, db };

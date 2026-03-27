@@ -1,7 +1,16 @@
 const { Router } = require('express');
+const { validate } = require('../middleware/validate');
+const { createFilter, updateFilter } = require('../schemas/filters.schema');
+const { idParam } = require('../schemas/common.schema');
+const FiltersRepository = require('../repositories/filters.repository');
+const FiltersService = require('../services/filters.service');
+
 module.exports = function(deps) {
   const { db, enrichTasks, getNextPosition } = deps;
   const router = Router();
+
+  const filtersRepo = new FiltersRepository(db);
+  const filtersSvc = new FiltersService(filtersRepo, deps);
 
 // ─── SMART FILTERS: Extended execute + counts + smart lists ───
 router.get('/api/filters/counts', (req, res) => {
@@ -100,33 +109,17 @@ router.get('/api/filters/smart/:type', (req, res) => {
 
 // ─── Saved Filters CRUD ───
 router.get('/api/filters', (req, res) => {
-  res.json(db.prepare('SELECT * FROM saved_filters WHERE user_id=? ORDER BY position').all(req.userId));
+  res.json(filtersSvc.list(req.userId));
 });
-router.post('/api/filters', (req, res) => {
-  const { name, icon, color, filters } = req.body;
-  if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'Name required' });
-  if (!filters || typeof filters !== 'object') return res.status(400).json({ error: 'Filters object required' });
-  const pos = getNextPosition('saved_filters');
-  const r = db.prepare('INSERT INTO saved_filters (name,icon,color,filters,position,user_id) VALUES (?,?,?,?,?,?)').run(
-    name.trim(), icon || '🔍', color || '#2563EB', JSON.stringify(filters), pos, req.userId
-  );
-  res.status(201).json(db.prepare('SELECT * FROM saved_filters WHERE id=?').get(r.lastInsertRowid));
+router.post('/api/filters', validate(createFilter), (req, res) => {
+  const filter = filtersSvc.create(req.userId, req.body);
+  res.status(201).json(filter);
 });
-router.put('/api/filters/:id', (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  const ex = db.prepare('SELECT * FROM saved_filters WHERE id=? AND user_id=?').get(id, req.userId);
-  if (!ex) return res.status(404).json({ error: 'Not found' });
-  const { name, icon, color, filters } = req.body;
-  db.prepare('UPDATE saved_filters SET name=COALESCE(?,name),icon=COALESCE(?,icon),color=COALESCE(?,color),filters=COALESCE(?,filters) WHERE id=? AND user_id=?').run(
-    name||null, icon||null, color||null, filters ? JSON.stringify(filters) : null, id, req.userId
-  );
-  res.json(db.prepare('SELECT * FROM saved_filters WHERE id=? AND user_id=?').get(id, req.userId));
+router.put('/api/filters/:id', validate(idParam, 'params'), validate(updateFilter), (req, res) => {
+  res.json(filtersSvc.update(req.params.id, req.userId, req.body));
 });
-router.delete('/api/filters/:id', (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  db.prepare('DELETE FROM saved_filters WHERE id=? AND user_id=?').run(id, req.userId);
+router.delete('/api/filters/:id', validate(idParam, 'params'), (req, res) => {
+  filtersSvc.remove(req.params.id, req.userId);
   res.json({ ok: true });
 });
 

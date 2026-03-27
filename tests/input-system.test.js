@@ -362,6 +362,9 @@ describe('Inline error spans exist in HTML', () => {
 describe('Backend maxlength validation', () => {
   const tasksJS = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'tasks.js'), 'utf8');
   const areasJS = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'areas.js'), 'utf8');
+  const areasSchemaJS = fs.existsSync(path.join(__dirname, '..', 'src', 'schemas', 'areas.schema.js'))
+    ? fs.readFileSync(path.join(__dirname, '..', 'src', 'schemas', 'areas.schema.js'), 'utf8') : '';
+  const areasAll = areasJS + areasSchemaJS;
 
   it('tasks route validates title maxlength', () => {
     assert.ok(tasksJS.includes('Title too long'), 'tasks.js must validate title maxlength');
@@ -372,15 +375,15 @@ describe('Backend maxlength validation', () => {
   });
 
   it('goals route validates title maxlength', () => {
-    assert.ok(areasJS.includes('Title too long'), 'areas.js must validate goal title maxlength');
+    assert.ok(areasAll.includes('Title too long'), 'areas.js must validate goal title maxlength');
   });
 
   it('goals route validates description maxlength', () => {
-    assert.ok(areasJS.includes('Description too long'), 'areas.js must validate description maxlength');
+    assert.ok(areasAll.includes('Description too long'), 'areas.js must validate description maxlength');
   });
 
   it('areas route validates area name maxlength', () => {
-    assert.ok(areasJS.includes('Name too long'), 'areas.js must validate area name maxlength');
+    assert.ok(areasAll.includes('Name too long'), 'areas.js must validate area name maxlength');
   });
 });
 

@@ -1,74 +1,46 @@
 const { Router } = require('express');
-const { isValidColor } = require('../middleware/validate');
+const { validate } = require('../middleware/validate');
+const { createTag, updateTag, setTaskTags } = require('../schemas/tags.schema');
+const { idParam } = require('../schemas/common.schema');
+const TagsRepository = require('../repositories/tags.repository');
+const TagsService = require('../services/tags.service');
+
 module.exports = function(deps) {
-  const { db, rebuildSearchIndex, getNextPosition } = deps;
+  const { db, getNextPosition } = deps;
   const router = Router();
+
+  const tagsRepo = new TagsRepository(db);
+  const tagsSvc = new TagsService(tagsRepo, deps);
 
 // ─── Tags ───
 router.get('/api/tags', (req, res) => {
-  res.json(db.prepare('SELECT * FROM tags WHERE user_id=? ORDER BY name').all(req.userId));
+  res.json(tagsSvc.list(req.userId));
 });
-router.post('/api/tags', (req, res) => {
-  const { name, color } = req.body;
-  if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'Name required' });
-  const clean = name.trim().toLowerCase().replace(/[^a-z0-9\-_ ]/g, '');
-  const existing = db.prepare('SELECT * FROM tags WHERE name=? AND user_id=?').get(clean, req.userId);
-  if (existing) return res.json(existing);
-  const r = db.prepare('INSERT INTO tags (name,color,user_id) VALUES (?,?,?)').run(clean, color || '#64748B', req.userId);
-  res.status(201).json(db.prepare('SELECT * FROM tags WHERE id=? AND user_id=?').get(r.lastInsertRowid, req.userId));
+router.post('/api/tags', validate(createTag), (req, res) => {
+  const { tag, created } = tagsSvc.create(req.userId, req.body);
+  res.status(created ? 201 : 200).json(tag);
 });
 
 // CRITICAL: /api/tags/stats MUST come before /api/tags/:id
 router.get('/api/tags/stats', (req, res) => {
-  const tags = db.prepare(`
-    SELECT t.*, COUNT(tt.task_id) as usage_count
-    FROM tags t LEFT JOIN task_tags tt ON t.id=tt.tag_id
-    WHERE t.user_id=?
-    GROUP BY t.id ORDER BY t.name
-  `).all(req.userId);
-  res.json(tags);
+  res.json(tagsSvc.stats(req.userId));
 });
 
 // ─── Tag Management ───
-router.put('/api/tags/:id', (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  const { name, color } = req.body;
-  const tag = db.prepare('SELECT * FROM tags WHERE id=? AND user_id=?').get(id, req.userId);
-  if (!tag) return res.status(404).json({ error: 'Tag not found' });
-  if (name !== undefined) {
-    const clean = String(name).trim().toLowerCase().replace(/[^a-z0-9\-_ ]/g, '');
-    if (!clean) return res.status(400).json({ error: 'Name required' });
-    const dup = db.prepare('SELECT * FROM tags WHERE name=? AND id!=? AND user_id=?').get(clean, id, req.userId);
-    if (dup) return res.status(409).json({ error: 'Tag name already exists' });
-    db.prepare('UPDATE tags SET name=? WHERE id=? AND user_id=?').run(clean, id, req.userId);
-  }
-  if (color !== undefined) {
-    if (!isValidColor(color)) return res.status(400).json({ error: 'Invalid color format (hex required)' });
-    db.prepare('UPDATE tags SET color=? WHERE id=? AND user_id=?').run(color, id, req.userId);
-  }
-  res.json(db.prepare('SELECT * FROM tags WHERE id=? AND user_id=?').get(id, req.userId));
+router.put('/api/tags/:id', validate(idParam, 'params'), validate(updateTag), (req, res) => {
+  const tag = tagsSvc.update(req.params.id, req.userId, req.body);
+  res.json(tag);
 });
 
-router.delete('/api/tags/:id', (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  db.prepare('DELETE FROM tags WHERE id=? AND user_id=?').run(id, req.userId);
+router.delete('/api/tags/:id', validate(idParam, 'params'), (req, res) => {
+  tagsSvc.remove(req.params.id, req.userId);
   res.json({ ok: true });
 });
 
 // Set tags for a task (replace all)
-router.put('/api/tasks/:id/tags', (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  const taskOwner = db.prepare('SELECT id FROM tasks WHERE id=? AND user_id=?').get(id, req.userId);
-  if (!taskOwner) return res.status(404).json({ error: 'Not found' });
-  const { tagIds } = req.body;
-  if (!Array.isArray(tagIds)) return res.status(400).json({ error: 'tagIds array required' });
-  db.prepare('DELETE FROM task_tags WHERE task_id=?').run(id);
-  const ins = db.prepare('INSERT OR IGNORE INTO task_tags (task_id,tag_id) VALUES (?,?)');
-  tagIds.forEach(tid => { if (Number.isInteger(tid)) ins.run(id, tid); });
-  res.json({ ok: true, tags: deps.getTaskTags(id) });
+router.put('/api/tasks/:id/tags', validate(idParam, 'params'), validate(setTaskTags), (req, res) => {
+  const tags = tagsSvc.setTaskTags(req.params.id, req.userId, req.body.tagIds);
+  res.json({ ok: true, tags });
 });
 
 // ─── Subtasks ───

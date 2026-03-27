@@ -1,6 +1,7 @@
 /**
  * Reusable input validation helpers for LifeFlow routes.
  */
+const { ZodError } = require('zod');
 
 const COLOR_HEX_RE = /^#[0-9A-Fa-f]{3,6}$/;
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -46,4 +47,26 @@ function isWithinLength(value, max) {
   return String(value).length <= max;
 }
 
-module.exports = { isValidColor, isValidHHMM, isValidTimeRange, isNonNegativeInt, isWithinLength, COLOR_HEX_RE, HHMM_RE };
+/**
+ * Zod-based validation middleware factory.
+ * Usage: router.post('/api/foo', validate(fooSchema), handler)
+ * @param {import('zod').ZodSchema} schema - Zod schema to validate against
+ * @param {'body'|'query'|'params'} source - Request property to validate (default: 'body')
+ */
+function validate(schema, source = 'body') {
+  return (req, res, next) => {
+    const result = schema.safeParse(req[source]);
+    if (!result.success) {
+      const issues = result.error.issues || result.error.errors || [];
+      const msg = issues.map(e => {
+        const field = e.path.join('.');
+        return field ? `${field}: ${e.message}` : e.message;
+      }).join(', ');
+      return res.status(400).json({ error: msg });
+    }
+    req[source] = result.data;
+    next();
+  };
+}
+
+module.exports = { isValidColor, isValidHHMM, isValidTimeRange, isNonNegativeInt, isWithinLength, validate, COLOR_HEX_RE, HHMM_RE };
