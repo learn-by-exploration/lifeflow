@@ -1,7 +1,7 @@
 # LifeFlow — Claude Code Configuration
 
-> **Last updated:** 30 March 2026 · **Version:** 0.7.7
-> **Metrics:** 2,172 tests | 95 test files | 190 API routes | 34 DB tables | ~15,000 LOC
+> **Last updated:** 30 March 2026 · **Version:** 0.7.8
+> **Metrics:** 2,189 tests | 96 test files | 190 API routes | 35 DB tables | ~15,000 LOC
 
 ## Project Overview
 
@@ -14,7 +14,7 @@ Includes authentication, habits, lists, focus timer, templates, automations, cus
 ```bash
 npm install
 node src/server.js          # http://localhost:3456
-npm test                    # 2,107 tests via node:test
+npm test                    # 2,189 tests via node:test
 # or with Docker:
 docker compose up -d
 ```
@@ -152,6 +152,7 @@ task_custom_values (id, task_id→tasks, field_id→custom_field_defs, value)
 api_tokens     (id, user_id→users, name, token_hash, last_used_at, created_at, expires_at)
 push_subscriptions (id, user_id→users, endpoint, p256dh, auth, created_at)
 webhooks       (id, user_id→users, name, url, events JSON, secret, active, created_at)
+login_attempts (email PK, attempts, first_attempt_at, locked_until)
 ```
 
 All foreign keys use `ON DELETE CASCADE`.
@@ -274,7 +275,7 @@ See `docs/openapi.yaml` for full specification. Key modules:
 ## Testing
 
 ```bash
-npm test                    # Run all 2,107 tests
+npm test                    # Run all 2,189 tests
 ```
 
 **Runner:** `node --test --test-force-exit` with `node:assert/strict` + `supertest`
@@ -321,7 +322,7 @@ See `docs/DOCUMENTATION-AUDIT.md` for the full documentation review and proposed
 | Version bump | CLAUDE.md header, `package.json`, `docs/openapi.yaml` |
 
 **Update the CLAUDE.md header line counts** when LOC changes significantly (>5%):
-- Current: 2,107 tests | 94 test files | 190 routes | 34 tables | ~15,000 LOC
+- Current: 2,189 tests | 96 test files | 190 routes | 35 tables | ~15,000 LOC
 
 ## What Needs to Be Done (Roadmap)
 

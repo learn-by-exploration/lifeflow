@@ -595,6 +595,14 @@ function initDatabase(dbDir) {
     UNIQUE(task_id, field_id)
   )`);
 
+  // ─── Login Attempts / Account Lockout table ───
+  db.exec(`CREATE TABLE IF NOT EXISTS login_attempts (
+    email TEXT PRIMARY KEY NOT NULL,
+    attempts INTEGER DEFAULT 0,
+    first_attempt_at DATETIME,
+    locked_until DATETIME
+  )`);
+
   // ─── Run SQL migrations ───
   const runMigrations = require('./migrate');
   runMigrations(db);

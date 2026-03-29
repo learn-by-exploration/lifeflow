@@ -74,6 +74,7 @@ function cleanDb() {
   try { db.exec('DELETE FROM push_notification_log'); } catch(e) {}
   try { db.exec('DELETE FROM webhooks'); } catch(e) {}
   try { db.exec('DELETE FROM daily_reviews'); } catch(e) {}
+  try { db.exec('DELETE FROM login_attempts'); } catch(e) {}
 }
 
 function teardown() {

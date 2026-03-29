@@ -8,6 +8,11 @@ const SESSION_TTL_REMEMBER = 30 * 24 * 60 * 60;  // 30 days in seconds
 // Dummy hash for timing-attack mitigation — always call bcrypt even if user not found
 const DUMMY_HASH = bcrypt.hashSync('__dummy_timing_pad__', SALT_ROUNDS);
 
+// Account lockout constants
+const LOCKOUT_THRESHOLD = 5;          // max failed attempts before lockout
+const LOCKOUT_WINDOW_MINUTES = 15;    // time window for counting failures
+const LOCKOUT_DURATION_MINUTES = 15;  // how long the lockout lasts
+
 // Color validation helper (used by area/goal routes)
 const COLOR_HEX_RE = /^#[0-9A-Fa-f]{3,6}$/;
 
@@ -78,12 +83,55 @@ module.exports = function(deps) {
     }
 
     const trimmedEmail = String(email).trim().toLowerCase();
+
+    // ─── Account lockout check ───
+    const lockoutRow = db.prepare('SELECT * FROM login_attempts WHERE email = ?').get(trimmedEmail);
+    if (lockoutRow && lockoutRow.locked_until) {
+      const lockedUntil = new Date(lockoutRow.locked_until + 'Z');
+      if (lockedUntil > new Date()) {
+        // Still locked — don't even check password (prevents timing leak)
+        // Run bcrypt anyway to prevent timing-based lockout detection
+        bcrypt.compareSync(String(password), DUMMY_HASH);
+        if (audit) audit.log(null, 'login_locked', 'auth', null, req, trimmedEmail);
+        return res.status(401).json({ error: 'Invalid email or password' });
+      }
+      // Lockout expired — reset
+      db.prepare('DELETE FROM login_attempts WHERE email = ?').run(trimmedEmail);
+    }
+
+    // Check if failures are outside the window (stale attempts)
+    if (lockoutRow && !lockoutRow.locked_until && lockoutRow.first_attempt_at) {
+      const firstAttempt = new Date(lockoutRow.first_attempt_at + 'Z');
+      const windowEnd = new Date(firstAttempt.getTime() + LOCKOUT_WINDOW_MINUTES * 60 * 1000);
+      if (new Date() > windowEnd) {
+        // Window expired — reset counter
+        db.prepare('DELETE FROM login_attempts WHERE email = ?').run(trimmedEmail);
+      }
+    }
+
     const user = db.prepare('SELECT * FROM users WHERE email = ?').get(trimmedEmail);
 
     // Always call bcrypt to prevent timing attacks
     const hashToCompare = user ? user.password_hash : DUMMY_HASH;
     const valid = bcrypt.compareSync(String(password), hashToCompare);
     if (!user || !valid) {
+      // ─── Track failed attempt ───
+      const existing = db.prepare('SELECT * FROM login_attempts WHERE email = ?').get(trimmedEmail);
+      if (existing) {
+        const newAttempts = existing.attempts + 1;
+        if (newAttempts >= LOCKOUT_THRESHOLD) {
+          // Lock the account
+          db.prepare(
+            "UPDATE login_attempts SET attempts = ?, locked_until = datetime('now', '+' || ? || ' minutes') WHERE email = ?"
+          ).run(newAttempts, LOCKOUT_DURATION_MINUTES, trimmedEmail);
+        } else {
+          db.prepare('UPDATE login_attempts SET attempts = ? WHERE email = ?').run(newAttempts, trimmedEmail);
+        }
+      } else {
+        db.prepare(
+          "INSERT INTO login_attempts (email, attempts, first_attempt_at) VALUES (?, 1, datetime('now'))"
+        ).run(trimmedEmail);
+      }
       if (audit) audit.log(null, 'login_failed', 'auth', null, req, trimmedEmail);
       return res.status(401).json({ error: 'Invalid email or password' });
     }
@@ -108,6 +156,9 @@ module.exports = function(deps) {
         return res.status(401).json({ error: 'Invalid 2FA token' });
       }
     }
+
+    // ─── Successful login: reset failure counter ───
+    db.prepare('DELETE FROM login_attempts WHERE email = ?').run(trimmedEmail);
 
     // Update last_login
     db.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(user.id);

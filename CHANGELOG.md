@@ -2,6 +2,30 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.8] - 2026-03-30
+
+### Added
+- `tests/account-lockout.test.js` — 19 tests for account lockout & rate limiting
+  - Login attempt tracking: per-email failure counting in `login_attempts` table
+  - Account locks after 5 failed attempts within 15-minute window
+  - Locked account returns same error as wrong password (no enumeration)
+  - Correct password rejected while account is locked
+  - Lockout expires after 15 minutes, counter resets
+  - Different emails are isolated (one lockout doesn't affect others)
+  - Successful login resets failure counter
+  - Rate limiter and auth limiter verified via source code checks
+
+### Security
+- Per-email account lockout after 5 failed login attempts (Finding #7)
+  - Lockout duration: 15 minutes
+  - Lockout response identical to wrong-password response (prevents account enumeration)
+  - Timing-safe: runs bcrypt even during lockout to prevent timing-based detection
+- `login_attempts` table stores lockout state in database (survives restarts)
+
+### Changed
+- Login handler now tracks failed attempts and enforces lockout before password check
+- Successful login clears `login_attempts` record for that email
+
 ## [0.7.7] - 2026-03-30
 
 ### Added
