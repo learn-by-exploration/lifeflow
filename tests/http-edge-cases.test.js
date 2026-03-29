@@ -49,19 +49,16 @@ describe('HTTP Boundary & Edge Case Tests', () => {
   });
 
   describe('ID Type Confusion — negative "-1"', () => {
-    it('GET /api/tasks/-1 → 404 (negative IDs pass isInteger but no data)', async () => {
-      // Number("-1") = -1, Number.isInteger(-1) = true → passes validation, returns 404
-      // DOCUMENTED BEHAVIOR: negative IDs are valid integers but produce no DB rows
+    it('GET /api/tasks/-1 → 400 (negative IDs rejected by isPositiveInt)', async () => {
       const res = await agent().get('/api/tasks/-1');
-      assert.equal(res.status, 404);
+      assert.equal(res.status, 400);
     });
   });
 
   describe('ID Type Confusion — zero "0"', () => {
-    it('GET /api/tasks/0 → 404 (valid integer, no task with id=0)', async () => {
-      // SQLite auto-increment starts at 1, so id=0 never exists
+    it('GET /api/tasks/0 → 400 (zero rejected by isPositiveInt)', async () => {
       const res = await agent().get('/api/tasks/0');
-      assert.equal(res.status, 404);
+      assert.equal(res.status, 400);
     });
   });
 

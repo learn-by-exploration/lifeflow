@@ -325,20 +325,18 @@ describe('Input Fuzzing & Injection Tests', () => {
 
   describe('Date Injection', () => {
 
-    it('Invalid date — Feb 30 passes regex (format-only validation, no calendar check)', async () => {
+    it('Invalid date — Feb 30 rejected by calendar validation', async () => {
       const { goal } = await makeTaskViaHttp();
-      // KNOWN LIMITATION: /^\d{4}-\d{2}-\d{2}$/ matches any digit triplet, not actual calendar dates
       const res = await agent().post(`/api/goals/${goal.id}/tasks`).send({ title: 'Leap Day', due_date: '2024-02-30' });
-      assert.equal(res.status, 201, 'FORMAT-ONLY VALIDATION: impossible date 2024-02-30 accepted by regex');
-      assert.equal(res.body.due_date, '2024-02-30');
+      assert.equal(res.status, 400, 'Calendar validation rejects impossible date 2024-02-30');
+      assert.match(res.body.error, /due_date|invalid/i);
     });
 
-    it('Invalid date — month 99 passes regex (format-only validation)', async () => {
+    it('Invalid date — month 99 rejected by calendar validation', async () => {
       const { goal } = await makeTaskViaHttp();
-      // KNOWN LIMITATION: regex accepts month 99
       const res = await agent().post(`/api/goals/${goal.id}/tasks`).send({ title: 'Bad Month', due_date: '2024-99-01' });
-      assert.equal(res.status, 201, 'FORMAT-ONLY VALIDATION: month 99 accepted — known limitation');
-      assert.equal(res.body.due_date, '2024-99-01');
+      assert.equal(res.status, 400, 'Calendar validation rejects month 99');
+      assert.match(res.body.error, /due_date|invalid/i);
     });
 
     it('SQL injection in date field — rejected by regex', async () => {

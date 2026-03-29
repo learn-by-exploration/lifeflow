@@ -2,6 +2,27 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.13] - 2026-03-30
+
+### Added
+- `tests/input-validation-comprehensive.test.js` — 31 tests for input validation boundaries
+  - Task title, note, priority, status, due_date, recurring, time_block, estimated_minutes
+  - Focus session duration_sec (negative and zero)
+  - Area, goal, tag, list, habit, note name/title validation
+  - ID parameter validation (non-integer, negative, float, zero)
+  - Body size limit (413 for oversized payloads)
+- `isValidDate()` helper for calendar-aware date validation (rejects 2024-13-01, 2024-02-30)
+- `isPositiveInt()` helper for ID parameter validation
+
+### Fixed
+- Task creation/update: due_date now validated as real calendar date (was regex-only)
+- Task creation: time_block_start/time_block_end now validated with HH:MM format
+- Focus session: duration_sec=0 now correctly rejected (must be positive)
+- Task GET/PUT/DELETE :id routes now reject negative and zero IDs with 400
+
+### Security
+- Input validation gaps closed across task, focus, and ID parameter routes
+
 ## [0.7.12] - 2026-03-30
 
 ### Added
