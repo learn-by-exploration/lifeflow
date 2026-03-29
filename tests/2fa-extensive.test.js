@@ -116,7 +116,7 @@ describe('2FA — Extensive Tests', () => {
     await agent().post('/api/auth/2fa/verify').send({ token: generateTOTP(secret) });
 
     // Disable 2FA
-    await agent().delete('/api/auth/2fa');
+    await agent().delete('/api/auth/2fa').send({ password: 'testpassword' });
 
     // Login without token should work again
     const res = await rawAgent().post('/api/auth/login').send({

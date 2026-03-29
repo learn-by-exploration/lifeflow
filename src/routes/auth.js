@@ -24,6 +24,18 @@ function validatePassword(pw) {
   return result.valid ? null : result.errors[0];
 }
 
+/**
+ * Constant-time string comparison using crypto.timingSafeEqual.
+ * Prevents timing attacks on TOTP token verification.
+ */
+function safeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
 module.exports = function(deps) {
   const { db, audit } = deps;
   const router = Router();
@@ -149,7 +161,7 @@ module.exports = function(deps) {
       const currentToken = generateTOTP(secret);
       const prevToken = generateTOTP(secret, 30, -1);
       const nextToken = generateTOTP(secret, 30, 1);
-      if (totp_token !== currentToken && totp_token !== prevToken && totp_token !== nextToken) {
+      if (!safeEqual(totp_token, currentToken) && !safeEqual(totp_token, prevToken) && !safeEqual(totp_token, nextToken)) {
         if (audit) audit.log(null, 'login_2fa_failed', 'auth', null, req, trimmedEmail);
         return res.status(401).json({ error: 'Invalid 2FA token' });
       }
@@ -277,7 +289,7 @@ module.exports = function(deps) {
     const currentToken = generateTOTP(secret);
     const prevToken = generateTOTP(secret, 30, -1);
     const nextToken = generateTOTP(secret, 30, 1);
-    if (token !== currentToken && token !== prevToken && token !== nextToken) {
+    if (!safeEqual(token, currentToken) && !safeEqual(token, prevToken) && !safeEqual(token, nextToken)) {
       return res.status(400).json({ error: 'Invalid token' });
     }
 
@@ -292,6 +304,16 @@ module.exports = function(deps) {
   // Disable 2FA
   router.delete('/api/auth/2fa', (req, res) => {
     if (!req.userId) return res.status(401).json({ error: 'Authentication required' });
+
+    const { password } = req.body || {};
+    if (!password) {
+      return res.status(400).json({ error: 'Current password is required to disable 2FA' });
+    }
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId);
+    if (!bcrypt.compareSync(String(password), user.password_hash)) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
 
     db.prepare("DELETE FROM settings WHERE user_id = ? AND key IN ('totp_secret', 'totp_enabled', 'totp_pending_secret')").run(req.userId);
     res.json({ enabled: false });

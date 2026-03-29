@@ -2,6 +2,25 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.10] - 2026-03-30
+
+### Added
+- `tests/2fa-security.test.js` — 16 tests for 2FA security hardening
+  - Status endpoint doesn't leak TOTP secret
+  - Secret not exposed in GET /me or /users
+  - Disable 2FA now requires current password
+  - Source code verified to use `crypto.timingSafeEqual` for TOTP
+  - API token auth bypasses 2FA (pre-authenticated)
+  - Login 2FA flow (403 requires_2fa, correct/wrong TOTP)
+  - Cross-user 2FA isolation
+  - Token input validation (format, empty, missing)
+  - All 2FA endpoints require authentication
+
+### Security
+- TOTP comparison uses `crypto.timingSafeEqual` (constant-time) instead of `!==` — timing attack prevention (Finding #4)
+- Disable 2FA requires current password verification — prevents unauthorized 2FA removal
+- Updated existing `2fa-extensive.test.js` to pass password on disable
+
 ## [0.7.9] - 2026-03-30
 
 ### Added

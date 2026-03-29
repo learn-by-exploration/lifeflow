@@ -74,7 +74,7 @@ describe('TOTP 2FA', () => {
 
   it('DELETE /api/auth/2fa disables 2FA', async () => {
     await agent().post('/api/auth/2fa/setup').send({});
-    const res = await agent().delete('/api/auth/2fa');
+    const res = await agent().delete('/api/auth/2fa').send({ password: 'testpassword' });
     assert.equal(res.status, 200);
   });
 
@@ -119,7 +119,7 @@ describe('TOTP 2FA', () => {
 
   it('enable 2FA → disable 2FA → login without totp_token → 200', async () => {
     await enable2FA(agent(), db);
-    await agent().delete('/api/auth/2fa');
+    await agent().delete('/api/auth/2fa').send({ password: 'testpassword' });
     const res = await rawAgent().post('/api/auth/login')
       .send({ email: getTestEmail(db), password: 'testpassword' });
     assert.equal(res.status, 200);
