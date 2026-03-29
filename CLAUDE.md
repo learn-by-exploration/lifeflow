@@ -1,7 +1,7 @@
 # LifeFlow — Claude Code Configuration
 
-> **Last updated:** 30 March 2026 · **Version:** 0.7.2
-> **Metrics:** 2,084 tests | 88 test files | 190 API routes | 34 DB tables | ~15,000 LOC
+> **Last updated:** 30 March 2026 · **Version:** 0.7.3
+> **Metrics:** 2,095 tests | 91 test files | 190 API routes | 34 DB tables | ~15,000 LOC
 
 ## Project Overview
 
@@ -14,7 +14,7 @@ Includes authentication, habits, lists, focus timer, templates, automations, cus
 ```bash
 npm install
 node src/server.js          # http://localhost:3456
-npm test                    # 2,084 tests via node:test
+npm test                    # 2,095 tests via node:test
 # or with Docker:
 docker compose up -d
 ```
@@ -274,12 +274,12 @@ See `docs/openapi.yaml` for full specification. Key modules:
 ## Testing
 
 ```bash
-npm test                    # Run all 2,084 tests
+npm test                    # Run all 2,095 tests
 ```
 
 **Runner:** `node --test --test-force-exit` with `node:assert/strict` + `supertest`
 
-**86 test files** across these categories:
+**91 test files** across these categories:
 
 | Category | Files | Description |
 |----------|-------|-------------|
@@ -321,7 +321,7 @@ See `docs/DOCUMENTATION-AUDIT.md` for the full documentation review and proposed
 | Version bump | CLAUDE.md header, `package.json`, `docs/openapi.yaml` |
 
 **Update the CLAUDE.md header line counts** when LOC changes significantly (>5%):
-- Current: 2,084 tests | 88 test files | 190 routes | 34 tables | ~15,000 LOC
+- Current: 2,095 tests | 91 test files | 190 routes | 34 tables | ~15,000 LOC
 
 ## What Needs to Be Done (Roadmap)
 

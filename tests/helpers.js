@@ -176,6 +176,47 @@ function rawAgent() {
   return request(app);
 }
 
+// ─── Multi-user helpers ────────────────────────────────────────────────────────
+
+let _user2Counter = 0;
+
+/**
+ * Create a second (or Nth) user with a separate session.
+ * Returns { userId, agent } where agent auto-attaches the new user's session.
+ */
+function makeUser2(overrides = {}) {
+  const { db } = setup();
+  const bcrypt = require('bcryptjs');
+  _user2Counter++;
+  const email = overrides.email || `user${_user2Counter + 1}@test.com`;
+  const hash = bcrypt.hashSync(overrides.password || 'testpassword', 4);
+  const displayName = overrides.display_name || `Test User ${_user2Counter + 1}`;
+  const r = db.prepare('INSERT INTO users (email, password_hash, display_name) VALUES (?,?,?)')
+    .run(email, hash, displayName);
+  const userId = r.lastInsertRowid;
+  const sid = `test-u${_user2Counter + 1}-session-${crypto.randomUUID()}`;
+  db.prepare(
+    "INSERT INTO sessions (sid, user_id, remember, expires_at) VALUES (?, ?, 1, datetime('now', '+1 day'))"
+  ).run(sid, userId);
+  return { userId, agent: agentAs(sid) };
+}
+
+/**
+ * Create an authenticated supertest agent for a given session id.
+ */
+function agentAs(sessionId) {
+  const { app } = setup();
+  const base = request(app);
+  return new Proxy(base, {
+    get(target, prop) {
+      if (['get', 'post', 'put', 'delete', 'patch', 'head', 'options'].includes(prop)) {
+        return (...args) => target[prop](...args).set('Cookie', `lf_sid=${sessionId}`);
+      }
+      return target[prop];
+    }
+  });
+}
+
 // Use UTC dates to match SQLite's date('now')
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -195,4 +236,4 @@ function serverLocalDate(offsetDays = 0) {
   return d.toISOString().slice(0, 10);
 }
 
-module.exports = { setup, cleanDb, teardown, makeArea, makeGoal, makeTask, makeSubtask, makeTag, linkTag, makeFocus, makeList, makeListItem, makeHabit, logHabit, agent, rawAgent, today, daysFromNow, serverLocalDate };
+module.exports = { setup, cleanDb, teardown, makeArea, makeGoal, makeTask, makeSubtask, makeTag, linkTag, makeFocus, makeList, makeListItem, makeHabit, logHabit, agent, rawAgent, makeUser2, agentAs, today, daysFromNow, serverLocalDate };

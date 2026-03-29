@@ -2,6 +2,16 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.3] - 2026-03-30
+
+### Added
+- `tests/helpers.test.js` — 24 tests validating test infrastructure (factories, agents, date helpers)
+- `makeUser2()` in test helpers — standardized second-user creation with isolated session
+- `agentAs(sessionId)` in test helpers — create authenticated agent for any session
+
+### Changed
+- Test helpers now export `makeUser2` and `agentAs` for multi-user testing
+
 ## [0.7.2] - 2026-03-30
 
 ### Added
