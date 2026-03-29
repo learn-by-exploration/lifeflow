@@ -2,6 +2,16 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.2] - 2026-03-30
+
+### Added
+- CI/CD audit job: `npm audit --audit-level=high` (allow-fail, reports vulnerabilities)
+- `tests/ci-config.test.js` — 10 tests validating CI/CD pipeline configuration
+- CI lint → test dependency chain verified by tests
+
+### Changed
+- `.github/workflows/ci.yml` enhanced with dedicated audit job
+
 ## [0.7.1] - 2026-03-30
 
 ### Added
