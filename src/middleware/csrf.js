@@ -4,7 +4,6 @@
  * the X-CSRF-Token header on state-changing requests.
  */
 const crypto = require('crypto');
-const config = require('../config');
 
 function createCsrfMiddleware() {
   return function csrfProtection(req, res, next) {
@@ -46,10 +45,13 @@ function ensureTokenCookie(req, res) {
       'Path=/',
       'Max-Age=86400'
     ];
-    if (config.isProd) parts.push('Secure');
+    // Add Secure flag when connection is HTTPS (proxy-aware)
+    if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
+      parts.push('Secure');
+    }
     // Append to existing Set-Cookie headers
-    const existing = res.getHeader('Set-Cookie');
-    const cookies = existing ? (Array.isArray(existing) ? existing : [existing]) : [];
+    const prev = res.getHeader('Set-Cookie');
+    const cookies = prev ? (Array.isArray(prev) ? prev : [prev]) : [];
     cookies.push(parts.join('; '));
     res.setHeader('Set-Cookie', cookies);
   }

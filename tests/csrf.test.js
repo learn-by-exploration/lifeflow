@@ -191,4 +191,47 @@ describe('CSRF Middleware', () => {
     assert.equal(nextCalled, false);
     assert.equal(res.statusCode, 403);
   });
+
+  // ── Secure flag based on req.secure (proxy-aware) ──
+  it('sets Secure flag on csrf_token cookie when req.secure is true', (_, done) => {
+    const req = mockReq('GET', '/api/tasks', {});
+    req.secure = true;
+    const res = mockRes();
+    csrf(req, res, () => {
+      const cookies = res.getHeader('Set-Cookie');
+      const csrfCookie = Array.isArray(cookies)
+        ? cookies.find(c => c.startsWith('csrf_token='))
+        : cookies;
+      assert.ok(csrfCookie.includes('Secure'), 'Should include Secure flag when req.secure');
+      done();
+    });
+  });
+
+  it('sets Secure flag when x-forwarded-proto is https', (_, done) => {
+    const req = mockReq('GET', '/api/tasks', { 'x-forwarded-proto': 'https' });
+    req.secure = false;
+    const res = mockRes();
+    csrf(req, res, () => {
+      const cookies = res.getHeader('Set-Cookie');
+      const csrfCookie = Array.isArray(cookies)
+        ? cookies.find(c => c.startsWith('csrf_token='))
+        : cookies;
+      assert.ok(csrfCookie.includes('Secure'), 'Should include Secure flag for x-forwarded-proto: https');
+      done();
+    });
+  });
+
+  it('does not set Secure flag on plain HTTP', (_, done) => {
+    const req = mockReq('GET', '/api/tasks', {});
+    req.secure = false;
+    const res = mockRes();
+    csrf(req, res, () => {
+      const cookies = res.getHeader('Set-Cookie');
+      const csrfCookie = Array.isArray(cookies)
+        ? cookies.find(c => c.startsWith('csrf_token='))
+        : cookies;
+      assert.ok(!csrfCookie.includes('Secure'), 'Should NOT include Secure flag on plain HTTP');
+      done();
+    });
+  });
 });
