@@ -691,6 +691,13 @@ router.get('/api/planner/:date', (req, res) => {
 
   // ─── Push Notifications ───
 
+  const pushService = require('../services/push.service');
+
+  // Get VAPID public key for client subscription
+  router.get('/api/push/vapid-key', (req, res) => {
+    res.json({ publicKey: pushService.getPublicKey() });
+  });
+
   // Subscribe to push notifications
   router.post('/api/push/subscribe', (req, res) => {
     const { endpoint, keys } = req.body;
@@ -721,21 +728,22 @@ router.get('/api/planner/:date', (req, res) => {
   });
 
   // Send test push notification
-  router.post('/api/push/test', (req, res) => {
+  router.post('/api/push/test', async (req, res) => {
     const subs = db.prepare('SELECT * FROM push_subscriptions WHERE user_id = ?').all(req.userId);
     if (subs.length === 0) {
       return res.json({ sent: 0, message: 'No subscriptions found' });
     }
 
-    // Check if VAPID keys are configured
-    const vapidPublic = process.env.VAPID_PUBLIC_KEY;
-    const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
-    if (!vapidPublic || !vapidPrivate) {
+    if (!pushService.isEnabled()) {
       return res.json({ sent: 0, pending: subs.length, message: 'VAPID keys not configured — subscriptions stored for future use' });
     }
 
-    // Push sending not yet implemented — report honestly
-    res.json({ sent: 0, pending: subs.length, message: 'Push sending not yet implemented — subscriptions stored for future use' });
+    const result = await pushService.sendPush(db, req.userId, {
+      title: 'LifeFlow Test',
+      body: 'Push notifications are working!',
+      url: '/'
+    });
+    res.json({ sent: result.sent, failed: result.failed });
   });
 
   return router;

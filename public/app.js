@@ -164,9 +164,12 @@ function renderSFList(){
 
 // Smart list handlers
 let activeSmartFilter=null;
-let activeListId=null,activeListName='',userLists=[];
+let activeListId=null,activeListName='',userLists=[],allUsers=[];
 async function loadUserLists(){
   try{userLists=await api.get('/api/lists');renderSBLists()}catch(e){}
+}
+async function loadAllUsers(){
+  try{allUsers=await api.get('/api/users')}catch(e){allUsers=[]}
 }
 function renderSBLists(){
   const el=$('sb-list-items');if(!el)return;
@@ -1194,7 +1197,7 @@ function tcHtml(t,ctx){
   let meta='';
   if(t.due_date){const o=isOD(t.due_date)&&t.status!=='done';const tm=t.due_time?(' '+new Date('2000-01-01T'+t.due_time).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})):'';meta+=`<span class="${o?'od':''}"><span class="material-icons-round">event</span>${fmtDue(t.due_date)}${tm}</span>`}
   if(t.priority>0)meta+=`<span style="color:${PC[t.priority]}">${PL[t.priority]}</span>`;
-  if(t.assigned_to)meta+=`<span>👤 ${esc(t.assigned_to)}</span>`;
+  if(t.assigned_to_user_id&&t.assignee_name){const isMe=currentUser&&t.assigned_to_user_id===currentUser.id;meta+=`<span class="asg-badge">👤 ${isMe?'You':esc(t.assignee_name)}</span>`}else if(t.assigned_to)meta+=`<span>👤 ${esc(t.assigned_to)}</span>`;
   if(t.recurring)meta+=`<span>🔁 ${esc(t.recurring)}</span>`;
   if(t.blocked_by&&t.blocked_by.some(b=>b.status!=='done'))meta+=`<span class="blocked-indicator"><span class="material-icons-round" style="font-size:12px">lock</span>Blocked</span>`;
   if(t.my_day&&currentView!=='myday')meta+=`<span>☀️</span>`;
@@ -1835,7 +1838,7 @@ function renderDPBody(){
     <div id="dp-note-preview" class="md-note" style="display:none;padding:8px 10px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin:-6px 0 10px;max-height:200px;overflow-y:auto"></div>
     <div class="dp-row"><div><label>Due Date</label><div style="display:flex;gap:6px"><input type="date" id="dp-due" value="${t.due_date||''}" style="flex:1"><input type="time" id="dp-time" value="${t.due_time||''}" style="width:100px"></div></div>
     <div><label>Priority</label><select id="dp-pri"><option value="0" ${t.priority===0?'selected':''}>None</option><option value="1" ${t.priority===1?'selected':''}>Normal</option><option value="2" ${t.priority===2?'selected':''}>High</option><option value="3" ${t.priority===3?'selected':''}>Critical</option></select></div></div>
-    <div class="dp-row"><div><label>Assigned To</label><input type="text" id="dp-asg" value="${escA(t.assigned_to||'')}"></div>
+    <div class="dp-row"><div><label>Assigned To</label><select id="dp-asg-user"><option value="">Unassigned</option></select></div>
     <div><label>Recurring</label><select id="dp-rec"><option value="">None</option><option value="daily" ${t.recurring==='daily'?'selected':''}>Daily</option><option value="weekdays" ${t.recurring==='weekdays'?'selected':''}>Weekdays</option><option value="weekly" ${t.recurring==='weekly'?'selected':''}>Weekly</option><option value="biweekly" ${t.recurring==='biweekly'?'selected':''}>Every 2 Weeks</option><option value="monthly" ${t.recurring==='monthly'?'selected':''}>Monthly</option><option value="yearly" ${t.recurring==='yearly'?'selected':''}>Yearly</option><option value="custom" ${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)?'selected':''}>Custom…</option></select><div id="dp-rec-custom" style="display:${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)&&t.recurring!=='every-2-weeks'?'flex':'none'};gap:6px;margin-top:4px;align-items:center"><span style="font-size:11px">Every</span><input type="number" id="dp-rec-n" min="1" max="365" style="width:60px" value="${(t.recurring?.match(/^every-(\d+)/)||[])[1]||'3'}"><select id="dp-rec-unit" style="width:80px"><option value="days" ${t.recurring?.endsWith('-days')?'selected':''}>Days</option><option value="weeks" ${t.recurring?.endsWith('-weeks')?'selected':''}>Weeks</option></select></div><div id="dp-rec-preview" style="display:${t.recurring?'block':'none'};margin-top:6px;padding:6px 8px;background:var(--bg-c);border-radius:4px;font-size:10px;color:var(--tx2)"><span class="material-icons-round" style="font-size:12px;vertical-align:middle">repeat</span> <span id="dp-rec-txt">${esc(t.recurring||'')} </span></div></div></div>
     <div><label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:10px"><input type="checkbox" id="dp-md" ${t.my_day?'checked':''} style="width:auto;margin:0">Add to My Day</label></div>
     <div class="dp-row"><div><label>Estimated (min)</label><input type="number" id="dp-est" min="0" value="${t.estimated_minutes||''}" placeholder="e.g. 30"></div>
@@ -1855,6 +1858,13 @@ function renderDPBody(){
     subs.forEach(s=>{opts+=`<option value="${s.id}"${t.list_id===s.id?' selected':''}>&nbsp;&nbsp;↳ ${esc(s.icon)} ${esc(s.name)}</option>`});
     return opts;
   }).join('');
+  // Populate user picker
+  const dpAsgUser=$('dp-asg-user');
+  if(dpAsgUser){
+    dpAsgUser.innerHTML='<option value="">Unassigned</option>'+allUsers.map(u=>
+      `<option value="${u.id}"${t.assigned_to_user_id===u.id?' selected':''}>${esc(u.display_name||u.email)}</option>`
+    ).join('');
+  }
   renderTagInput();
   renderSubtasks();
   renderDeps();
@@ -2049,7 +2059,7 @@ $('dp-save').addEventListener('click',async()=>{
   await api.put('/api/tasks/'+dpTask.id,{
     title:$('dp-ttl').value, note:$('dp-note').value, due_date:$('dp-due').value||null,
     due_time:$('dp-time').value||null,
-    priority:Number($('dp-pri').value), assigned_to:$('dp-asg').value,
+    priority:Number($('dp-pri').value), assigned_to_user_id:$('dp-asg-user').value?Number($('dp-asg-user').value):null,
     recurring:rec, my_day:$('dp-md').checked,
     estimated_minutes:Number($('dp-est').value)||null, actual_minutes:Number($('dp-act').value)||0,
     list_id:$('dp-list').value?Number($('dp-list').value):null
@@ -2215,7 +2225,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 // Boot
-Promise.all([loadSettings(),loadAreas(),loadTags(),loadSavedFilters(),loadSmartCounts(),loadUserLists()]).then(()=>{
+Promise.all([loadSettings(),loadAreas(),loadTags(),loadSavedFilters(),loadSmartCounts(),loadUserLists(),loadAllUsers()]).then(()=>{
   // Apply settings on load
   if(appSettings.theme){
     document.documentElement.setAttribute('data-theme',appSettings.theme);

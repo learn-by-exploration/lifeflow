@@ -4,7 +4,7 @@ services:
     ports:
       - "3456:3456"
     volumes:
-      - lifeflow-data:/app/data
+      - ./data:/app/data
     restart: unless-stopped
     read_only: true
     tmpfs:
@@ -16,5 +16,3 @@ services:
         limits:
           memory: 512M
           cpus: '1.0'
-volumes:
-  lifeflow-data:

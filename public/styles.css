@@ -998,6 +998,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .sub-list-chip{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:var(--rs);background:var(--bg-c);border:1px solid var(--brd);cursor:pointer;font-size:12px;transition:all .15s}
 .sub-list-chip:hover{border-color:var(--brand);transform:translateY(-1px)}
 .task-list-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:500}
+.asg-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:1px 6px;border-radius:6px;background:rgba(99,102,241,0.12);color:var(--brand);font-weight:500}
 @media(max-width:768px){.list-grid{grid-template-columns:1fr}.li-item{padding:14px;min-height:48px}.li-check{width:28px;height:28px}.li-del{opacity:1}}
 
 /* Context menus */

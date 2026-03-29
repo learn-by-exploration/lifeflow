@@ -99,4 +99,70 @@ describe('Web Push Notifications', () => {
       assert.ok(fk.some(f => f.table === 'users'), 'Should have FK to users');
     });
   });
+
+  // ── Task 3.8 — Push Subscription Expansion ──
+
+  describe('Push subscription edge cases', () => {
+    it('POST /api/push/subscribe → stores endpoint + keys correctly', async () => {
+      const sub = {
+        endpoint: 'https://push.example.com/unique-' + Date.now(),
+        keys: { p256dh: 'test-p256dh-key', auth: 'test-auth-key' }
+      };
+      const res = await agent().post('/api/push/subscribe').send(sub);
+      assert.equal(res.status, 201);
+
+      const stored = db.prepare('SELECT * FROM push_subscriptions WHERE id=?').get(res.body.id);
+      assert.equal(stored.endpoint, sub.endpoint);
+      assert.equal(stored.p256dh, sub.keys.p256dh);
+      assert.equal(stored.auth, sub.keys.auth);
+    });
+
+    it('POST /api/push/subscribe with missing endpoint → 400', async () => {
+      const res = await agent().post('/api/push/subscribe').send({
+        keys: { p256dh: 'key', auth: 'auth' }
+      });
+      assert.equal(res.status, 400);
+    });
+
+    it('POST /api/push/subscribe duplicate endpoint → upserts keys', async () => {
+      const sub = {
+        endpoint: 'https://push.example.com/upsert-test',
+        keys: { p256dh: 'key-v1', auth: 'auth-v1' }
+      };
+      await agent().post('/api/push/subscribe').send(sub);
+
+      // Update keys for same endpoint
+      sub.keys = { p256dh: 'key-v2', auth: 'auth-v2' };
+      await agent().post('/api/push/subscribe').send(sub);
+
+      const stored = db.prepare('SELECT * FROM push_subscriptions WHERE endpoint=?').get(sub.endpoint);
+      assert.equal(stored.p256dh, 'key-v2');
+      assert.equal(stored.auth, 'auth-v2');
+    });
+
+    it('DELETE /api/push/subscribe → removes subscription', async () => {
+      const sub = {
+        endpoint: 'https://push.example.com/to-delete',
+        keys: { p256dh: 'k', auth: 'a' }
+      };
+      await agent().post('/api/push/subscribe').send(sub);
+      const before = db.prepare('SELECT COUNT(*) as c FROM push_subscriptions WHERE endpoint=?').get(sub.endpoint);
+      assert.equal(before.c, 1);
+
+      await agent().delete('/api/push/subscribe').send({ endpoint: sub.endpoint });
+      const after = db.prepare('SELECT COUNT(*) as c FROM push_subscriptions WHERE endpoint=?').get(sub.endpoint);
+      assert.equal(after.c, 0);
+    });
+
+    it('GET /api/push/vapid-key → returns publicKey field', async () => {
+      const res = await agent().get('/api/push/vapid-key');
+      assert.equal(res.status, 200);
+      assert.ok('publicKey' in res.body);
+    });
+
+    it('push subscribe requires authentication', async () => {
+      const res = await rawAgent().post('/api/push/subscribe').send(validSub);
+      assert.equal(res.status, 401);
+    });
+  });
 });

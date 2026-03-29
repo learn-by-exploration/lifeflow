@@ -85,4 +85,59 @@ describe('Gantt V2 — Timeline API', () => {
     assert.ok(taskMap[t3.id].blocked_by.includes(t2.id));
     assert.equal(taskMap[t3.id].blocked_by.length, 2);
   });
+
+  // ── Task 3.6 — Gantt View Expansion ──
+
+  it('GET /api/tasks/timeline returns tasks within date range', async () => {
+    const area = makeArea();
+    const goal = makeGoal(area.id);
+    makeTask(goal.id, { title: 'In Range', due_date: '2026-06-15' });
+    makeTask(goal.id, { title: 'Out of Range', due_date: '2027-01-01' });
+
+    const res = await agent().get('/api/tasks/timeline?start=2026-01-01&end=2026-12-31');
+    assert.equal(res.status, 200);
+    const titles = res.body.tasks.map(t => t.title);
+    assert.ok(titles.includes('In Range'));
+    assert.ok(!titles.includes('Out of Range'));
+  });
+
+  it('GET /api/tasks/timeline excludes tasks without due_date', async () => {
+    const area = makeArea();
+    const goal = makeGoal(area.id);
+    makeTask(goal.id, { title: 'No Due', due_date: null });
+
+    const res = await agent().get('/api/tasks/timeline?start=2026-01-01&end=2026-12-31');
+    assert.equal(res.status, 200);
+    assert.ok(!res.body.tasks.some(t => t.title === 'No Due'));
+  });
+
+  it('timeline tasks include area_name and goal_color', async () => {
+    const area = makeArea({ name: 'Work Area' });
+    const goal = makeGoal(area.id, { color: '#FF5733' });
+    makeTask(goal.id, { due_date: '2026-06-01' });
+
+    const res = await agent().get('/api/tasks/timeline?start=2026-01-01&end=2026-12-31');
+    const task = res.body.tasks[0];
+    assert.ok(task.area_name);
+    assert.ok(task.goal_color);
+  });
+
+  it('frontend: renderGantt function exists in app.js', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const appJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+    assert.ok(/renderGantt|renderTimeline/.test(appJs), 'app.js should have gantt/timeline render function');
+  });
+
+  it('frontend: gantt-bar class used in gantt rendering', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const appJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+    assert.ok(/gantt-bar/.test(appJs), 'app.js should use gantt-bar class in SVG rendering');
+  });
+
+  it('timeline requires start and end params', async () => {
+    const res = await agent().get('/api/tasks/timeline');
+    assert.equal(res.status, 400);
+  });
 });

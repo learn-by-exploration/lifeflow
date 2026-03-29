@@ -7,7 +7,7 @@ git clone https://github.com/learn-by-exploration/lifeflow.git
 cd lifeflow
 npm install
 npm start          # http://localhost:3456
-npm test           # 1,692+ tests, Node.js native test runner
+npm test           # 1,992+ tests, Node.js native test runner
 ```
 
 ## Project Structure
@@ -16,7 +16,7 @@ npm test           # 1,692+ tests, Node.js native test runner
 src/
   server.js          — Express app entry point (174 lines)
   db/index.js        — SQLite schema, 26 tables, migrations (511 lines)
-  routes/            — 10 route modules (157 routes total)
+  routes/            — 11 route modules (190+ routes total)
     areas.js         — Life Areas CRUD + reorder
     auth.js          — Register, login, logout, session
     data.js          — Export, import, backup
@@ -36,7 +36,7 @@ public/
   sw.js              — Service Worker (192 lines)
 tests/
   helpers.js         — Shared setup/teardown + data builders
-  *.test.js          — 60 test files (node:test + supertest)
+  *.test.js          — 80+ test files (node:test + supertest)
 docs/
   openapi.yaml       — Full OpenAPI 3.0.3 spec
 ```
@@ -58,11 +58,19 @@ node --test --test-name-pattern "overdue"   # By name pattern
 5. Commit with a descriptive message
 6. Open a PR against `main`
 
+## TDD Methodology
+
+1. **RED:** Write a failing test first — the test should fail for the right reason
+2. **GREEN:** Write the minimum code to make the test pass
+3. **REFACTOR:** Clean up only if the implementation is unclear
+4. Run `npm test` after each change — zero failures required
+
 ## Code Style
 
 - 2-space indent, single quotes, trailing commas
-- No external runtime dependencies beyond `express`, `better-sqlite3`, `bcryptjs`, `helmet`, `cors`, and `express-rate-limit`
+- No external runtime dependencies beyond `express`, `better-sqlite3`, `bcryptjs`, `helmet`, `cors`, `express-rate-limit`, `web-push`, `pino`, and `zod`
 - Tests use `node:test` + `node:assert/strict` + `supertest`
+- See `CLAUDE.md` for full architecture documentation
 
 ## Database
 

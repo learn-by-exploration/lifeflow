@@ -126,4 +126,119 @@ describe('API Token Authentication', () => {
       assert.equal(res.status, 200);
     });
   });
+
+  // ── Task 3.2 — API Tokens Expansion ──
+
+  describe('Token creation details', () => {
+    it('returns plaintext token ONCE at creation, never on list', async () => {
+      const createRes = await agent().post('/api/auth/tokens').send({ name: 'Once Only' });
+      assert.ok(createRes.body.token, 'creation response should include plaintext token');
+      assert.ok(createRes.body.token.length >= 32);
+
+      const listRes = await agent().get('/api/auth/tokens');
+      for (const tok of listRes.body) {
+        assert.equal(tok.token, undefined, 'list should not expose plaintext token');
+        assert.equal(tok.token_hash, undefined, 'list should not expose token hash');
+      }
+    });
+
+    it('create token with empty name → 400', async () => {
+      const res = await agent().post('/api/auth/tokens').send({ name: '   ' });
+      assert.equal(res.status, 400);
+    });
+  });
+
+  describe('Bearer token expiration', () => {
+    it('expired bearer token → 401', async () => {
+      // Create a token that expires immediately
+      const createRes = await agent().post('/api/auth/tokens').send({ name: 'Short Lived', expires_in_days: 0 });
+      const token = createRes.body.token;
+
+      // Manually set expiration to past
+      const crypto = require('crypto');
+      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+      db.prepare("UPDATE api_tokens SET expires_at = datetime('now', '-1 hour') WHERE token_hash = ?").run(tokenHash);
+
+      const res = await rawAgent()
+        .get('/api/areas')
+        .set('Authorization', `Bearer ${token}`);
+      assert.equal(res.status, 401);
+    });
+  });
+
+  describe('Bearer token behavior', () => {
+    it('bearer token sets req.userId correctly', async () => {
+      const { makeArea } = require('./helpers');
+      makeArea({ name: 'User1 Area' });
+
+      const createRes = await agent().post('/api/auth/tokens').send({ name: 'Verify User' });
+      const token = createRes.body.token;
+
+      // Bearer token should see user1's areas
+      const res = await rawAgent()
+        .get('/api/areas')
+        .set('Authorization', `Bearer ${token}`);
+      assert.equal(res.status, 200);
+      assert.ok(res.body.some(a => a.name === 'User1 Area'));
+    });
+
+    it('bearer token updates last_used_at on use', async () => {
+      const createRes = await agent().post('/api/auth/tokens').send({ name: 'Track Usage' });
+      const token = createRes.body.token;
+      const tokenId = createRes.body.id;
+
+      // Use the token
+      await rawAgent().get('/api/areas').set('Authorization', `Bearer ${token}`);
+
+      // Check last_used_at is set
+      const row = db.prepare('SELECT last_used_at FROM api_tokens WHERE id=?').get(tokenId);
+      assert.ok(row.last_used_at, 'last_used_at should be set after use');
+    });
+
+    it('token works for POST/PUT/DELETE, not just GET', async () => {
+      const { makeArea, makeGoal } = require('./helpers');
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+
+      const createRes = await agent().post('/api/auth/tokens').send({ name: 'Full Access' });
+      const token = createRes.body.token;
+
+      // POST via bearer token
+      const postRes = await rawAgent()
+        .post(`/api/goals/${goal.id}/tasks`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: 'Token Task' });
+      assert.equal(postRes.status, 201);
+
+      // PUT via bearer token
+      const putRes = await rawAgent()
+        .put(`/api/tasks/${postRes.body.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: 'Updated Token Task' });
+      assert.equal(putRes.status, 200);
+
+      // DELETE via bearer token
+      const delRes = await rawAgent()
+        .delete(`/api/tasks/${postRes.body.id}`)
+        .set('Authorization', `Bearer ${token}`);
+      assert.ok([200, 204].includes(delRes.status), 'delete should succeed');
+    });
+
+    it('delete token → subsequent bearer auth fails', async () => {
+      const createRes = await agent().post('/api/auth/tokens').send({ name: 'Revokable' });
+      const token = createRes.body.token;
+      const tokenId = createRes.body.id;
+
+      // Works before deletion
+      const before = await rawAgent().get('/api/areas').set('Authorization', `Bearer ${token}`);
+      assert.equal(before.status, 200);
+
+      // Delete
+      await agent().delete(`/api/auth/tokens/${tokenId}`);
+
+      // Fails after deletion
+      const after = await rawAgent().get('/api/areas').set('Authorization', `Bearer ${token}`);
+      assert.equal(after.status, 401);
+    });
+  });
 });

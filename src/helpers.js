@@ -48,6 +48,13 @@ module.exports = function createHelpers(db) {
     `).all(...ids);
     const cfMap = {};
     cfValues.forEach(r => { (cfMap[r.task_id] = cfMap[r.task_id] || []).push({ field_id: r.field_id, name: r.name, field_type: r.field_type, value: r.value }); });
+    // Batch-load assignee display names
+    const assigneeIds = [...new Set(tasks.filter(t => t.assigned_to_user_id).map(t => t.assigned_to_user_id))];
+    const assigneeMap = {};
+    if (assigneeIds.length) {
+      const aph = assigneeIds.map(() => '?').join(',');
+      db.prepare(`SELECT id, display_name FROM users WHERE id IN (${aph})`).all(...assigneeIds).forEach(u => { assigneeMap[u.id] = u.display_name; });
+    }
     return tasks.map(t => {
       t.tags = tagMap[t.id] || [];
       t.subtasks = subMap[t.id] || [];
@@ -60,6 +67,7 @@ module.exports = function createHelpers(db) {
         t.list_color = listMap[t.list_id].color;
       }
       t.custom_fields = cfMap[t.id] || [];
+      t.assignee_name = t.assigned_to_user_id ? (assigneeMap[t.assigned_to_user_id] || null) : null;
       return t;
     });
   }

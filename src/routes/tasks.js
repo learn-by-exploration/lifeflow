@@ -2,6 +2,8 @@ const { Router } = require('express');
 const { isValidHHMM } = require('../middleware/validate');
 const RecurringService = require('../services/recurring.service');
 const { validateRecurring } = require('../schemas/tasks.schema');
+const pushService = require('../services/push.service');
+const logger = require('../logger');
 module.exports = function(deps) {
   const { db, rebuildSearchIndex, enrichTask, enrichTasks, getNextPosition, nextDueDate, executeRules, verifyGoalOwnership } = deps;
   const router = Router();
@@ -421,6 +423,27 @@ router.put('/api/tasks/:id', (req, res) => {
     list_id!==undefined?(list_id?Number(list_id):null):ex.list_id,
     assigned_to_user_id!==undefined?assigned_to_user_id:ex.assigned_to_user_id, id
   );
+  // Push notification for assignment change
+  if (assigned_to_user_id !== undefined && assigned_to_user_id !== null && assigned_to_user_id !== ex.assigned_to_user_id) {
+    // Dedup: check if we already sent an assignment notification for this task to this user within 24h
+    const recent = db.prepare(
+      `SELECT 1 FROM push_notification_log WHERE task_id = ? AND user_id = ? AND type = 'assignment' AND sent_at > datetime('now', '-24 hours')`
+    ).get(id, assigned_to_user_id);
+    if (!recent) {
+      db.prepare(
+        `INSERT INTO push_notification_log (user_id, task_id, type) VALUES (?, ?, 'assignment')`
+      ).run(assigned_to_user_id, id);
+      // Fire-and-forget push (don't block response)
+      if (pushService.isEnabled()) {
+        const taskTitle = title || ex.title;
+        pushService.sendPush(db, assigned_to_user_id, {
+          title: 'Task Assigned',
+          body: `You've been assigned: ${taskTitle}`,
+          url: `/tasks/${id}`
+        }).catch(err => logger.warn({ err, taskId: id, userId: assigned_to_user_id }, 'Assignment push notification failed'));
+      }
+    }
+  }
   // Recurring: spawn next task when completed
   if (status === 'done' && ex.status !== 'done' && ex.recurring) {
     recurringSvc.spawnNext(ex, req.userId);

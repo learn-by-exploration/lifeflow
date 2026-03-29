@@ -1,585 +1,559 @@
-# Feature Gap Analysis — Implementation Plan
+# Feature Gap Analysis — Implementation Plan (v2)
 
-> **Source:** [spec.md](spec.md) (Parts 0-7)
-> **Baseline:** v0.4.0 | 1,728 tests | 61 test files | 166 routes | 28 tables
-> **Date:** 27 March 2026
-
----
-
-## Already Implemented (v0.4.0)
-
-These items from the spec are **done** and committed:
-
-| Spec Section | Feature | Status |
-|-------------|---------|--------|
-| 6.1 | Copy subtasks on recurring spawn | ✅ Shipped |
-| 6.2 | Auto-link Pomodoro to actual_minutes | ✅ Shipped |
-| 5.3 | Recurring field Zod validation | ✅ Shipped |
-| 6.3 | Table View (backend + frontend) | ✅ Shipped |
-| 6.4 | Custom Fields (2 tables, 6 endpoints, UI) | ✅ Shipped |
-| 6.5 | Gantt Chart MVP (SVG, no drag/deps) | ✅ Shipped |
+> **Source:** [spec.md](spec.md) (5-expert panel, 18 recommendations, Any.do comparison)
+> **Baseline:** v0.6.0 | 1,931 tests | 78 test files | 190 routes | 33 tables | ~14,500 LOC
+> **Date:** 28 March 2026
+> **TDD Protocol:** Strict Red→Green→Refactor. Every task starts with failing tests.
+> **Replaces:** Previous plan.md (v0.4.0 baseline, now obsolete)
 
 ---
 
-## Remaining Work
+## Scope
 
-Organized into 6 phases. Phase 0 addresses critical test infrastructure gaps discovered during the test audit. Phases 1-5 follow the spec's tiered priorities.
+The spec proposed 18 features across 4 tiers. **11 of 14 checked features are fully implemented**, 2 are partial, 0 are missing. This plan covers:
+
+1. **Release hygiene** — version sync, CHANGELOG, OpenAPI, engines (blockers for any release)
+2. **Completing partial features** — Web Push delivery, multi-user assignment UI
+3. **Test hardening** — extensive TDD for undertested existing features
+
+### Already Implemented (verified 28 March 2026)
+
+| Spec Section | Feature | Status | Tests |
+|-------------|---------|--------|-------|
+| 6.1 | Copy subtasks on recurring spawn | ✅ Shipped | In recurring tests |
+| 6.2 | Auto-link Pomodoro to actual_minutes | ✅ Shipped | In stats.js |
+| 5.3 | Recurring field Zod validation | ✅ Shipped | In tasks schema |
+| 6.3 | Table View (backend + frontend) | ✅ Shipped | In tasks.test.js |
+| 6.4 | Custom Fields (2 tables, 6 endpoints, UI) | ✅ Shipped | phase3 tests |
+| 6.5 | Gantt Chart V2 (deps, bars, today line) | ✅ Shipped | gantt-v2.test.js |
+| — | API Token Authentication | ✅ Shipped | api-tokens.test.js |
+| — | TOTP 2FA | ✅ Shipped | phase7-auth.test.js |
+| — | Outbound Webhooks (HMAC-SHA256) | ✅ Shipped | batch5.test.js |
+| — | Todoist/Trello Import | ✅ Shipped | external-import.test.js |
+| — | iCal Export | ✅ Shipped | data-integrity.test.js |
+| — | Offline Mutation Queue | ✅ Shipped | offline-queue.test.js |
+
+### Partial (this plan completes them)
+
+| Feature | What exists | What's missing |
+|---------|------------|----------------|
+| Web Push | Subscriptions table + endpoints | Delivery (web-push pkg), VAPID keys, triggers |
+| Multi-user assignment | Backend `assigned_to_user_id` + GET /api/users | UI user picker, assignment indicators |
+
+### Deferred (Tier 4 — future plan)
+
+- CalDAV calendar sync
+- Telegram/WhatsApp bot
+- Sync conflict resolution
 
 ---
 
-## Phase 0 — Test Gap Remediation
+## TDD Protocol
 
-**Why first:** The test audit found 4 critical gaps (CSRF untested, FTS cross-user data leak, export/import data loss, migration runner untested) plus 5 high-severity gaps. These are bugs and security holes that must be fixed before adding new features.
+Every task in this plan follows strict TDD:
 
-### Task 0.1: Fix FTS Search Cross-User Data Leak
+1. **RED:** Write failing tests FIRST. Tests must fail for the right reason (not import errors — the feature must be absent or broken).
+2. **GREEN:** Write the minimum code to make tests pass. No speculative features.
+3. **REFACTOR:** Clean up only if the implementation is unclear. Don't gold-plate.
+4. **Verify:** Run `node --test --test-force-exit tests/*.test.js` after each task. Zero failures.
+5. **Test categories per task:**
+   - **Happy path** — feature works as intended
+   - **Validation** — bad input rejected with correct status code and message
+   - **Edge cases** — empty arrays, null values, boundary conditions
+   - **Security** — IDOR (accessing other user's data), auth required, injection
+   - **Integration** — feature interacts correctly with related features
+   - **Regression** — existing tests still pass
 
-**Type:** Bug fix + test
-**Severity:** CRITICAL — User2 can search and find User1's private task data
-**Risk:** Security vulnerability in production
+Minimum **8 tests per backend task**, **4 tests per frontend-only task**.
 
-**Problem:** `search_index` FTS5 table has no `user_id` column. The search query in `src/routes/data.js` doesn't filter by user_id.
+---
 
-**Changes:**
-- `src/db/index.js` — Rebuild `search_index` FTS5 table to include `user_id` column, or join against tasks table on search
-- `src/routes/data.js` — Add `WHERE user_id = ?` filtering to search query (JOIN tasks ON search_index.rowid = tasks.rowid WHERE tasks.user_id = ?)
-- `tests/break_auth.test.js` — Verify User2 search does NOT return User1's tasks (currently marked FAIL-EXPECTED)
+## Phase 0 — Release Hygiene
 
-**Tests:** 3-5 new
-```
-1. User1 creates task "Secret Project" → User2 searches "Secret" → 0 results
-2. User1 searches own task → finds it
-3. Search with no results → empty array
-4. Search after task deletion → no stale index entries
-```
+**Why first:** Version mismatches and missing changelog entries are blockers for any public release. Automated tooling (Docker tags, npm audit) depends on correct versions.
 
-### Task 0.2: CSRF Middleware Test Coverage
+### Task 0.1: Version Sync
 
-**Type:** New tests (no code changes expected)
-**Severity:** CRITICAL — Security middleware completely untested
+**Type:** Config fix
+**Files:** `package.json`, `docs/openapi.yaml`
 
-**Changes:**
-- New test file `tests/csrf.test.js`
-- Use `rawAgent()` (no session) and `agent()` (with session) to test CSRF enforcement
-
-**Tests:** 6-8 new
-```
-1. POST /api/tasks without X-CSRF-Token header → 403
-2. POST /api/tasks with invalid CSRF token → 403
-3. POST /api/tasks with valid CSRF token → 201 (succeeds)
-4. PUT request without token → 403
-5. DELETE request without token → 403
-6. GET request without token → 200 (exempt)
-7. Auth endpoints exempt from CSRF → login works without token
-8. CSRF cookie set on first response
-```
-
-**Implementation note:** The test helpers `agent()` may already auto-handle CSRF tokens. Need to read `src/middleware/csrf.js` to understand the double-submit cookie pattern and craft tests that intentionally bypass it.
-
-### Task 0.3: Export/Import Data Completeness
-
-**Type:** Bug fix + test
-**Severity:** CRITICAL — Export silently drops custom fields, focus sessions, habits, comments, deps, automation rules
-
-**Problem:** `GET /api/export` only exports 4 tables (areas, goals, tasks, tags). Users lose custom field data, focus session history, habit logs, comments, dependencies, and automation rules on export/import cycle.
+**Problem:** Three different versions exist:
+- `package.json`: `0.5.0`
+- `docs/openapi.yaml`: `0.2.6`
+- `CLAUDE.md`: `0.6.0`
+- `src/config.js`: reads from `package.json` (correct), fallback `0.3.0`
 
 **Changes:**
-- `src/routes/data.js` — Extend export to include: `custom_field_defs`, `task_custom_values`, `focus_sessions`, `habits`, `habit_logs`, `task_comments`, `task_deps`, `automation_rules`, `notes`, `inbox`, `saved_filters`, `lists`, `list_items`
-- `src/routes/data.js` — Extend import to restore all exported tables
-- `tests/data-integrity.test.js` — Roundtrip fidelity tests
+- `package.json` → `"version": "0.6.0"`
+- `package.json` → add `"engines": { "node": ">=22" }`
+- `docs/openapi.yaml` → line 24: `version: 0.6.0`
 
-**Tests:** 8-12 new
+**Tests:** 2 new (in new `tests/release-hygiene.test.js`)
 ```
-1. Export includes custom_field_defs and task_custom_values
-2. Export includes focus_sessions
-3. Export includes habits + habit_logs
-4. Export includes task_comments
-5. Export includes task_deps
-6. Export includes automation_rules
-7. Export includes lists + list_items
-8. Full roundtrip: export → wipe → import → all records identical
-9. Import with missing optional tables (backward compat) → succeeds
-10. Roundtrip preserves tag associations
-11. Roundtrip preserves custom field values on tasks
+1. GET /health returns version matching package.json version
+2. package.json has engines.node constraint
 ```
 
-### Task 0.4: Database Migration Runner Tests
+### Task 0.2: CHANGELOG Update
 
-**Type:** New tests (no code changes expected)
-**Severity:** CRITICAL — Migration infrastructure untested
+**Type:** Documentation
+**File:** `CHANGELOG.md`
 
-**Changes:**
-- New test file `tests/migrations.test.js`
-- Test the migration runner in `src/db/migrate.js` with temp DBs
+**Changes:** Add entries for v0.4.0, v0.5.0, v0.5.1, and v0.6.0 covering:
+- v0.4.0: Table view, custom fields, Gantt V1, Todoist/Trello import, iCal export
+- v0.5.0: API tokens, TOTP 2FA, outbound webhooks, Web Push subscriptions, offline queue, multi-user assignment backend
+- v0.5.1: Security remediation (115 findings), audit logging
+- v0.6.0: Multi-expert improvement (6 phases), background scheduler, request logging, daily review, goal progress, What's Next, context menu, bulk operations
 
-**Tests:** 5-6 new
+**Tests:** 1 new
 ```
-1. Fresh DB → all migrations applied in sorted order
-2. Already-applied migration → skipped (idempotent)
-3. _migrations table tracks applied migrations with timestamps
-4. Malformed SQL migration → throws error (doesn't silently pass)
-5. Empty migrations directory → no error
-6. Migration files execute in alphabetical/numeric order
+1. CHANGELOG.md contains entry for current package.json version
 ```
 
-### Task 0.5: Recurring Spawn Doesn't Copy Custom Fields
+### Task 0.3: OpenAPI Spec — New Endpoints
 
-**Type:** Bug fix + test
-**Severity:** HIGH — Custom field values silently lost when recurring task spawns
+**Type:** Documentation
+**File:** `docs/openapi.yaml`
 
-**Problem:** `RecurringService.spawnNext()` copies tags and subtasks but NOT custom field values.
+**Problem:** Missing documentation for endpoints added in v0.5.0–v0.6.0:
+- `PATCH /api/tasks/batch` — bulk update
+- `GET /api/tasks/suggested` — What's Next suggestions
+- `POST /api/reviews/daily` — daily micro-review create/upsert
+- `GET /api/reviews/daily/{date}` — daily micro-review get
+- `GET /api/tasks/recurring` — list recurring tasks
+- `POST /api/tasks/{id}/skip` — skip recurring occurrence
 
-**Changes:**
-- `src/services/recurring.service.js` — After subtask copying, add custom field value copying:
-  ```
-  SELECT field_id, value FROM task_custom_values WHERE task_id = ?
-  INSERT INTO task_custom_values (task_id, field_id, value) VALUES (newId, ?, ?)
-  ```
-
-**Tests:** 3 new
+**Tests:** 2 new
 ```
-1. Complete recurring task with custom fields → spawned task has same field values
-2. Complete recurring task with no custom fields → no error
-3. Custom field def deleted between spawns → no orphan values
-```
-
-### Task 0.6: Error Handler Edge Cases
-
-**Type:** New tests
-**Severity:** MEDIUM
-
-**Tests:** 4 new
-```
-1. SQLite UNIQUE constraint violation → 409 (not 500)
-2. Generic unhandled error → 500 with "Internal server error" (no stack trace)
-3. Malformed JSON body → 400 (already partially tested, verify coverage)
-4. AppError subclasses return correct status codes (NotFoundError→404, ValidationError→400)
-```
-
-### Task 0.7: Comment UPDATE Route Test
-
-**Type:** New test
-**Severity:** MEDIUM — Route exists at PUT /api/tasks/:id/comments/:commentId but is untested
-
-**Tests:** 3 new
-```
-1. PUT comment with new content → 200, content updated
-2. PUT comment with empty content → 400
-3. PUT comment owned by different user → 403/404
-```
-
-### Task 0.8: Task Lifecycle → Dashboard Stats E2E
-
-**Type:** New test
-**Severity:** MEDIUM — No test verifies the full create → complete → stats reflection flow
-
-**Tests:** 3 new
-```
-1. Create task → complete it → GET /api/stats → task appears in recentDone
-2. Complete task → GET /api/stats → done count incremented
-3. Create tasks across areas → complete some → GET /api/stats → byArea percentages correct
+1. Every router.get/post/put/patch/delete route in src/routes/*.js has a corresponding path in openapi.yaml
+2. openapi.yaml version matches package.json version
 ```
 
 ### Phase 0 Summary
 
 | Task | Type | New Tests | Files Changed |
 |------|------|-----------|---------------|
-| 0.1 FTS user isolation | Bug fix | 4 | data.js, db/index.js, break_auth.test.js |
-| 0.2 CSRF tests | Tests only | 8 | csrf.test.js (new) |
-| 0.3 Export/Import completeness | Bug fix | 12 | data.js, data-integrity.test.js |
-| 0.4 Migration runner tests | Tests only | 6 | migrations.test.js (new) |
-| 0.5 Recurring + custom fields | Bug fix | 3 | recurring.service.js |
-| 0.6 Error handler tests | Tests only | 4 | error-handler.test.js (new) |
-| 0.7 Comment UPDATE test | Tests only | 3 | exhaustive-misc.test.js |
-| 0.8 Lifecycle → stats E2E | Tests only | 3 | stats.test.js |
-| **Total** | | **~43** | |
+| 0.1 Version sync | Config | 2 | package.json, openapi.yaml |
+| 0.2 CHANGELOG | Docs | 1 | CHANGELOG.md |
+| 0.3 OpenAPI update | Docs | 2 | openapi.yaml |
+| **Total** | | **5** | |
 
 ---
 
-## Phase 1 — Server Foundation (Spec Tier 1 remaining)
+## Phase 1 — Web Push Delivery (Complete Partial Feature)
 
-**Why:** API tokens and HTTPS docs are prerequisites for every server-ready feature (Web Push, multi-device, integrations). Nothing in Tiers 2-4 works without these.
+**Why now:** Push subscription infrastructure exists (table, endpoints, subscribe/unsubscribe) but delivery is stubbed out. Users who subscribe get nothing. This is a broken promise.
 
-### Task 1.1: API Token Authentication
+### Task 1.1: Web Push Dependency + VAPID Keys
 
-**Spec ref:** Part 4, Tier 1 #4
-**Effort:** Medium
-
-**Database:**
-- New table `api_tokens` (id, user_id, name, token_hash, last_used_at, created_at, expires_at)
-- Token stored as bcrypt hash (never plaintext)
-
-**Backend:**
-- `src/routes/auth.js` — 4 new endpoints:
-  - `POST /api/auth/tokens` — Generate token (returns plaintext ONCE)
-  - `GET /api/auth/tokens` — List user's tokens (name, last_used, created — no hash)
-  - `DELETE /api/auth/tokens/:id` — Revoke token
-  - `PUT /api/auth/tokens/:id` — Rename token
-- `src/middleware/auth.js` — Extend `requireAuth` to check `Authorization: Bearer <token>` header alongside session cookie. Bearer tokens bypass CSRF (stateless).
-
-**Frontend:**
-- Settings → Data tab: Token management UI (generate, copy, revoke, rename)
-
-**Security requirements (from spec Part 3, Security Panel):**
-- Tokens hashed with bcrypt (like passwords)
-- Rate limit per-token
-- Token names for user identification ("My Laptop Script", "Phone App")
-- Expiration support (optional, default: no expiry)
-
-**Tests:** 12-15 new
-```
-1. POST /api/auth/tokens → 201, returns token string + id
-2. Token only shown once (subsequent GET shows name, not token)
-3. Bearer token authenticates API requests
-4. Invalid bearer token → 401
-5. Expired bearer token → 401
-6. Revoke token → subsequent requests fail
-7. List tokens → returns all user tokens (no hashes)
-8. Rename token → 200
-9. Bearer auth bypasses CSRF requirement
-10. Session auth still works alongside token auth
-11. User2 cannot revoke User1's token
-12. Token rate limiting separate from session rate limiting
-```
-
-### Task 1.2: HTTPS / Reverse Proxy Documentation
-
-**Spec ref:** Part 4, Tier 1 #5
-**Effort:** Small (documentation only)
+**Type:** Infrastructure
+**Files:** `package.json`, `src/server.js`, `.env.example`
 
 **Changes:**
-- `docs/deployment.md` — Add sections for:
-  - Nginx reverse proxy config (HTTPS termination, WebSocket, proxy headers)
-  - Caddy reverse proxy config (automatic HTTPS)
-  - `BASE_URL` env var for external URL generation (iCal links, share links)
-  - Cookie `Secure` flag when behind HTTPS (`TRUST_PROXY=1` env var)
-  - HSTS header configuration
-- `src/server.js` — Add `app.set('trust proxy', 1)` when `TRUST_PROXY` env var set
-- `src/config.js` — Add `BASE_URL`, `TRUST_PROXY` to config
-
-**Tests:** 2 new
-```
-1. trust proxy setting applied when TRUST_PROXY=1
-2. BASE_URL used in share link generation
-```
-
-### Task 1.3: CORS Configuration
-
-**Spec ref:** Part 3, Security Panel
-**Effort:** Small
-
-**Changes:**
-- `src/server.js` — Read `ALLOWED_ORIGINS` env var (comma-separated), configure CORS dynamically
-- `src/config.js` — Add `ALLOWED_ORIGINS` to config
-- `.env.example` — Document the variable
+- `npm install web-push` (production dependency)
+- `.env.example` → add `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_EMAIL`
+- `src/server.js` or new `src/services/push.service.js` → initialize web-push with VAPID keys
+- Add VAPID key generation script: `node -e "const wp=require('web-push');console.log(wp.generateVAPIDKeys())"`
 
 **Tests:** 4 new
 ```
-1. Default (no ALLOWED_ORIGINS) → same-origin only
-2. ALLOWED_ORIGINS set → those origins allowed
-3. Unlisted origin → rejected
-4. Preflight OPTIONS request → correct headers
+1. web-push is in package.json dependencies
+2. Push service initializes without error when VAPID keys provided
+3. Push service skips initialization gracefully when VAPID keys missing
+4. VAPID public key available via GET /api/push/vapid-key endpoint
+```
+
+### Task 1.2: Push Notification Delivery
+
+**Type:** Feature (backend)
+**Files:** `src/services/push.service.js` (new), `src/routes/features.js`
+
+**Changes:**
+- Create `src/services/push.service.js`:
+  - `sendPush(userId, {title, body, url, tag})` — sends to all user's subscriptions
+  - Handles expired subscriptions (410 response → delete from DB)
+  - Handles network errors gracefully (log, don't crash)
+- Update `POST /api/push/test` to actually send a test notification
+- Wire push into scheduler: check for overdue tasks every 30 min, send push if any
+
+**Tests:** 10 new
+```
+1. POST /api/push/test sends notification to subscribed user (mock web-push)
+2. POST /api/push/test with no subscriptions → 200 with count:0
+3. sendPush handles expired subscription (410) → removes from DB
+4. sendPush handles network error → logs warning, doesn't throw
+5. sendPush with invalid subscription → removes from DB
+6. Multiple subscriptions → sends to all, returns success count
+7. Push payload includes title, body, url fields
+8. Push payload is properly JSON-encoded
+9. VAPID key endpoint returns public key
+10. Push service disabled when VAPID keys not configured → operations are no-op
+```
+
+### Task 1.3: Push Triggers
+
+**Type:** Feature (backend)
+**Files:** `src/routes/tasks.js`, `src/routes/productivity.js`, `src/scheduler.js`
+
+**Changes:**
+- Task assignment: when `assigned_to_user_id` changes → push to assignee
+- Overdue check (scheduler job, every 30 min): push for tasks overdue by >1 hour
+- Daily review reminder (scheduler job, 6pm): push "Review your day"
+- Deduplicate: don't re-send for same task within 24h
+
+**Tests:** 8 new
+```
+1. Assigning task to user triggers push notification (mock)
+2. Re-assigning same task doesn't duplicate notification
+3. Unassigning task (null) doesn't trigger push
+4. Overdue task check finds tasks overdue by >1 hour
+5. Overdue push not sent for same task within 24h (dedup)
+6. Daily review push fires after configured hour (mock time)
+7. Push not sent when user has no subscriptions (no error)
+8. Push not sent when VAPID keys not configured (graceful skip)
 ```
 
 ### Phase 1 Summary
 
-| Task | New Tests | Files Changed |
-|------|-----------|---------------|
-| 1.1 API Tokens | 15 | auth.js (routes + middleware), db/index.js, app.js |
-| 1.2 HTTPS Docs | 2 | deployment.md, server.js, config.js |
-| 1.3 CORS Config | 4 | server.js, config.js, .env.example |
-| **Total** | **~21** | |
+| Task | Type | New Tests | Files Changed |
+|------|------|-----------|---------------|
+| 1.1 VAPID + dependency | Infra | 4 | package.json, .env.example, server.js |
+| 1.2 Push delivery | Feature | 10 | push.service.js (new), features.js |
+| 1.3 Push triggers | Feature | 8 | tasks.js, productivity.js, scheduler.js |
+| **Total** | | **22** | |
 
 ---
 
-## Phase 2 — Multi-Device Ready (Spec Tier 2)
+## Phase 2 — Multi-User Assignment UI (Complete Partial Feature)
 
-**Depends on:** Phase 1 (API tokens for auth, CORS for cross-origin)
+**Why now:** Backend supports `assigned_to_user_id` with foreign key to users table. GET /api/users returns user list. But the UI only shows a text input for `assigned_to`. This makes the multi-user feature invisible.
 
-### Task 2.1: Web Push Notifications
+### Task 2.1: User Picker in Task Detail Panel
 
-**Spec ref:** Part 4, Tier 2 #6
-**Effort:** Medium
-
-**Dependencies:** `npm install web-push`
-
-**Database:**
-- New table `push_subscriptions` (id, user_id, endpoint, p256dh, auth, created_at)
-
-**Backend:**
-- `src/routes/features.js` — 3 new endpoints:
-  - `POST /api/push/subscribe` — Store push subscription
-  - `DELETE /api/push/subscribe` — Remove subscription
-  - `POST /api/push/test` — Send test notification
-- `src/services/push.js` — New service:
-  - `sendPushNotification(userId, title, body, url)`
-  - Uses VAPID keys from env vars (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`)
-- Trigger push on: overdue task (daily check), reminder time reached, task assigned to user
-
-**Frontend:**
-- `public/sw.js` — Add `push` event handler, `notificationclick` for navigation
-- `public/app.js` — Push permission request in Settings, subscription management
-- `public/index.html` — VAPID public key meta tag
-
-**Tests:** 10-12 new
-```
-1. POST /api/push/subscribe → 201
-2. Duplicate subscription → upsert (no error)
-3. DELETE subscription → 200
-4. Push notification sent on overdue task
-5. Push notification sent on reminder
-6. Invalid subscription → graceful failure (no crash)
-7. User with no subscriptions → skip silently
-8. VAPID keys missing → service disabled gracefully
-9. Subscription cascade deletes with user
-```
-
-### Task 2.2: Offline Mutation Queue
-
-**Spec ref:** Part 4, Tier 2 #9
-**Effort:** Medium
+**Type:** Frontend feature
+**Files:** `public/app.js`, `public/styles.css`
 
 **Changes:**
-- `public/sw.js` — Intercept failed POST/PUT/DELETE requests, store in IndexedDB queue
-- `public/store.js` — Mutation queue manager:
-  - `queueMutation(method, url, body)` — Store failed write
-  - `syncQueue()` — Replay queue when online (FIFO order)
-  - `getQueueSize()` — For UI badge
-- `public/app.js` — Online/offline event listeners, sync indicator in header, queue badge count
-- Conflict strategy: Last-write-wins (simplest). Server timestamps win on conflict.
+- In `renderDPBody()`, replace the text input `#dp-asg` with a user dropdown from `GET /api/users`
+- Show user initials + display_name in dropdown
+- On select: `PUT /api/tasks/:id { assigned_to_user_id: userId }`
+- Show "Unassigned" option to clear assignment
 
-**Tests:** 6-8 new (static analysis + API behavior)
+**Tests:** 6 new (static analysis in `tests/frontend-validation.test.js`)
 ```
-1. SW intercepts failed POST → stored in queue (static code analysis)
-2. Queue replays in FIFO order on reconnect
-3. Successful replay removes from queue
-4. Failed replay retains in queue
-5. Queue size reflected in UI indicator
-6. Empty queue → no sync attempt
+1. app.js contains /api/users fetch call
+2. app.js contains assigned_to_user_id in task update
+3. app.js contains user picker dropdown markup
+4. Task detail panel shows assigned user display name
+5. PUT /api/tasks/:id with assigned_to_user_id=valid → 200, user assigned
+6. PUT /api/tasks/:id with assigned_to_user_id=nonexistent → 400
+```
+
+### Task 2.2: Assignment Indicators in Task Cards
+
+**Type:** Frontend feature
+**Files:** `public/app.js`, `public/styles.css`
+
+**Changes:**
+- In `tcHtml()`, if `assigned_to_user_id` is set, show assignee initials badge
+- In Today view, assigned-to-me tasks get a visual indicator
+
+**Tests:** 4 new
+```
+1. tcHtml includes assignee badge when assigned_to_user_id is set
+2. Assignee badge shows user initials (first letter of display_name)
+3. Tasks assigned to current user show "You" instead of name
+4. CSS contains assignee badge styles
+```
+
+### Task 2.3: Assignment API Hardening
+
+**Type:** Backend security
+**Files:** `src/routes/tasks.js`
+
+**Changes:**
+- Validate `assigned_to_user_id` references a real user on the same instance
+- Add assignee display_name to enrichTask response
+
+**Tests:** 8 new
+```
+1. Assign task to valid user → 200, assigned_to_user_id set
+2. Assign task to nonexistent user → 400 error
+3. Assign task to user_id=0 → 400 error
+4. Unassign task (null) → 200, assigned_to_user_id cleared
+5. enrichTask includes assignee_name when assigned_to_user_id set
+6. Assigning another user's task → 403 (IDOR protection)
+7. GET /api/users excludes password_hash from response
+8. GET /api/users requires authentication
 ```
 
 ### Phase 2 Summary
 
-| Task | New Tests | Files Changed |
-|------|-----------|---------------|
-| 2.1 Web Push | 12 | features.js, push.js (new), sw.js, db/index.js |
-| 2.2 Offline Mutation Queue | 8 | sw.js, store.js, app.js |
-| **Total** | **~20** | |
+| Task | Type | New Tests | Files Changed |
+|------|------|-----------|---------------|
+| 2.1 User picker | Frontend | 6 | app.js, styles.css |
+| 2.2 Assignment indicators | Frontend | 4 | app.js, styles.css |
+| 2.3 Assignment API hardening | Backend | 8 | tasks.js |
+| **Total** | | **18** | |
 
 ---
 
-## Phase 3 — Gantt V2 + Webhooks (Spec Tier 3 partial)
+## Phase 3 — Test Hardening (Extensive TDD for Existing Features)
 
-**Depends on:** Phase 0 (test stability), Phase 1 (API tokens for webhook auth)
+**Why:** Several implemented features have thin test coverage (3-10 tests). For a beta release, every feature needs comprehensive tests covering happy path, validation, edge cases, security, and integration. This phase adds no new features — only tests. Any bugs discovered get fixed immediately.
 
-### Task 3.1: Gantt Chart V2
+### Task 3.1: Custom Fields Test Expansion
 
-**Spec ref:** Part 6.5, V2 scope
-**Effort:** Medium
+**Current coverage:** ~28 tests in `tests/phase3-makeyours.test.js` (shared with other features)
+**Target:** 15 new dedicated tests
 
-**Changes (frontend only):**
-- `public/app.js` — Extend `renderGantt()`:
-  - Dependency arrows: SVG `<path>` bezier curves from task end → dependent task start
-  - Drag-to-reschedule: mousedown/mousemove on bar → update due_date via PUT
-  - Zoom controls: Day (40px col) / Week (120px) / Month (200px) toggle buttons
-  - Progress fill: Partial bar fill based on subtask_done/subtask_total
-- `public/styles.css` — Gantt interaction styles (drag cursor, arrow markers)
-
-**Tests:** 8 new
+**Tests:** 15 new (new file `tests/custom-fields-extensive.test.js`)
 ```
-1. GET /api/tasks/timeline includes blocked_by arrays
-2. Tasks with dependencies → both present in response
-3. Drag reschedule → PUT /api/tasks/:id updates due_date
-4. Zoom day → column width = 40px (CSS check)
-5. Zoom week → column width changes
-6. Progress bar reflects subtask completion ratio
-7. Circular dependency → no infinite loop (render cap)
-8. Tasks without dates excluded from timeline
+Field definition CRUD:
+1. Create text field → 201 with correct type
+2. Create number field → validates field_type enum
+3. Create select field with options array → stored correctly
+4. Create select field without options → 400
+5. Create field with empty name → 400
+6. Create field with duplicate name → 409
+7. Update field name → 200
+8. Update field position → 200
+9. Delete field → cascades to task_custom_values
+10. List fields → ordered by position
+
+Value operations:
+11. Set text value → 200, value stored
+12. Set number value with non-numeric string → 400
+13. Set date value with invalid format → 400
+14. Set select value not in options → 400
+15. Delete task → custom values cascade deleted
 ```
 
-### Task 3.2: Outbound Webhooks
+### Task 3.2: API Tokens Test Expansion
 
-**Spec ref:** Part 4, Tier 3 #13
-**Effort:** Medium
+**Current coverage:** 10 tests in `tests/api-tokens.test.js`
+**Target:** 12 new tests
 
-**Database:**
-- New table `webhooks` (id, user_id, name, url, events JSON, secret, active, created_at)
-
-**Backend:**
-- `src/routes/features.js` — 4 new endpoints:
-  - `POST /api/webhooks` — Register webhook (URL, events, secret)
-  - `GET /api/webhooks` — List user's webhooks
-  - `PUT /api/webhooks/:id` — Update webhook
-  - `DELETE /api/webhooks/:id` — Remove webhook
-- `src/services/webhook.js` — New service:
-  - `fireWebhook(userId, event, payload)` — POST to registered URLs
-  - HMAC-SHA256 signature in `X-Webhook-Signature` header
-  - Events: `task.created`, `task.completed`, `task.updated`, `task.deleted`, `habit.logged`
-  - Fire-and-forget with 5s timeout, log failures
-
-**Frontend:**
-- Settings → Automations tab (or new Webhooks tab): CRUD UI for webhooks
-
-**Tests:** 10-12 new
+**Tests:** 12 new (append to `tests/api-tokens.test.js`)
 ```
-1. POST /api/webhooks → 201
-2. Webhook fires on task.created event
-3. Webhook fires on task.completed event
-4. Webhook with invalid URL → validation error
-5. HMAC signature present and correct
-6. Disabled webhook → not fired
-7. Webhook timeout → doesn't block API response
-8. List webhooks → returns all user webhooks
-9. Delete webhook → 200
-10. User2 cannot access User1's webhooks
+1. Create token → returns plaintext token ONCE, never again
+2. List tokens → does NOT include token_hash or plaintext
+3. Use bearer token → authenticated request succeeds
+4. Use expired bearer token → 401
+5. Use revoked bearer token → 401
+6. Bearer token auth sets req.userId correctly
+7. Bearer token updates last_used_at on use
+8. Create token with empty name → 400
+9. Create token with duplicate name → 409 or allowed
+10. Delete token → subsequent bearer auth fails
+11. Token works for POST/PUT/DELETE (not just GET)
+12. Token IDOR: using token for user A on user B's resources → 403
+```
+
+### Task 3.3: Webhook Test Expansion
+
+**Current coverage:** Some tests in `tests/batch5.test.js`
+**Target:** 10 new dedicated tests
+
+**Tests:** 10 new (new file `tests/webhooks-extensive.test.js`)
+```
+1. Create webhook → 201 with secret + events
+2. Create webhook with invalid URL → 400
+3. Create webhook with empty events array → 400
+4. List webhooks → returns all user's webhooks
+5. Update webhook (name, url, events, active) → 200
+6. Delete webhook → 200
+7. Get webhook events list → returns supported event types
+8. Webhook IDOR: access other user's webhook → 404
+9. Webhook secret is unique per webhook
+10. Disable webhook (active=false) → persisted correctly
+```
+
+### Task 3.4: 2FA Test Expansion
+
+**Current coverage:** Some tests in `tests/phase7-auth.test.js`
+**Target:** 10 new tests
+
+**Tests:** 10 new (new file `tests/2fa-extensive.test.js`)
+```
+1. GET /api/auth/2fa/status when not enabled → { enabled: false }
+2. POST /api/auth/2fa/setup → returns secret + otpauth URI
+3. POST /api/auth/2fa/verify with correct token → enables 2FA
+4. POST /api/auth/2fa/verify with wrong token → 400
+5. POST /api/auth/2fa/verify when not in setup state → 400
+6. Login with 2FA enabled but no token → 403 "2FA required"
+7. Login with 2FA enabled and correct token → success
+8. Login with 2FA enabled and wrong token → 401
+9. DELETE /api/auth/2fa → disables, login works without token
+10. 2FA time drift: token from adjacent time step → accepted (±1)
+```
+
+### Task 3.5: Import/Export Roundtrip Tests
+
+**Current coverage:** 28 tests in `tests/data-integrity.test.js`
+**Target:** 10 new tests for import formats + edge cases
+
+**Tests:** 10 new (append to `tests/data-integrity.test.js`)
+```
+1. Todoist import → creates area, goals from projects, tasks from items
+2. Todoist import → maps priority correctly (1→3, 2→2, 3→1, 4→0)
+3. Todoist import → preserves due dates
+4. Trello import → creates area, goals from lists, tasks from cards
+5. Trello import → preserves card descriptions as task notes
+6. iCal export → valid VCALENDAR format
+7. iCal export → includes RRULE for recurring tasks
+8. iCal export → excludes completed tasks
+9. Export → import roundtrip preserves custom field values
+10. Export → import roundtrip preserves daily_reviews
+```
+
+### Task 3.6: Gantt View Test Expansion
+
+**Current coverage:** 5 tests in `tests/gantt-v2.test.js`
+**Target:** 8 new tests
+
+**Tests:** 8 new (append to `tests/gantt-v2.test.js`)
+```
+1. GET /api/tasks/timeline returns tasks within date range
+2. GET /api/tasks/timeline excludes tasks without due_date
+3. Timeline tasks include blocked_by dependency data
+4. Timeline tasks include area_name and goal_color
+5. Frontend: renderGantt function exists in app.js
+6. Frontend: gantt-bar and gantt-today classes exist in CSS
+7. Frontend: dependency arrows render (gantt-dep-arrow class)
+8. Frontend: task bars have goal_color styling
+```
+
+### Task 3.7: Offline Queue Test Expansion
+
+**Current coverage:** 10 tests in `tests/offline-queue.test.js`
+**Target:** 6 new tests
+
+**Tests:** 6 new (append to `tests/offline-queue.test.js`)
+```
+1. store.js has queueMutation function
+2. store.js persists queue to localStorage key
+3. store.js restores queue from localStorage on init
+4. sw.js detects POST/PUT/DELETE failures and notifies client
+5. sw.js does NOT queue GET request failures
+6. Mutation queue entries have timestamp for ordering
+```
+
+### Task 3.8: Push Subscription Test Expansion
+
+**Current coverage:** 9 tests in `tests/push.test.js`
+**Target:** 6 new tests
+
+**Tests:** 6 new (append to `tests/push.test.js`)
+```
+1. POST /api/push/subscribe → stores endpoint + keys
+2. POST /api/push/subscribe with missing endpoint → 400
+3. POST /api/push/subscribe duplicate endpoint → upsert
+4. DELETE /api/push/subscribe → removes subscription
+5. Subscription IDOR: other user can't delete your subscription
+6. GET /api/push/vapid-key → returns public key (or 404 if not configured)
 ```
 
 ### Phase 3 Summary
 
-| Task | New Tests | Files Changed |
-|------|-----------|---------------|
-| 3.1 Gantt V2 | 8 | app.js, styles.css |
-| 3.2 Webhooks | 12 | features.js, webhook.js (new), db/index.js, app.js |
-| **Total** | **~20** | |
+| Task | Type | New Tests | Target File |
+|------|------|-----------|-------------|
+| 3.1 Custom fields | Tests | 15 | custom-fields-extensive.test.js (new) |
+| 3.2 API tokens | Tests | 12 | api-tokens.test.js |
+| 3.3 Webhooks | Tests | 10 | webhooks-extensive.test.js (new) |
+| 3.4 2FA | Tests | 10 | 2fa-extensive.test.js (new) |
+| 3.5 Import/export | Tests | 10 | data-integrity.test.js |
+| 3.6 Gantt view | Tests | 8 | gantt-v2.test.js |
+| 3.7 Offline queue | Tests | 6 | offline-queue.test.js |
+| 3.8 Push subscriptions | Tests | 6 | push.test.js |
+| **Total** | | **77** | |
 
 ---
 
-## Phase 4 — Collaboration (Spec Tier 3 continued)
+## Phase 4 — Documentation & Release Polish
 
-**Depends on:** Phase 1 (API tokens), Phase 2 (Web Push for assignment notifications)
+**Why last:** All features work and are tested. Now make them discoverable.
 
-### Task 4.1: Multi-User Task Assignment
+### Task 4.1: Reverse Proxy Documentation Update
 
-**Spec ref:** Part 4, Tier 3 #11
-**Effort:** Medium
-
-**Current state:** `assigned_to` text field exists on tasks table. UI shows a text input. No real user references.
+**Type:** Documentation
+**File:** `docs/deployment.md`
 
 **Changes:**
-- `src/db/index.js` — Add `assigned_to_user_id INTEGER REFERENCES users(id)` to tasks (migration)
-- `src/routes/tasks.js` — On assign, verify target user exists on same instance. Send push notification to assignee.
-- `public/app.js` — User picker dropdown (populated from instance users), assigned task badge, "Assigned to Me" filter in Today view
+- Verify Nginx reverse proxy config (HTTPS termination, proxy headers)
+- Verify Caddy reverse proxy config (automatic HTTPS)
+- Document `BASE_URL` env var for proper URL generation
+- Document cookie `Secure` flag behavior behind reverse proxy
 
-**Tests:** 8-10 new
+**Tests:** 2 new
 ```
-1. Assign task to another user → 200
-2. Assign to non-existent user → 400
-3. Assigned task appears in assignee's task list
-4. Assignee receives push notification
-5. Unassign task → 200
-6. Cannot assign task you don't own (unless admin)
-7. Filter tasks by assigned_to_user_id
-8. Assigned tasks show assignee name
+1. docs/deployment.md exists and contains nginx configuration
+2. docs/deployment.md contains caddy configuration
 ```
 
-### Task 4.2: AI BYOK (Bring Your Own Key)
+### Task 4.2: Contributing Guide Review
 
-**Spec ref:** Part 4, Tier 3 #12
-**Effort:** Medium
+**Type:** Documentation
+**File:** `CONTRIBUTING.md`
 
 **Changes:**
-- `src/routes/features.js` — 2 new endpoints:
-  - `POST /api/ai/suggest` — Task breakdown suggestions
-  - `POST /api/ai/schedule` — Smart scheduling suggestions
-- `src/services/ai.js` — New service:
-  - Reads API key from user settings (encrypted with `AES-256-GCM`, key from env `AI_ENCRYPTION_KEY`)
-  - Proxies to OpenAI/Anthropic API with structured prompts
-  - Rate limit: 20 requests/hour per user
-- Settings → General tab: API key input (encrypted storage), model selection
+- Verify CONTRIBUTING.md references correct test command
+- Add TDD methodology section
+- Add code architecture overview link
 
-**Security:**
-- API key encrypted at rest (never stored plaintext)
-- Proxy all requests server-side (user's API key never exposed to browser)
-- No data sent to AI provider without explicit user action
-
-**Tests:** 8-10 new
+**Tests:** 1 new
 ```
-1. Save API key → encrypted in settings
-2. POST /api/ai/suggest without API key → 400
-3. POST /api/ai/suggest with key → returns suggestions (mock external API)
-4. API key not exposed in GET /api/settings
-5. Rate limit enforced (20/hr)
-6. Invalid API key → graceful error
-7. AI service disabled when no key configured
+1. CONTRIBUTING.md references current test command and node version
 ```
 
 ### Phase 4 Summary
 
-| Task | New Tests | Files Changed |
-|------|-----------|---------------|
-| 4.1 Multi-user assignment | 10 | tasks.js, db/index.js, app.js |
-| 4.2 AI BYOK | 10 | features.js, ai.js (new), app.js |
-| **Total** | **~20** | |
-
----
-
-## Phase 5 — Ecosystem (Spec Tier 4)
-
-**Depends on:** Phase 1 (API tokens), Phases 1-4 stable
-
-### Task 5.1: CalDAV Calendar Sync
-
-**Spec ref:** Part 4, Tier 4 #14
-**Effort:** Large
-
-### Task 5.2: TOTP 2FA
-
-**Spec ref:** Part 4, Tier 4 #17
-**Effort:** Medium
-
-### Task 5.3: Sync Conflict Resolution
-
-**Spec ref:** Part 4, Tier 4 #18
-**Effort:** Large
-
-### Task 5.4: Todoist/Trello Importer
-
-**Spec ref:** Part 4, Tier 4 #16
-**Effort:** Small
-
-### Task 5.5: Telegram/WhatsApp Bot
-
-**Spec ref:** Part 4, Tier 4 #15
-**Effort:** Medium
-
-> Phase 5 tasks are stretch goals. Each should get its own `agent.spec.md` when prioritized. Not detailed here.
-
----
-
-## Review Checkpoint
-
-Before implementation begins, verify:
-
-- [ ] Phase 0 tasks are agreed (especially 0.1 FTS fix and 0.3 export fix — these are behavior changes)
-- [ ] API token auth design reviewed (hashing strategy, rate limiting, CSRF bypass)
-- [ ] Export/import schema change is backward-compatible (import with missing tables must succeed)
-- [ ] Gantt V2 drag UX acceptable (last-write-wins for reschedule)
-- [ ] Webhook security model approved (HMAC-SHA256, fire-and-forget, 5s timeout)
-- [ ] AI BYOK encryption key management understood (separate env var)
+| Task | Type | New Tests | Files Changed |
+|------|------|-----------|---------------|
+| 4.1 Reverse proxy docs | Docs | 2 | docs/deployment.md |
+| 4.2 Contributing review | Docs | 1 | CONTRIBUTING.md |
+| **Total** | | **3** | |
 
 ---
 
 ## Execution Summary
 
-| Phase | Tasks | New Tests | Priority |
-|-------|-------|-----------|----------|
-| **0: Test Gap Remediation** | 8 | ~43 | CRITICAL — do first |
-| **1: Server Foundation** | 3 | ~21 | HIGH — unlocks everything |
-| **2: Multi-Device Ready** | 2 | ~20 | HIGH — core value prop |
-| **3: Gantt V2 + Webhooks** | 2 | ~20 | MEDIUM — power features |
-| **4: Collaboration** | 2 | ~20 | MEDIUM — multi-user |
-| **5: Ecosystem** | 5 | TBD | LOW — stretch goals |
-| **Total (Phases 0-4)** | **17 tasks** | **~124 tests** | |
-
-### Handoff
-
-This plan is ready for the `implementer` agent. Recommended execution:
-
 ```
-Phase 0 → commit + tag v0.4.1 (test remediation + bug fixes)
-Phase 1 → commit + tag v0.5.0 (server foundation)
-Phase 2 → commit + tag v0.6.0 (multi-device)
-Phase 3 → commit + tag v0.7.0 (power features)
-Phase 4 → commit + tag v0.8.0 (collaboration)
+Phase 0 (Release Hygiene)    →   5 tests  — version sync, changelog, OpenAPI
+Phase 1 (Web Push Delivery)  →  22 tests  — VAPID, delivery, triggers
+Phase 2 (Multi-User UI)      →  18 tests  — user picker, indicators, API hardening
+Phase 3 (Test Hardening)     →  77 tests  — extensive TDD for 8 existing features
+Phase 4 (Docs & Polish)      →   3 tests  — deployment docs, contributing
+                                ────────
+Total:                        125 new tests, ~15 tasks
+Target:                       v0.7.0-beta | ~2,056 tests | 81+ test files
 ```
 
-Each phase should run `npm test` with 0 failures before committing. Each phase updates `CLAUDE.md` metrics and `docs/openapi.yaml`.
+### Execution Order
+
+Phases 0→1→2→3→4 strictly sequential. Within each phase, tasks are independent.
+
+Run `npm test` after each task — zero failures required.
+
+### Review Checkpoint
+
+After Phase 1 completion (Web Push delivery working), pause and verify:
+- [ ] All existing 1,931 tests still pass
+- [ ] New tests cover happy path + validation + security
+- [ ] No regressions in recurring tasks, focus timer, or daily review
+- [ ] Web Push actually delivers to a test subscription
+
+If any fail, fix before proceeding to Phase 2.
+
+---
+
+## Risk Assessment
+
+| Risk | Mitigation |
+|------|-----------|
+| web-push npm package version conflicts | Pin version, test before merge |
+| VAPID key management complexity | Generate once, store in .env, document clearly |
+| Push notification spam | Dedup per task per 24h, respect subscription state |
+| Multi-user UI breaks single-user UX | User picker only shown when >1 user exists |
+| Test hardening reveals bugs | Fix bugs immediately — that's TDD's purpose |
+| OpenAPI spec drift | Task 0.3 adds automated route↔spec coverage test |

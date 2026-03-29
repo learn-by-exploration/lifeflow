@@ -14,6 +14,7 @@ const createCsrfMiddleware = require('./middleware/csrf');
 const createAuditLogger = require('./services/audit');
 const createRequestLogger = require('./middleware/request-logger');
 const createScheduler = require('./scheduler');
+const logger = require('./logger');
 
 const app = express();
 const PORT = config.port;
@@ -202,8 +203,6 @@ app.get('/{*splat}', (req, res) => {
 app.use(errorHandler);
 
 // Export for testing; start server only when run directly
-const logger = require('./logger');
-
 if (require.main === module) {
   const server = app.listen(PORT, () => logger.info({ port: PORT, version: config.version }, 'LifeFlow started'));
 

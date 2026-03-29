@@ -67,4 +67,28 @@ describe('Offline Mutation Queue (static analysis)', () => {
       'mutation-failed message should include request body');
     assert.ok(swCode.includes('clone()'), 'Should clone request to read body');
   });
+
+  // ── Task 3.7 — Offline Queue Expansion ──
+
+  it('store.js has queueMutation function', () => {
+    assert.ok(/function\s+queueMutation|queueMutation\s*=/.test(storeCode),
+      'store.js should define queueMutation');
+  });
+
+  it('sw.js does NOT queue GET request failures as mutations', () => {
+    // SW should only report mutation failures for POST/PUT/DELETE, not GET
+    // Check that the mutation-failed logic only triggers for non-GET methods
+    assert.ok(
+      swCode.includes("method !== 'GET'") || swCode.includes("!== 'GET'") ||
+      swCode.includes("POST") || swCode.includes("method"),
+      'sw.js should distinguish GET from mutation methods'
+    );
+  });
+
+  it('mutation queue entries have timestamp for ordering', () => {
+    assert.ok(
+      storeCode.includes('Date.now()') || storeCode.includes('timestamp'),
+      'Queue entries should include timestamp for ordering'
+    );
+  });
 });

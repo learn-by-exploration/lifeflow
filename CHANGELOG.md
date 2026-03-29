@@ -2,6 +2,85 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.6.1] - 2026-03-29
+
+### New Features
+- Web Push delivery: VAPID keys, push.service.js, assignment triggers
+- Multi-user assignment UI: user picker dropdown, assignee badges
+- Push notification deduplication with 24h window per user
+
+### Bug Fixes
+- Push dedup query now filters by user_id (prevented cross-user notifications)
+- Hoisted logger require to fix startup crash in non-test mode
+- Webhook IDOR test now verifies real cross-user isolation
+
+### Documentation
+- Push endpoints documented in OpenAPI spec (vapid-key, subscribe, test)
+- Updated CONTRIBUTING.md with TDD methodology and current metrics
+
+### Testing
+- Test hardening for 8 existing features (custom fields, API tokens, webhooks,
+  2FA, import/export, Gantt, offline queue, push subscriptions)
+- 2,045 tests across 86 test files
+
+## [0.6.0] - 2026-03-27
+
+### Multi-Expert Improvement (6 Phases)
+- Export completeness: all 33 tables exported/imported
+- Docker compose hardening: healthcheck, tmpfs, non-root user
+- Goal progress visualization: progress bars, percentage badges
+- What's Next suggestions: GET /api/tasks/suggested with scoring
+- Task context menu: right-click with edit, delete, priority, complete
+- Bulk operations expansion: batch priority, due date, move-to-goal
+- Command palette: Ctrl+K fuzzy search across tasks, views, actions
+- Background scheduler: session cleanup, recurring task spawn, overdue checks
+- Request logging middleware: structured HTTP request logging
+- Daily micro-review: POST/GET /api/reviews/daily
+- Today view module extraction
+- Expanded offline state store
+
+### Testing
+- 1,918 tests across 78+ test files
+
+## [0.5.1] - 2026-03-27
+
+### Security Remediation
+- 115 security findings addressed across 22 files
+- Audit logging service (create/update/delete events)
+- CSRF token hardening
+- Rate limiting on auth endpoints
+- Input validation tightening
+
+## [0.5.0] - 2026-03-27
+
+### New Features
+- API token authentication (SHA-256 hashed, Bearer tokens)
+- TOTP 2FA (RFC 6238, setup/verify/disable, recovery)
+- Outbound webhooks (HMAC-SHA256 signed, configurable events)
+- Web Push subscription endpoints (subscribe/unsubscribe/test)
+- Offline mutation queue (service worker queuing)
+- Multi-user assignment backend (assigned_to_user_id FK)
+- GET /api/users endpoint
+- AI BYOK endpoints (suggest, schedule with encrypted API key)
+
+### Database
+- Added: api_tokens, push_subscriptions, webhooks, automation_rules tables
+- Added: assigned_to_user_id column on tasks
+
+## [0.4.0] - 2026-03-26
+
+### New Features
+- Table view with sortable columns, grouping, filtering, pagination
+- Custom fields (text, number, date, select) with per-task values
+- Gantt Chart V1 (SVG timeline, task bars, today marker)
+- Todoist JSON import (projects → goals, items → tasks)
+- Trello JSON import (lists → goals, cards → tasks)
+- iCal export (VCALENDAR with RRULE for recurring tasks)
+- Saved filters and smart lists
+
+### Database
+- Added: custom_field_defs, task_custom_values, saved_filters tables
+
 ## [0.3.0] - 2026-03-27
 
 ### Collapsible Sidebar with Icon Rail
