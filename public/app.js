@@ -13,6 +13,7 @@ const api={
   async patch(u,d){try{const r=await fetch(u,{method:'PATCH',headers:{'Content-Type':'application/json','X-CSRF-Token':this._getCsrf()},body:JSON.stringify(d)});if(r.status===401){window.location.href='/login';return{}}if(!r.ok){const b=await r.json().catch(()=>({}));return b}return await r.json()}catch(e){showToast('Network error — please try again');throw e}}
 };
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function isValidHexColor(c){return /^#[0-9A-Fa-f]{3,6}$/.test(c)}
 
 // ─── FORM VALIDATION HELPER ───
 function validateField(inputId, rules) {

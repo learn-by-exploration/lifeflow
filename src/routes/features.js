@@ -1,4 +1,5 @@
 const { Router } = require('express');
+const { isValidColor } = require('../middleware/validate');
 module.exports = function(deps) {
   const { db, enrichTask, enrichTasks, getNextPosition } = deps;
   const router = Router();
@@ -350,6 +351,7 @@ router.post('/api/habits', (req, res) => {
   const { name, icon, color, frequency, target, area_id, schedule_days, preferred_time } = req.body;
   if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'Name required' });
   if (name.trim().length > 100) return res.status(400).json({ error: 'Name too long (max 100 characters)' });
+  if (color && !isValidColor(color)) return res.status(400).json({ error: 'Invalid hex color' });
   if (preferred_time !== undefined && preferred_time !== null && preferred_time !== '' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(preferred_time)) return res.status(400).json({ error: 'preferred_time must be HH:MM format' });
   const validFreqs = ['daily','weekly','monthly','yearly'];
   if (frequency && !validFreqs.includes(frequency)) return res.status(400).json({ error: 'Invalid frequency (must be daily, weekly, monthly, or yearly)' });
@@ -385,6 +387,7 @@ router.put('/api/habits/:id', (req, res) => {
   const ex = db.prepare('SELECT * FROM habits WHERE id=? AND user_id=?').get(id, req.userId);
   if (!ex) return res.status(404).json({ error: 'Not found' });
   const { name, icon, color, frequency, target, archived, area_id, schedule_days, preferred_time } = req.body;
+  if (color && !isValidColor(color)) return res.status(400).json({ error: 'Invalid hex color' });
   let sdVal = undefined;
   if (schedule_days !== undefined) {
     sdVal = (schedule_days && Array.isArray(schedule_days) && schedule_days.length > 0) ? JSON.stringify(schedule_days) : null;

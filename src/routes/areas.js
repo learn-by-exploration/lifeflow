@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { validate } = require('../middleware/validate');
+const { validate, isValidColor } = require('../middleware/validate');
 const { createArea, updateArea, createGoal, updateGoal, createMilestone, updateMilestone } = require('../schemas/areas.schema');
 const { idParam } = require('../schemas/common.schema');
 const AreasRepository = require('../repositories/areas.repository');
@@ -57,6 +57,7 @@ router.post('/api/areas/:areaId/goals', (req, res) => {
   if (!title || typeof title !== 'string' || !title.trim()) return res.status(400).json({ error: 'Title required' });
   if (title.trim().length > 200) return res.status(400).json({ error: 'Title too long (max 200 characters)' });
   if (description && description.length > 2000) return res.status(400).json({ error: 'Description too long (max 2000 characters)' });
+  if (color && !isValidColor(color)) return res.status(400).json({ error: 'Invalid hex color' });
   res.status(201).json(areasSvc.createGoal(areaId, req.userId, { title: title.trim(), description: description || '', color: color || '#6C63FF', due_date: due_date || null }));
 });
 router.put('/api/goals/:id', validate(idParam, 'params'), (req, res) => {

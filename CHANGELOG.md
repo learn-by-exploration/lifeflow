@@ -2,6 +2,26 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.12] - 2026-03-30
+
+### Added
+- `tests/xss-prevention.test.js` — 29 tests for XSS prevention & output encoding
+  - Server-side hex color validation on areas, goals, tags, habits, lists (create + update)
+  - Verifies `<script>` in task titles stored verbatim (no server-side transformation)
+  - API returns JSON Content-Type, not text/html
+  - Frontend static analysis: esc(), escA(), renderMd() safety
+  - CSP header verification (default-src, object-src, frame-ancestors)
+
+### Fixed
+- Goals creation route now validates color field (was accepting arbitrary strings)
+- Habits creation/update routes now validate color field
+- Lists creation/update routes now validate color field
+- Added `isValidHexColor()` to frontend for client-side color validation
+
+### Security
+- Security findings #76, #77, #78, #81 addressed (XSS prevention)
+- CSS injection via color fields blocked on all routes
+
 ## [0.7.11] - 2026-03-30
 
 ### Added

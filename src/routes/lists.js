@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const crypto = require('crypto');
+const { isValidColor } = require('../middleware/validate');
 module.exports = function(deps) {
   const { db, rebuildSearchIndex, getNextPosition } = deps;
   const router = Router();
@@ -69,6 +70,7 @@ module.exports = function(deps) {
     if (name.length > 100) return res.status(400).json({ error: 'name must be 100 chars or less' });
     const validTypes = ['checklist', 'grocery', 'notes'];
     if (type && !validTypes.includes(type)) return res.status(400).json({ error: 'type must be checklist, grocery, or notes' });
+    if (color && !isValidColor(color)) return res.status(400).json({ error: 'Invalid hex color' });
     const listCount = db.prepare('SELECT COUNT(*) as c FROM lists WHERE user_id=?').get(req.userId).c;
     if (listCount >= 100) return res.status(400).json({ error: 'Maximum 100 lists reached' });
     if (parent_id) {
@@ -103,6 +105,7 @@ module.exports = function(deps) {
     if (!ex) return res.status(404).json({ error: 'List not found' });
     const { name, icon, color, area_id, position } = req.body;
     if (name !== undefined && (!name || name.length > 100)) return res.status(400).json({ error: 'Invalid name' });
+    if (color && !isValidColor(color)) return res.status(400).json({ error: 'Invalid hex color' });
     const { parent_id: newParentId } = req.body;
     if (newParentId !== undefined && newParentId !== null) {
       const pid = Number(newParentId);
