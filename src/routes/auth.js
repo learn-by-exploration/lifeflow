@@ -173,14 +173,8 @@ module.exports = function(deps) {
     // Invalidate ALL sessions (including current) — force re-login
     db.prepare('DELETE FROM sessions WHERE user_id = ?').run(req.userId);
 
-    // Create a new session for the current user
-    const sid = crypto.randomUUID();
-    const ttl = SESSION_TTL_DEFAULT;
-    db.prepare(
-      "INSERT INTO sessions (sid, user_id, remember, expires_at) VALUES (?, ?, 0, datetime('now', '+' || ? || ' seconds'))"
-    ).run(sid, req.userId, ttl);
-
-    res.setHeader('Set-Cookie', buildCookie(sid, ttl, req));
+    // Clear the session cookie — user must re-login
+    res.setHeader('Set-Cookie', 'lf_sid=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
     if (audit) audit.log(req.userId, 'password_changed', 'user', req.userId, req);
     res.json({ ok: true });
   });

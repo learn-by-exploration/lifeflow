@@ -2,6 +2,27 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.7] - 2026-03-30
+
+### Added
+- `tests/session-security.test.js` — 19 tests for session security hardening
+  - Cookie security flags: HttpOnly, SameSite=Strict, Path=/ (register + login)
+  - Cookie-based session lifecycle (valid, invalid, missing cookies)
+  - Multiple concurrent sessions per user verified
+  - Logout invalidates only current session, not all sessions
+  - Session expiry enforcement (expired sessions return 401)
+
+### Security
+- Password change now invalidates ALL sessions (Finding #9)
+  - All sessions deleted on password change, user must re-login
+  - Cookie cleared with Max-Age=0 in password change response
+  - Other users' sessions not affected
+- Session cookie security flags verified via tests (Finding #12)
+
+### Changed
+- `POST /api/auth/change-password` no longer creates a new session after password change
+  - Response clears session cookie; user must re-authenticate
+
 ## [0.7.6] - 2026-03-30
 
 ### Added
