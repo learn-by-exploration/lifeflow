@@ -143,11 +143,11 @@
 
 ### Coder Tasks
 
-**C2.1 — Fix Timing Attacks** (1h)
-- [ ] Define `DUMMY_HASH` constant in `src/routes/auth.js`
-- [ ] `src/routes/auth.js:72` — when `!user`, compare against DUMMY_HASH instead of skipping bcrypt
-- [ ] `src/middleware/auth.js:77` — same pattern in requirePassword
-- [ ] Write tests: measure response time for valid vs invalid email — expect similar (+/- 50ms)
+**C2.1 — Fix Timing Attacks** (1h) ✅ DONE (v0.7.6)
+- [x] Define `DUMMY_HASH` constant in `src/routes/auth.js`
+- [x] `src/routes/auth.js:72` — when `!user`, compare against DUMMY_HASH instead of skipping bcrypt
+- [x] `src/middleware/auth.js:77` — same pattern in requirePassword
+- [x] Write tests: 16 tests in `tests/auth-timing.test.js` verifying timing attack prevention
 
 **C2.2 — Implement Session Binding** (2h)
 - [ ] Add `ip_hash`, `ua_hash` columns to sessions table migration

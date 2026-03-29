@@ -176,27 +176,31 @@ describe('Developer Workflow', () => {
   });
 
   describe('Version consistency', () => {
-    it('package.json version is 0.7.5', () => {
+    it('package.json version is a valid semver', () => {
       const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-      assert.equal(pkg.version, '0.7.5');
+      assert.match(pkg.version, /^\d+\.\d+\.\d+$/, 'version should be semver');
     });
 
-    it('CLAUDE.md header references 0.7.5', () => {
+    it('CLAUDE.md header references current package.json version', () => {
+      const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
       const content = fs.readFileSync(path.join(ROOT, 'CLAUDE.md'), 'utf8');
-      assert.ok(content.includes('0.7.5'),
-        'CLAUDE.md should reference version 0.7.5');
+      assert.ok(content.includes(pkg.version),
+        `CLAUDE.md should reference version ${pkg.version}`);
     });
 
-    it('openapi.yaml version is 0.7.5', () => {
+    it('openapi.yaml version matches package.json', () => {
+      const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
       const content = fs.readFileSync(path.join(ROOT, 'docs/openapi.yaml'), 'utf8');
-      assert.ok(/version:\s*0\.7\.5/.test(content),
-        'openapi.yaml should have version 0.7.5');
+      const match = content.match(/version:\s*(\S+)/);
+      assert.ok(match, 'openapi.yaml should have a version field');
+      assert.equal(match[1], pkg.version, 'openapi.yaml version should match package.json');
     });
 
-    it('CHANGELOG.md has 0.7.5 entry', () => {
+    it('CHANGELOG.md has current version entry', () => {
+      const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
       const content = fs.readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8');
-      assert.ok(content.includes('[0.7.5]'),
-        'CHANGELOG.md should have a [0.7.5] entry');
+      assert.ok(content.includes(`[${pkg.version}]`),
+        `CHANGELOG.md should have a [${pkg.version}] entry`);
     });
   });
 });

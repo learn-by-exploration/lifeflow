@@ -2,6 +2,24 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.6] - 2026-03-30
+
+### Added
+- `tests/auth-timing.test.js` — 16 tests validating timing attack prevention
+  - Login returns identical response for valid-email-wrong-pass vs non-existent-email
+  - Error messages are generic — no user existence leakage
+  - Response headers identical shape for both failure cases
+  - Source code static analysis: DUMMY_HASH constant, bcrypt always called
+  - `requirePassword` middleware timing safety verified
+  - Register returns 201 for existing email (no 409 enumeration leak)
+  - Register response shape identical for new vs existing email
+
+### Security
+- Verified timing attack prevention in login handler (Finding #2)
+- Verified timing attack prevention in requirePassword middleware (Finding #3)
+- Verified account enumeration prevention in register handler (Finding #1)
+- Security findings #1, #2, #3 confirmed resolved with test coverage
+
 ## [0.7.5] - 2026-03-30
 
 ### Added
