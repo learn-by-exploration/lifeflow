@@ -553,7 +553,7 @@ describe('Security Basics', () => {
 
   it('No hardcoded localhost/IP URLs in production code', () => {
     // Allow localhost in comments but not in actual string literals
-    const localhostRegex = /['"`]https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0)[:\/][^'"`]*['"`]/g;
+    const localhostRegex = /['"`]https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0)[:/][^'"`]*['"`]/g;
     const matches = [];
     let match;
     while ((match = localhostRegex.exec(scriptContent)) !== null) {

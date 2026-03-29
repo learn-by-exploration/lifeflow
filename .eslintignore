@@ -1,0 +1,7 @@
+node_modules
+public/
+backups/
+data/
+*.db
+*.db-shm
+*.db-wal

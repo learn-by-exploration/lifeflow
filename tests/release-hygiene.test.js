@@ -42,6 +42,14 @@ describe('Release Hygiene', () => {
     assert.match(pkg.engines.node, /22/, 'engines.node should require Node 22+');
   });
 
+  it('CLAUDE.md version matches package.json version', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+    const claude = fs.readFileSync(path.join(__dirname, '..', 'CLAUDE.md'), 'utf8');
+    const match = claude.match(/Version:\*\*\s*(\S+)/);
+    assert.ok(match, 'CLAUDE.md should have a Version field');
+    assert.equal(match[1], pkg.version, 'CLAUDE.md version should match package.json');
+  });
+
   // ── Task 0.2: CHANGELOG ──
 
   it('CHANGELOG.md contains entry for current package.json version', () => {

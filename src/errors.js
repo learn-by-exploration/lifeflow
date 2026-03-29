@@ -15,7 +15,7 @@ class AppError extends Error {
 
 class NotFoundError extends AppError {
   constructor(resource, id) {
-    const msg = id != null ? `${resource} ${id} not found` : `${resource} not found`;
+    const msg = id !== null && id !== undefined ? `${resource} ${id} not found` : `${resource} not found`;
     super('NOT_FOUND', msg, 404);
   }
 }

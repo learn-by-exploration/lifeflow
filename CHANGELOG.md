@@ -2,6 +2,21 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.1] - 2026-03-30
+
+### Added
+- ESLint integration with `eslint:recommended` rules and Node.js environment
+- `npm run lint` and `npm run lint:fix` scripts
+- CI lint job (runs before tests, fast-fail gate)
+- `tests/lint-config.test.js` — 16 tests validating ESLint configuration
+
+### Fixed
+- Strict equality (`!==`) replaces loose equality (`!=`) in 4 files
+- `no-constant-condition` fix: `while(true)` → `for(;;)` in habit streak calc
+- `no-inner-declarations` fix: function expression for shutdown handler
+- `no-useless-escape` fix in frontend-validation test regex
+- Auto-fixed `prefer-const` warnings across src/ and tests/
+
 ## [0.6.1] - 2026-03-29
 
 ### New Features

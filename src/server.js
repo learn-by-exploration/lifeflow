@@ -228,7 +228,7 @@ if (require.main === module) {
 
   // ─── Graceful shutdown ───
   let shuttingDown = false;
-  function shutdown(signal) {
+  const shutdown = (signal) => {
     if (shuttingDown) return;
     shuttingDown = true;
     logger.info({ signal }, 'Shutdown signal received, draining connections...');

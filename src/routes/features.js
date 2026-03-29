@@ -333,7 +333,7 @@ router.get('/api/habits', (req, res) => {
     const todayCount = logs[today] || 0;
     if (todayCount < h.target) d.setDate(d.getDate() - 1);
     else { streak = 1; d.setDate(d.getDate() - 1); }
-    while (true) {
+    for (;;) {
       const ds = d.toISOString().slice(0, 10);
       const count = logs[ds];
       if (count !== undefined && count >= h.target) { streak++; d.setDate(d.getDate() - 1); }

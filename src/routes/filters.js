@@ -18,7 +18,7 @@ router.get('/api/filters/counts', (req, res) => {
   const counts = filters.map(f => {
     let p;
     try { p = JSON.parse(f.filters || '{}'); } catch { p = {}; }
-    let w = [], pa = [];
+    const w = [], pa = [];
     if (p.area_id) { w.push('a.id=?'); pa.push(Number(p.area_id)); }
     if (p.goal_id) { w.push('g.id=?'); pa.push(Number(p.goal_id)); }
     if (p.priority) { w.push('t.priority=?'); pa.push(Number(p.priority)); }
@@ -41,7 +41,7 @@ router.get('/api/filters/counts', (req, res) => {
 
 // Execute a saved filter (or ad-hoc filter params)
 router.get('/api/filters/execute', (req, res) => {
-  let whereParts = [], params = [];
+  const whereParts = [], params = [];
   if (req.query.area_id) { whereParts.push('a.id=?'); params.push(Number(req.query.area_id)); }
   if (req.query.goal_id) { whereParts.push('g.id=?'); params.push(Number(req.query.goal_id)); }
   if (req.query.priority) { whereParts.push('t.priority=?'); params.push(Number(req.query.priority)); }

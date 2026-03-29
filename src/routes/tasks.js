@@ -47,7 +47,7 @@ router.get('/api/tasks/board', (req, res) => {
   const areaId = req.query.area_id ? Number(req.query.area_id) : null;
   const priority = req.query.priority !== undefined ? Number(req.query.priority) : null;
   const tagId = req.query.tag_id ? Number(req.query.tag_id) : null;
-  let clauses = ['t.user_id=?'], params = [req.userId];
+  const clauses = ['t.user_id=?'], params = [req.userId];
   if (goalId && Number.isInteger(goalId)) { clauses.push('t.goal_id=?'); params.push(goalId); }
   if (areaId && Number.isInteger(areaId)) { clauses.push('a.id=?'); params.push(areaId); }
   if (priority !== null && Number.isInteger(priority)) { clauses.push('t.priority=?'); params.push(priority); }
@@ -146,7 +146,7 @@ router.get('/api/tasks/search', (req, res) => {
   const hasQ = q && typeof q === 'string' && q.trim();
   const hasFilters = req.query.area_id || req.query.goal_id || req.query.status;
   if (!hasQ && !hasFilters) return res.json([]);
-  let whereParts = [], params = [];
+  const whereParts = [], params = [];
   if (hasQ) {
     const term = '%' + q.trim() + '%';
     whereParts.push('(t.title LIKE ? OR t.note LIKE ? OR s.title LIKE ?)');
@@ -231,7 +231,7 @@ router.get('/api/tasks/table', (req, res) => {
   const limit = Math.min(Math.max(1, Number(req.query.limit) || 100), 500);
   const offset = Math.max(0, Number(req.query.offset) || 0);
 
-  let clauses = ['t.user_id=?'], params = [req.userId];
+  const clauses = ['t.user_id=?'], params = [req.userId];
   if (status) { clauses.push('t.status=?'); params.push(status); }
   if (areaId && Number.isInteger(areaId)) { clauses.push('a.id=?'); params.push(areaId); }
   const where = 'WHERE ' + clauses.join(' AND ');

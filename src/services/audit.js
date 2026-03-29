@@ -31,7 +31,7 @@ module.exports = function createAuditLogger(db) {
         userId || null,
         action,
         resource || null,
-        resourceId != null ? String(resourceId) : null,
+        resourceId !== null && resourceId !== undefined ? String(resourceId) : null,
         typeof ip === 'string' ? ip.slice(0, 45) : '',
         typeof ua === 'string' ? ua.slice(0, 256) : '',
         detail || null
