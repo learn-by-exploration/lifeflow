@@ -2,6 +2,20 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.5] - 2026-03-30
+
+### Added
+- `tests/dev-workflow.test.js` — 22 tests validating developer workflow standards
+  - `.editorconfig` settings, `.gitignore` completeness, `.env.example` coverage
+  - No `console.log` in `src/` (must use logger)
+  - Dockerfile security (USER node, HEALTHCHECK)
+  - Consistent 2-space indentation in `src/`
+  - Version consistency across package.json, CLAUDE.md, openapi.yaml, CHANGELOG.md
+- Docker Compose healthcheck configuration
+
+### Changed
+- Version bump to 0.7.5 in package.json, CLAUDE.md, openapi.yaml
+
 ## [0.7.4] - 2026-03-30
 
 ### Changed
