@@ -2,6 +2,21 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.9] - 2026-03-30
+
+### Added
+- `src/utils/password-policy.js` — Centralized password validation module
+- `tests/password-policy.test.js` — 15 tests for password policy enforcement
+  - Min 12 chars, max 128 chars, uppercase + lowercase + digit + special required
+  - Common password blocklist (top 25 patterns)
+  - Structured error responses with all unmet requirements
+  - Unicode password support
+  - Applied to both register and change-password routes
+
+### Security
+- Password strength enforcement with common password blocklist (Finding #8)
+- Max password length of 128 chars prevents bcrypt DoS
+
 ## [0.7.8] - 2026-03-30
 
 ### Added

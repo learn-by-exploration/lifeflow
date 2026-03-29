@@ -16,14 +16,12 @@ const LOCKOUT_DURATION_MINUTES = 15;  // how long the lockout lasts
 // Color validation helper (used by area/goal routes)
 const COLOR_HEX_RE = /^#[0-9A-Fa-f]{3,6}$/;
 
-// Password policy: 12+ chars, at least 1 uppercase, 1 lowercase, 1 digit, 1 special
+const { validatePassword: _validatePw } = require('../utils/password-policy');
+
+// Adapter: returns first error string or null (backwards-compatible)
 function validatePassword(pw) {
-  if (typeof pw !== 'string' || pw.length < 12) return 'Password must be at least 12 characters';
-  if (!/[A-Z]/.test(pw)) return 'Password must contain at least 1 uppercase letter';
-  if (!/[a-z]/.test(pw)) return 'Password must contain at least 1 lowercase letter';
-  if (!/[0-9]/.test(pw)) return 'Password must contain at least 1 digit';
-  if (!/[^A-Za-z0-9]/.test(pw)) return 'Password must contain at least 1 special character';
-  return null;
+  const result = _validatePw(pw);
+  return result.valid ? null : result.errors[0];
 }
 
 module.exports = function(deps) {
