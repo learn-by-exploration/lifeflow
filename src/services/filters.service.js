@@ -22,6 +22,8 @@ class FiltersService {
   }
 
   remove(id, userId) {
+    const ex = this.repo.findById(id, userId);
+    if (!ex) throw new NotFoundError('Filter');
     this.repo.remove(id, userId);
   }
 }

@@ -2,6 +2,29 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.11] - 2026-03-30
+
+### Added
+- `tests/idor-comprehensive.test.js` — 56 tests for systematic IDOR protection
+  - Area ownership: update, delete, archive blocked for non-owners
+  - Goal ownership: create, update, delete, milestones, progress, save-as-template blocked
+  - Task ownership: read, update, delete, comments, subtasks, tags, deps, custom-fields, time
+  - Tag ownership: update, delete verified
+  - List ownership: update, delete, items, save-as-template blocked
+  - Habit ownership: update, delete, log, heatmap blocked
+  - Filter ownership: update, delete verified
+  - Note ownership: read, update, delete blocked
+  - Focus session ownership: update, end, delete, meta, steps blocked
+  - Custom field ownership: update, delete blocked
+  - Inbox ownership: update, delete, triage blocked
+  - Template ownership: update, delete, apply blocked
+  - Automation rule ownership: update, delete blocked
+
+### Security
+- Fix IDOR in `GET /api/tasks/:id/deps` — add task ownership check (Finding #40)
+- Fix IDOR in `DELETE /api/tags/:id` — verify tag exists and belongs to user before deletion
+- Fix IDOR in `DELETE /api/filters/:id` — verify filter exists and belongs to user before deletion
+
 ## [0.7.10] - 2026-03-30
 
 ### Added

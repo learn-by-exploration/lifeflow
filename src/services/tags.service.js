@@ -41,6 +41,8 @@ class TagsService {
   }
 
   remove(id, userId) {
+    const tag = this.repo.findById(id, userId);
+    if (!tag) throw new NotFoundError('Tag');
     this.repo.remove(id, userId);
   }
 

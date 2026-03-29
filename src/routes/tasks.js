@@ -536,6 +536,8 @@ router.post('/api/tasks/reschedule', (req, res) => {
 router.get('/api/tasks/:id/deps', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const taskOwner = db.prepare('SELECT id FROM tasks WHERE id=? AND user_id=?').get(id, req.userId);
+  if (!taskOwner) return res.status(404).json({ error: 'Not found' });
   const blockedBy = db.prepare('SELECT t.id, t.title, t.status FROM tasks t JOIN task_deps d ON t.id=d.blocked_by_id WHERE d.task_id=? AND t.user_id=?').all(id, req.userId);
   const blocking = db.prepare('SELECT t.id, t.title, t.status FROM tasks t JOIN task_deps d ON t.id=d.task_id WHERE d.blocked_by_id=? AND t.user_id=?').all(id, req.userId);
   res.json({ blockedBy, blocking });
