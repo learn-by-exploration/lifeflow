@@ -2,6 +2,28 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.4] - 2026-03-30
+
+### Changed
+- Renamed 20 test files from chaotic `phase*`/`batch*`/`break_*` naming to descriptive names
+  - `phase0-gaps` → `gaps-coverage`, `phase2` → `settings-reviews`, `phase3` → `transactions`
+  - `phase3-makeyours` → `customization`, `phase4` → `accessibility`, `phase4-a11y-mobile` → `a11y-mobile`
+  - `phase5` → `smart-filters`, `phase5-advanced` → `smart-filters-advanced`
+  - `phase6` → `launch-readiness`, `phase6-launch` → `launch-checks`
+  - `phase7` → `search-ical-planner`, `phase7-auth` → `auth-registration`
+  - `batch4` → `import-api`, `batch5` → `integration-batch`
+  - `nav-phase2` → `settings-advanced`
+  - `break_auth` → `idor-auth`, `break_input` → `input-fuzzing`
+  - `break_http` → `http-edge-cases`, `break_logic` → `logic-edge-cases`
+  - `break_concurrency` → `concurrency`
+- Updated `tests/README.md` with full test catalog and category documentation
+
+### Added
+- `tests/test-organization.test.js` — validates naming conventions (no phase/batch/break_ prefixes)
+- `npm run test:security` — run security & auth tests only
+- `npm run test:crud` — run core CRUD tests only
+- `npm run test:integration` — run integration & edge-case tests only
+
 ## [0.7.3] - 2026-03-30
 
 ### Added

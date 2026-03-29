@@ -1,7 +1,7 @@
 # LifeFlow — Claude Code Configuration
 
-> **Last updated:** 30 March 2026 · **Version:** 0.7.3
-> **Metrics:** 2,095 tests | 91 test files | 190 API routes | 34 DB tables | ~15,000 LOC
+> **Last updated:** 30 March 2026 · **Version:** 0.7.4
+> **Metrics:** 2,095 tests | 92 test files | 190 API routes | 34 DB tables | ~15,000 LOC
 
 ## Project Overview
 

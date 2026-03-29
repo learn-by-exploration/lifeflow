@@ -1,6 +1,6 @@
 {
   "name": "lifeflow",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "Self-hosted personal task planner with 4-level hierarchy, 25+ views, and zero cloud dependencies",
   "main": "src/server.js",
   "scripts": {
@@ -9,7 +9,10 @@
     "lint": "eslint src/ tests/",
     "lint:fix": "eslint src/ tests/ --fix",
     "pretest": "bash scripts/backup.sh",
-    "test": "node --test --test-force-exit tests/*.test.js"
+    "test": "node --test --test-force-exit tests/*.test.js",
+    "test:security": "node --test --test-force-exit tests/security.test.js tests/idor-auth.test.js tests/auth-registration.test.js tests/csrf.test.js tests/cors.test.js tests/api-tokens.test.js tests/totp-2fa.test.js tests/2fa-extensive.test.js tests/https-proxy.test.js tests/multi-user.test.js tests/input-fuzzing.test.js",
+    "test:crud": "node --test --test-force-exit tests/areas.test.js tests/goals.test.js tests/tasks.test.js tests/subtasks.test.js tests/tags.test.js tests/lists.test.js tests/filters.test.js tests/custom-fields.test.js",
+    "test:integration": "node --test --test-force-exit tests/integration-batch.test.js tests/exhaustive-tasks.test.js tests/exhaustive-inbox.test.js tests/exhaustive-notes.test.js tests/exhaustive-habits.test.js tests/exhaustive-misc.test.js tests/exhaustive-reviews.test.js tests/exhaustive-filters.test.js tests/exhaustive-stats.test.js tests/exhaustive-planner.test.js tests/exhaustive-rules.test.js tests/concurrency.test.js tests/http-edge-cases.test.js tests/logic-edge-cases.test.js"
   },
   "keywords": [
     "task-manager",

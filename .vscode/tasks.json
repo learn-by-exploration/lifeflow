@@ -1,0 +1,45 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "rename-test-files",
+			"type": "shell",
+			"command": "bash /home/shyam/personal/lifeflow/do-renames.sh"
+		},
+		{
+			"label": "cleanup-temp-files",
+			"type": "shell",
+			"command": "rm -f /home/shyam/personal/lifeflow/run-test.js /home/shyam/personal/lifeflow/run-test-save.js /home/shyam/personal/lifeflow/do-renames.sh && echo 'CLEANUP_DONE'"
+		},
+		{
+			"label": "test-org-verify",
+			"type": "shell",
+			"command": "node --test --test-force-exit tests/test-organization.test.js 2>&1; echo EXIT=$?"
+		},
+		{
+			"label": "test-org-run",
+			"type": "shell",
+			"command": "export PATH=$HOME/.nvm/versions/node/v22.14.0/bin:$PATH && node --test --test-force-exit tests/test-organization.test.js 2>&1; echo EXIT=$?"
+		},
+		{
+			"label": "test-org-nvm",
+			"type": "shell",
+			"command": "source ~/.bashrc 2>/dev/null; source ~/.nvm/nvm.sh 2>/dev/null; which node; node --test --test-force-exit tests/test-organization.test.js 2>&1; echo EXIT=$?"
+		},
+		{
+			"label": "full-test-suite",
+			"type": "shell",
+			"command": "source ~/.nvm/nvm.sh 2>/dev/null; npm test 2>&1 | tail -10"
+		},
+		{
+			"label": "full-test-results",
+			"type": "shell",
+			"command": "source ~/.nvm/nvm.sh 2>/dev/null; npm test 2>&1 | grep -E '^# (tests|pass|fail)'"
+		},
+		{
+			"label": "lint-check",
+			"type": "shell",
+			"command": "source ~/.nvm/nvm.sh 2>/dev/null; npx eslint tests/test-organization.test.js 2>&1; echo LINT_EXIT=$?"
+		}
+	]
+}
