@@ -151,6 +151,44 @@ server {
 }
 ```
 
+## CORS Configuration
+
+By default, LifeFlow only accepts requests from the **same origin** (the domain the page was loaded from). This is the most secure setting and works for all standard deployments.
+
+### When to configure CORS
+
+You need to set `ALLOWED_ORIGINS` if:
+- Your frontend is on a different domain than the API
+- You have a mobile app making API calls
+- Third-party services need to call your API
+
+### Configuration
+
+Set `ALLOWED_ORIGINS` to a comma-separated list of allowed origins:
+
+```bash
+# Single origin
+ALLOWED_ORIGINS=https://app.example.com
+
+# Multiple origins
+ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com
+```
+
+When `ALLOWED_ORIGINS` is set:
+- Only listed origins can make cross-origin requests
+- Requests from unlisted origins are rejected
+- Credentials (cookies) are included in CORS responses
+
+When `ALLOWED_ORIGINS` is **not set** (default):
+- Only same-origin requests are allowed
+- Cross-origin requests from any domain are blocked
+
+### Security warnings
+
+- **Never use wildcard origins** (`*`) with cookie-based authentication — browsers will refuse to send credentials
+- **Always use HTTPS origins** in production — `http://` origins leak session cookies over unencrypted connections
+- If using `ALLOWED_ORIGINS`, also set `TRUST_PROXY=1` when behind a reverse proxy
+
 ## Backups
 
 ### Automatic

@@ -49,13 +49,13 @@ app.use(helmet({
       connectSrc: ["'self'"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
-      frameAncestors: ["'none'"]
+      frameAncestors: ["'none'"],
+      // Only upgrade requests when behind HTTPS proxy (breaks plain HTTP on LAN)
+      upgradeInsecureRequests: config.trustProxy ? [] : null
     }
   },
-  strictTransportSecurity: {
-    maxAge: 31536000,
-    includeSubDomains: true
-  },
+  // Only enable HSTS when behind HTTPS proxy
+  strictTransportSecurity: config.trustProxy,
   referrerPolicy: { policy: 'same-origin' }
 }));
 
@@ -107,6 +107,11 @@ app.use('/api', (req, res, next) => {
   if (['POST', 'PUT', 'PATCH'].includes(req.method) && !req.body) req.body = {};
   next();
 });
+
+// ─── Response compression ───
+const compression = require('compression');
+app.use(compression());
+
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // ─── CSRF Protection ───
@@ -204,6 +209,16 @@ app.use(errorHandler);
 
 // Export for testing; start server only when run directly
 if (require.main === module) {
+  // ─── Process-level error handlers (must be before app.listen) ───
+  process.on('uncaughtException', (err) => {
+    logger.error({ err }, 'Uncaught exception — forcing shutdown');
+    process.exit(1);
+  });
+  process.on('unhandledRejection', (reason) => {
+    logger.error({ err: reason }, 'Unhandled rejection — forcing shutdown');
+    process.exit(1);
+  });
+
   const server = app.listen(PORT, () => logger.info({ port: PORT, version: config.version }, 'LifeFlow started'));
 
   // ─── Background Scheduler ───
