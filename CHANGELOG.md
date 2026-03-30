@@ -2,6 +2,15 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.24] - 2026-03-30
+
+### Added
+- `tests/security-regression.test.js` — 13 security regression tests
+  - Auth endpoint security (logout, password change, rate limiting)
+  - Data isolation (inbox, notes, focus sessions, templates)
+  - Input boundary tests (max length, unicode, empty/null)
+  - Session security (expired, malformed cookies)
+
 ## [0.7.23] - 2026-03-30
 
 ### Added
