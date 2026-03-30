@@ -2,6 +2,17 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.34] - 2026-03-30
+
+### Added
+- `tests/recurring-spawn-edges.test.js` — 40 recurring task spawn edge case tests
+  - Next due date calculation (yearly, every-N-days/weeks, weekdays, month rollover)
+  - Spawn relation copying (tags, subtasks, custom fields, but not comments/deps)
+  - Skip endpoint (skip+spawn, non-recurring, tags preserved)
+  - Spawn idempotency (no double-spawn, rapid status cycling)
+  - Recurring JSON validation (strings, objects, invalid values)
+  - Spawned task field preservation (status=todo, my_day=0, endAfter tracking)
+
 ## [0.7.33] - 2026-03-30
 
 ### Added
