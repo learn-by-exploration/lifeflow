@@ -1,7 +1,7 @@
 # LifeFlow — Claude Code Configuration
 
-> **Last updated:** 30 March 2026 · **Version:** 0.7.45
-> **Metrics:** 3,312 tests | 138 test files | 190 API routes | 35 DB tables | ~15,000 LOC
+> **Last updated:** 30 March 2026 · **Version:** 0.7.46
+> **Metrics:** 3,333 tests | 139 test files | 190 API routes | 35 DB tables | ~15,000 LOC
 
 ## Project Overview
 
@@ -322,7 +322,7 @@ See `docs/DOCUMENTATION-AUDIT.md` for the full documentation review and proposed
 | Version bump | CLAUDE.md header, `package.json`, `docs/openapi.yaml` |
 
 **Update the CLAUDE.md header line counts** when LOC changes significantly (>5%):
-- Current: 3,312 tests | 138 test files | 190 routes | 35 tables | ~15,000 LOC
+- Current: 3,333 tests | 139 test files | 190 routes | 35 tables | ~15,000 LOC
 
 ## What Needs to Be Done (Roadmap)
 

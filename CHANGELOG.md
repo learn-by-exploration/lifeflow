@@ -2,6 +2,14 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.46] - 2026-03-30
+
+### Added
+- `tests/webhook-push-exhaustive.test.js` — 21 webhook & push edge case tests
+  - Webhook activation toggle, update edge cases, secret security
+  - SSRF prevention edge cases, push subscription lifecycle
+  - Events endpoint, auth requirements
+
 ## [0.7.45] - 2026-03-30
 
 ### Added
