@@ -2,6 +2,17 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.35] - 2026-03-30
+
+### Added
+- `tests/frontend-units.test.js` — 36 frontend JS unit tests
+  - HTML escaping (esc/escA) source verification
+  - fmtDue() date formatting patterns
+  - renderMd() markdown rendering with XSS prevention
+  - NLP parser via POST /api/tasks/parse (11 endpoint tests)
+  - isValidHexColor regex validation
+  - Service Worker structure verification
+
 ## [0.7.34] - 2026-03-30
 
 ### Added
