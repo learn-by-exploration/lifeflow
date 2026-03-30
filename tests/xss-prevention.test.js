@@ -90,6 +90,16 @@ describe('XSS Prevention & Output Encoding', () => {
       const res = await agent().put(`/api/lists/${createRes.body.id}`).send({ color: 'hsla(0,100%,50%,1)' });
       assert.equal(res.status, 400);
     });
+
+    it('POST /api/areas with color "#FFFF" → rejected (4-char hex invalid)', async () => {
+      const res = await agent().post('/api/areas').send({ name: 'Four Char', color: '#FFFF' });
+      assert.equal(res.status, 400);
+    });
+
+    it('POST /api/areas with color "#FFFFF" → rejected (5-char hex invalid)', async () => {
+      const res = await agent().post('/api/areas').send({ name: 'Five Char', color: '#FFFFF' });
+      assert.equal(res.status, 400);
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════

@@ -2,6 +2,22 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.52] - 2026-03-30
+
+### Fixed
+- **Critical:** Fix hex color regex to reject invalid 4/5-char values (#FFFF, #FFFFF)
+  - Updated in `validate.js`, `auth.js`, `common.schema.js`
+
+### Changed
+- Add `user_id` to all test factory functions (makeArea, makeGoal, makeTask, makeTag, makeFocus, makeList, makeHabit)
+- Tighten performance test thresholds (2000ms→500ms, 1000ms→200ms, 5000ms→2000ms)
+- Convert frontend-units.test.js from source-inspection to jsdom behavioral tests
+
+### Removed
+- Consolidate duplicate IDOR tests across 4 files (−23 tests)
+- Merge 4 meta/hygiene test files into project-health.test.js (−3 files)
+  - Deleted: release-hygiene, dev-workflow, coverage-audit, release-gate
+
 ## [0.7.51] - 2026-03-30
 
 ### Added

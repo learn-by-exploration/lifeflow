@@ -28,29 +28,7 @@ describe('E2E Security Workflows', () => {
     assert.equal(r.status, 201);
   });
 
-  it('user2 cannot edit user1 area', async () => {
-    const area = makeArea({ name: 'Protected Area' });
-    const { agent: agent2 } = makeUser2();
-    const res = await agent2.put(`/api/areas/${area.id}`).send({ name: 'Hacked' });
-    assert.equal(res.status, 404);
-  });
-
-  it('user2 cannot delete user1 goal', async () => {
-    const area = makeArea();
-    const goal = makeGoal(area.id);
-    const { agent: agent2 } = makeUser2();
-    const res = await agent2.delete(`/api/goals/${goal.id}`);
-    assert.equal(res.status, 404);
-  });
-
-  it('user2 cannot complete user1 task', async () => {
-    const area = makeArea();
-    const goal = makeGoal(area.id);
-    const task = makeTask(goal.id);
-    const { agent: agent2 } = makeUser2();
-    const res = await agent2.put(`/api/tasks/${task.id}`).send({ status: 'done' });
-    assert.equal(res.status, 404);
-  });
+  // IDOR tests for area edit, goal delete, task complete removed — covered by idor-comprehensive.test.js
 
   // ── Auth + Token combined flow ──
 
@@ -163,14 +141,5 @@ describe('E2E Security Workflows', () => {
 
   // ── List isolation ──
 
-  it('user2 cannot access user1 list items', async () => {
-    const list = await agent().post('/api/lists').send({ name: 'MyList', type: 'checklist' });
-    assert.equal(list.status, 201);
-    await agent().post(`/api/lists/${list.body.id}/items`).send({ title: 'Secret Item' });
-
-    const { agent: agent2 } = makeUser2();
-    const items = await agent2.get(`/api/lists/${list.body.id}/items`);
-    // Should either 404 or return empty
-    assert.ok(items.status === 404 || (items.body || []).length === 0);
-  });
+  // IDOR test for list items access removed — covered by idor-comprehensive.test.js
 });

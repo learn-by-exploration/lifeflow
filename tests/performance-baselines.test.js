@@ -41,41 +41,41 @@ describe('Performance Baseline Tests', () => {
   }
 
   describe('Response time assertions', () => {
-    it('GET /api/tasks/all responds in <2s with 100 tasks', async () => {
+    it('GET /api/tasks/all responds in <500ms with 100 tasks', async () => {
       await seedBulkData();
       const { result, ms } = await timed(() => agent().get('/api/tasks/all'));
       assert.equal(result.status, 200);
       assert.ok(result.body.length >= 100, `should have ≥100 tasks, got ${result.body.length}`);
-      assert.ok(ms < 2000, `should respond in <2s, took ${ms}ms`);
+      assert.ok(ms < 500, `should respond in <500ms, took ${ms}ms`);
     });
 
-    it('GET /api/stats responds in <1s', async () => {
+    it('GET /api/stats responds in <200ms', async () => {
       await seedBulkData();
       const { result, ms } = await timed(() => agent().get('/api/stats'));
       assert.equal(result.status, 200);
-      assert.ok(ms < 1000, `should respond in <1s, took ${ms}ms`);
+      assert.ok(ms < 200, `should respond in <200ms, took ${ms}ms`);
     });
 
-    it('GET /api/tasks/board responds in <2s', async () => {
+    it('GET /api/tasks/board responds in <500ms', async () => {
       await seedBulkData();
       const { result, ms } = await timed(() => agent().get('/api/tasks/board'));
       assert.equal(result.status, 200);
-      assert.ok(ms < 2000, `should respond in <2s, took ${ms}ms`);
+      assert.ok(ms < 500, `should respond in <500ms, took ${ms}ms`);
     });
 
-    it('GET /api/tasks/my-day responds in <1s', async () => {
+    it('GET /api/tasks/my-day responds in <200ms', async () => {
       await seedBulkData();
       const { result, ms } = await timed(() => agent().get('/api/tasks/my-day'));
       assert.equal(result.status, 200);
-      assert.ok(ms < 1000, `should respond in <1s, took ${ms}ms`);
+      assert.ok(ms < 200, `should respond in <200ms, took ${ms}ms`);
     });
 
-    it('GET /api/areas responds in <1s with 5 areas', async () => {
+    it('GET /api/areas responds in <200ms with 5 areas', async () => {
       await seedBulkData();
       const { result, ms } = await timed(() => agent().get('/api/areas'));
       assert.equal(result.status, 200);
       assert.ok(result.body.length >= 5);
-      assert.ok(ms < 1000, `should respond in <1s, took ${ms}ms`);
+      assert.ok(ms < 200, `should respond in <200ms, took ${ms}ms`);
     });
 
     it('GET /api/tags responds in <500ms', async () => {
@@ -86,12 +86,12 @@ describe('Performance Baseline Tests', () => {
       const { result, ms } = await timed(() => agent().get('/api/tags'));
       assert.equal(result.status, 200);
       assert.ok(result.body.length >= 50);
-      assert.ok(ms < 500, `should respond in <500ms, took ${ms}ms`);
+      assert.ok(ms < 200, `should respond in <200ms, took ${ms}ms`);
     });
   });
 
   describe('Bulk operation performance', () => {
-    it('creating 50 tasks sequentially in <5s', async () => {
+    it('creating 50 tasks sequentially in <2s', async () => {
       const area = makeArea();
       const goal = makeGoal(area.id);
       const start = Date.now();
@@ -100,7 +100,7 @@ describe('Performance Baseline Tests', () => {
         assert.equal(res.status, 201);
       }
       const ms = Date.now() - start;
-      assert.ok(ms < 5000, `should create 50 tasks in <5s, took ${ms}ms`);
+      assert.ok(ms < 2000, `should create 50 tasks in <2s, took ${ms}ms`);
     });
 
     it('batch status update responds in <2s', async () => {
@@ -111,7 +111,7 @@ describe('Performance Baseline Tests', () => {
         agent().patch('/api/tasks/batch').send({ ids, updates: { status: 'done' } })
       );
       assert.ok([200, 204].includes(result.status), `expected 200/204, got ${result.status}`);
-      assert.ok(ms < 2000, `should batch update in <2s, took ${ms}ms`);
+      assert.ok(ms < 500, `should batch update in <500ms, took ${ms}ms`);
     });
   });
 
@@ -133,16 +133,16 @@ describe('Performance Baseline Tests', () => {
       const enriched = result.body.find(t => t.id === tasks[0].id);
       assert.ok(enriched.tags.length >= 1, 'should have tags');
       assert.ok(enriched.subtask_total >= 1, 'should have subtasks');
-      assert.ok(ms < 3000, `enriched 100 tasks in <3s, took ${ms}ms`);
+      assert.ok(ms < 1000, `enriched 100 tasks in <1s, took ${ms}ms`);
     });
   });
 
   describe('Search performance', () => {
-    it('GET /api/search?q=test responds in <2s', async () => {
+    it('GET /api/search?q=test responds in <500ms', async () => {
       await seedBulkData();
       const { result, ms } = await timed(() => agent().get('/api/search?q=Task'));
       assert.equal(result.status, 200);
-      assert.ok(ms < 2000, `search should respond in <2s, took ${ms}ms`);
+      assert.ok(ms < 500, `search should respond in <500ms, took ${ms}ms`);
     });
 
     it('empty search result returns quickly', async () => {
@@ -154,12 +154,12 @@ describe('Performance Baseline Tests', () => {
   });
 
   describe('Export performance', () => {
-    it('export with 100 tasks responds in <3s', async () => {
+    it('export with 100 tasks responds in <1s', async () => {
       await seedBulkData();
       const { result, ms } = await timed(() => agent().get('/api/export'));
       assert.equal(result.status, 200);
       assert.ok(result.body.tasks || result.body.areas, 'export should have data');
-      assert.ok(ms < 3000, `export in <3s, took ${ms}ms`);
+      assert.ok(ms < 1000, `export in <1s, took ${ms}ms`);
     });
 
     it('export response is valid JSON', async () => {

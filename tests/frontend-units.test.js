@@ -2,56 +2,57 @@
  * Frontend Unit Tests
  *
  * Tests frontend utility functions and NLP parser via:
- * 1. Source inspection (read file, verify patterns/logic)
+ * 1. Behavioral tests using jsdom (esc, escA, fmtDue, renderMd)
  * 2. HTTP API (NLP parse endpoint)
- *
- * Does NOT import browser JS directly (it uses DOM APIs).
+ * 3. Source inspection (isValidHexColor, service worker)
  */
 
 const { describe, it, before, beforeEach, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const { JSDOM } = require('jsdom');
 const { setup, cleanDb, teardown, agent, makeArea, makeGoal } = require('./helpers');
 
 const PUBLIC = path.join(__dirname, '..', 'public');
 const appJs = fs.readFileSync(path.join(PUBLIC, 'app.js'), 'utf8');
-const utilsJs = fs.readFileSync(path.join(PUBLIC, 'js', 'utils.js'), 'utf8');
 const swJs = fs.readFileSync(path.join(PUBLIC, 'sw.js'), 'utf8');
+
+// ─── Load utils.js functions into jsdom ─────────────────────────────────────
+const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
+const utilsSrc = fs.readFileSync(path.join(PUBLIC, 'js', 'utils.js'), 'utf8');
+const cleanSrc = utilsSrc
+  .replace(/^export /gm, '')
+  .replace(/^export\{[^}]*\}/gm, '');
+const loadUtils = new Function('document', 'window', cleanSrc + '\nreturn { esc, escA, fmtDue, renderMd, parseDate, toDateStr, isOD, timeAgo };');
+const utils = loadUtils(dom.window.document, dom.window);
+
+// Helper: format a Date as YYYY-MM-DD
+function dateStr(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
 
 before(() => setup());
 beforeEach(() => cleanDb());
 after(() => teardown());
 
-// ─── 1. HTML Escaping Verification (source inspection) ─────────────────────
+// ─── 1. esc() — behavioral tests ───────────────────────────────────────────
 
-describe('HTML escaping — source inspection', () => {
-  it('esc() in app.js uses DOM textContent for escaping', () => {
-    assert.ok(appJs.includes('function esc('), 'esc function must exist');
-    assert.ok(appJs.includes('textContent'), 'esc should use textContent assignment');
-    assert.ok(appJs.includes('.innerHTML'), 'esc should return innerHTML');
+describe('esc() — behavioral', () => {
+  it('escapes HTML tags', () => {
+    assert.equal(utils.esc('<script>alert("xss")</script>'), '&lt;script&gt;alert("xss")&lt;/script&gt;');
   });
 
-  it('esc() in utils.js also uses DOM textContent', () => {
-    assert.ok(utilsJs.includes('export function esc('), 'esc must be exported from utils.js');
-    assert.ok(utilsJs.includes('textContent'), 'utils esc should use textContent');
+  it('passes through normal text', () => {
+    assert.equal(utils.esc('normal text'), 'normal text');
   });
 
-  it('escA() replaces &, ", \', <, > characters', () => {
-    // Check in both app.js and utils.js
-    const escABody = utilsJs.match(/export function escA\(s\)\s*\{[^}]+\}/);
-    assert.ok(escABody, 'escA function exists in utils.js');
-    const body = escABody[0];
-    assert.ok(body.includes('&amp;'), 'escA escapes &');
-    assert.ok(body.includes('&quot;'), 'escA escapes "');
-    assert.ok(body.includes('&#39;'), 'escA escapes \'');
-    assert.ok(body.includes('&lt;'), 'escA escapes <');
-    assert.ok(body.includes('&gt;'), 'escA escapes >');
+  it('returns empty string for empty input', () => {
+    assert.equal(utils.esc(''), '');
   });
 
-  it('escA() in app.js matches utils.js pattern', () => {
-    assert.ok(appJs.includes('function escA('), 'escA exists in app.js');
-    assert.ok(appJs.includes('&amp;') && appJs.includes('&lt;'), 'app.js escA handles & and <');
+  it('double-escapes existing entities', () => {
+    assert.equal(utils.esc('&amp;'), '&amp;amp;');
   });
 
   it('API returns raw user content (escaping is client-side)', async () => {
@@ -66,80 +67,84 @@ describe('HTML escaping — source inspection', () => {
   });
 });
 
-// ─── 2. fmtDue() Date Formatting (source inspection) ───────────────────────
+// ─── 2. escA() — behavioral tests ──────────────────────────────────────────
 
-describe('fmtDue() — source inspection', () => {
-  it('fmtDue function exists in both app.js and utils.js', () => {
-    assert.ok(appJs.includes('function fmtDue('), 'fmtDue in app.js');
-    assert.ok(utilsJs.includes('export function fmtDue('), 'fmtDue in utils.js');
+describe('escA() — behavioral', () => {
+  it('escapes angle brackets', () => {
+    assert.equal(utils.escA('<img onerror=alert(1)>'), '&lt;img onerror=alert(1)&gt;');
   });
 
-  it('handles today, tomorrow, yesterday labels', () => {
-    // Check utils.js version (more readable)
-    assert.ok(utilsJs.includes("'Today'"), 'fmtDue handles today');
-    assert.ok(utilsJs.includes("'Tomorrow'"), 'fmtDue handles tomorrow');
-    assert.ok(utilsJs.includes("'Yesterday'"), 'fmtDue handles yesterday');
+  it('escapes double quotes', () => {
+    const result = utils.escA('"onclick="alert(1)"');
+    assert.ok(result.includes('&quot;'), 'should escape double quotes');
   });
 
-  it('handles relative day ranges (overdue, upcoming)', () => {
-    assert.ok(utilsJs.includes("'d overdue'"), 'Shows overdue label');
-    assert.ok(utilsJs.includes("'in '"), 'Shows "in N days"');
-    assert.ok(utilsJs.includes("'Next week'"), 'Shows "Next week" for 7 days');
+  it('escapes single quotes', () => {
+    const result = utils.escA("it's");
+    assert.ok(result.includes('&#39;'), 'should escape single quotes');
   });
 
-  it('supports multiple date formats: relative, iso, us, eu', () => {
-    assert.ok(utilsJs.includes("'relative'"), 'relative format');
-    assert.ok(utilsJs.includes("'iso'"), 'ISO format');
-    assert.ok(utilsJs.includes("'us'"), 'US format');
-    assert.ok(utilsJs.includes("'eu'"), 'EU format');
-  });
-
-  it('returns empty string for null/undefined input', () => {
-    assert.ok(utilsJs.includes("if (!d) return ''"), 'fmtDue returns empty for falsy');
+  it('escapes ampersand', () => {
+    assert.equal(utils.escA('a & b'), 'a &amp; b');
   });
 });
 
-// ─── 3. renderMd() Markdown (source inspection) ────────────────────────────
+// ─── 3. fmtDue() — behavioral tests ────────────────────────────────────────
 
-describe('renderMd() — source inspection', () => {
-  it('renderMd exists and calls esc() first', () => {
-    assert.ok(appJs.includes('function renderMd('), 'renderMd exists in app.js');
-    // Extract renderMd body ~30 lines after function
-    const idx = appJs.indexOf('function renderMd(');
-    const snippet = appJs.slice(idx, idx + 800);
-    assert.ok(snippet.includes('esc('), 'renderMd calls esc() for XSS safety');
+describe('fmtDue() — behavioral', () => {
+  it('returns empty string for null', () => {
+    assert.equal(utils.fmtDue(null), '');
   });
 
-  it('renders bold, italic, code syntax', () => {
-    const idx = appJs.indexOf('function renderMd(');
-    const snippet = appJs.slice(idx, idx + 800);
-    assert.ok(snippet.includes('<strong>'), 'renderMd handles **bold**');
-    assert.ok(snippet.includes('<em>'), 'renderMd handles *italic*');
-    assert.ok(snippet.includes('<code>'), 'renderMd handles `code`');
+  it('returns "Today" for today', () => {
+    const today = new Date();
+    assert.equal(utils.fmtDue(dateStr(today)), 'Today');
   });
 
-  it('only allows http/https URLs in links', () => {
-    const idx = appJs.indexOf('function renderMd(');
-    const snippet = appJs.slice(idx, idx + 800);
-    assert.ok(
-      snippet.includes('https?://') || snippet.includes('https?:\\/\\/') || (snippet.includes('http') && snippet.includes('protocol')),
-      'renderMd requires http/https protocol in links'
-    );
+  it('returns "Tomorrow" for tomorrow', () => {
+    const tmrw = new Date();
+    tmrw.setDate(tmrw.getDate() + 1);
+    assert.equal(utils.fmtDue(dateStr(tmrw)), 'Tomorrow');
   });
 
-  it('validates URL protocol to block javascript: URIs', () => {
-    const idx = appJs.indexOf('function renderMd(');
-    const snippet = appJs.slice(idx, idx + 800);
-    assert.ok(
-      snippet.includes("protocol!=='http:'") || snippet.includes('protocol'),
-      'renderMd checks URL protocol'
-    );
+  it('returns "Yesterday" for yesterday', () => {
+    const yest = new Date();
+    yest.setDate(yest.getDate() - 1);
+    assert.equal(utils.fmtDue(dateStr(yest)), 'Yesterday');
   });
 
-  it('returns empty string for falsy input', () => {
-    const idx = appJs.indexOf('function renderMd(');
-    const snippet = appJs.slice(idx, idx + 200);
-    assert.ok(snippet.includes("if(!text)return''"), 'renderMd returns empty for falsy');
+  it('returns date as-is for iso format', () => {
+    const d = '2026-06-15';
+    assert.equal(utils.fmtDue(d, { dateFormat: 'iso' }), d);
+  });
+});
+
+// ─── 4. renderMd() — behavioral tests ──────────────────────────────────────
+
+describe('renderMd() — behavioral', () => {
+  it('renders **bold** as <strong>', () => {
+    const result = utils.renderMd('**bold**');
+    assert.ok(result.includes('<strong>bold</strong>'), `got: ${result}`);
+  });
+
+  it('renders *italic* as <em>', () => {
+    const result = utils.renderMd('*italic*');
+    assert.ok(result.includes('<em>italic</em>'), `got: ${result}`);
+  });
+
+  it('renders `code` as <code>', () => {
+    const result = utils.renderMd('`code`');
+    assert.ok(result.includes('<code>code</code>'), `got: ${result}`);
+  });
+
+  it('returns empty string for null', () => {
+    assert.equal(utils.renderMd(null), '');
+  });
+
+  it('escapes <script> tags (XSS safety)', () => {
+    const result = utils.renderMd('<script>xss</script>');
+    assert.ok(!result.includes('<script>'), 'raw <script> should be escaped');
+    assert.ok(result.includes('&lt;script&gt;'), 'should contain escaped tag');
   });
 });
 

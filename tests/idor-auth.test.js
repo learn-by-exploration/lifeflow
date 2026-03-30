@@ -266,79 +266,7 @@ describe('Authentication & IDOR Security Tests', () => {
     });
   });
 
-  // ── Scenario 4: IDOR Read — GET task by ID ───────────────────────────────
-  describe('Scenario 4: IDOR read — GET /api/tasks/:id', () => {
-    /**
-     * [PASS-EXPECTED] — The GET handler checks user_id; should return 404.
-     */
-    it('User2 GET on User1 task should return 404', async () => {
-      cleanDb();
-      const user2 = makeUser2(db);
-
-      const areaRes = await agent()
-        .post('/api/areas')
-        .send({ name: 'Area Read', color: '#112233' });
-      const goalRes = await agent()
-        .post(`/api/areas/${areaRes.body.id}/goals`)
-        .send({ title: 'Goal Read', color: '#112233' });
-      const taskRes = await agent()
-        .post(`/api/goals/${goalRes.body.id}/tasks`)
-        .send({ title: 'Private task read test' });
-      assert.equal(taskRes.status, 201);
-      const taskId = taskRes.body.id;
-
-      const readRes = await user2.agent.get(`/api/tasks/${taskId}`);
-      assert.equal(
-        readRes.status,
-        404,
-        `Expected 404 but got ${readRes.status}. Body: ${JSON.stringify(readRes.body)}`
-      );
-    });
-  });
-
-  // ── Scenario 5: IDOR Update — PUT /api/tasks/:id ─────────────────────────
-  describe('Scenario 5: IDOR update task — PUT /api/tasks/:id', () => {
-    /**
-     * [PASS-EXPECTED] — PUT handler checks user_id via SELECT before update.
-     * Should return 404 and leave task unchanged.
-     */
-    it('User2 PUT on User1 task should return 404 and not mutate data', async () => {
-      cleanDb();
-      const user2 = makeUser2(db);
-
-      const areaRes = await agent()
-        .post('/api/areas')
-        .send({ name: 'Area Update', color: '#334455' });
-      const goalRes = await agent()
-        .post(`/api/areas/${areaRes.body.id}/goals`)
-        .send({ title: 'Goal Update', color: '#334455' });
-      const taskRes = await agent()
-        .post(`/api/goals/${goalRes.body.id}/tasks`)
-        .send({ title: 'Original Title — Do Not Touch' });
-      assert.equal(taskRes.status, 201);
-      const taskId = taskRes.body.id;
-
-      // User2 attempts title hijack
-      const updateRes = await user2.agent
-        .put(`/api/tasks/${taskId}`)
-        .send({ title: 'HACKED' });
-      assert.notEqual(
-        updateRes.status,
-        200,
-        `Expected non-200 status but got ${updateRes.status}. ` +
-          `IDOR: User2 may have updated User1's task.`
-      );
-
-      // Confirm title is unchanged from User1's perspective
-      const getRes = await agent().get(`/api/tasks/${taskId}`);
-      assert.equal(getRes.status, 200);
-      assert.equal(
-        getRes.body.title,
-        'Original Title — Do Not Touch',
-        `Task title was mutated to "${getRes.body.title}" by User2`
-      );
-    });
-  });
+  // Scenarios 4 (GET task), 5 (PUT task) removed — covered by idor-comprehensive.test.js
 
   // ── Scenario 6: IDOR Task Deps — Cross-User blockedByIds ─────────────────
   describe('Scenario 6: IDOR task deps cross-user blockedByIds reference', () => {
@@ -409,75 +337,7 @@ describe('Authentication & IDOR Security Tests', () => {
     });
   });
 
-  // ── Scenario 7: IDOR Comment POST on Other User's Task ───────────────────
-  describe('Scenario 7: IDOR — POST comment on another user\'s task', () => {
-    /**
-     * [PASS-EXPECTED] — The handler checks task ownership before insert.
-     * Should return 404.
-     */
-    it('User2 POST /api/tasks/:id/comments on User1 task should return 404', async () => {
-      cleanDb();
-      const user2 = makeUser2(db);
-
-      const areaRes = await agent()
-        .post('/api/areas')
-        .send({ name: 'Area Comment', color: '#223344' });
-      const goalRes = await agent()
-        .post(`/api/areas/${areaRes.body.id}/goals`)
-        .send({ title: 'Goal Comment', color: '#223344' });
-      const taskRes = await agent()
-        .post(`/api/goals/${goalRes.body.id}/tasks`)
-        .send({ title: 'Task for Comment IDOR' });
-      assert.equal(taskRes.status, 201);
-      const taskId = taskRes.body.id;
-
-      const commentRes = await user2.agent
-        .post(`/api/tasks/${taskId}/comments`)
-        .send({ text: 'hacked comment from user2' });
-
-      assert.equal(
-        commentRes.status,
-        404,
-        `Expected 404 but got ${commentRes.status}. ` +
-          `Body: ${JSON.stringify(commentRes.body)}`
-      );
-    });
-  });
-
-  // ── Scenario 8: IDOR Subtask Create on Other User's Task ─────────────────
-  describe('Scenario 8: IDOR — POST subtask on another user\'s task', () => {
-    /**
-     * [PASS-EXPECTED] — The subtask POST handler checks task ownership.
-     * Should return 404.
-     */
-    it('User2 POST /api/tasks/:id/subtasks on User1 task should return 404', async () => {
-      cleanDb();
-      const user2 = makeUser2(db);
-
-      const areaRes = await agent()
-        .post('/api/areas')
-        .send({ name: 'Area Subtask', color: '#556677' });
-      const goalRes = await agent()
-        .post(`/api/areas/${areaRes.body.id}/goals`)
-        .send({ title: 'Goal Subtask', color: '#556677' });
-      const taskRes = await agent()
-        .post(`/api/goals/${goalRes.body.id}/tasks`)
-        .send({ title: 'Task for Subtask IDOR' });
-      assert.equal(taskRes.status, 201);
-      const taskId = taskRes.body.id;
-
-      const subtaskRes = await user2.agent
-        .post(`/api/tasks/${taskId}/subtasks`)
-        .send({ title: 'hacked subtask' });
-
-      assert.equal(
-        subtaskRes.status,
-        404,
-        `Expected 404 but got ${subtaskRes.status}. ` +
-          `Body: ${JSON.stringify(subtaskRes.body)}`
-      );
-    });
-  });
+  // Scenarios 7 (POST comment), 8 (POST subtask) removed — covered by idor-comprehensive.test.js
 
   // ── Scenario 9: IDOR List Item Update Across Users ───────────────────────
   describe('Scenario 9: IDOR — PUT /api/lists/:id/items/:itemId cross-user', () => {
@@ -574,45 +434,7 @@ describe('Authentication & IDOR Security Tests', () => {
     });
   });
 
-  // ── Scenario 11: IDOR Update — PUT /api/areas/:id ────────────────────────
-  describe('Scenario 11: IDOR update area — PUT /api/areas/:id', () => {
-    /**
-     * [PASS-EXPECTED] — PUT area handler does a SELECT with user_id check first.
-     * Should return 404.
-     */
-    it('User2 PUT on User1 area should return 404 and not mutate data', async () => {
-      cleanDb();
-      const user2 = makeUser2(db);
-
-      const areaRes = await agent()
-        .post('/api/areas')
-        .send({ name: 'User1 Original Area Name', color: '#AABBCC' });
-      assert.equal(areaRes.status, 201);
-      const areaId = areaRes.body.id;
-
-      const updateRes = await user2.agent
-        .put(`/api/areas/${areaId}`)
-        .send({ name: 'HACKED', color: '#FF0000' });
-
-      assert.equal(
-        updateRes.status,
-        404,
-        `Expected 404 but got ${updateRes.status}. ` +
-          `Body: ${JSON.stringify(updateRes.body)}`
-      );
-
-      // Confirm name unchanged for User1
-      const getRes = await agent().get('/api/areas');
-      assert.equal(getRes.status, 200);
-      const area = getRes.body.find((a) => a.id === areaId);
-      assert.ok(area, 'Area should still exist for User1');
-      assert.equal(
-        area.name,
-        'User1 Original Area Name',
-        `Area name was mutated to "${area.name}" by User2`
-      );
-    });
-  });
+  // Scenario 11 (PUT area) removed — covered by idor-comprehensive.test.js
 
   // ── Scenario 12: Area Count Integrity After Mass Deletion Attempt ─────────
   describe('Scenario 12: User1 area count intact after User2 bulk delete attempts', () => {
@@ -736,47 +558,5 @@ describe('Authentication & IDOR Security Tests', () => {
     });
   });
 
-  // ── Bonus Scenario 15: User2 cannot read User1 goals list ────────────────
-  describe('Scenario 15: IDOR — User2 cannot read User1 goals via area endpoint', () => {
-    /**
-     * [PASS-EXPECTED] — GET /api/areas/:areaId/goals filters by user_id.
-     * User2 querying User1's area ID should get empty results (not 404,
-     * because the route doesn't verify area ownership first — but the
-     * goals query is scoped to user_id so no data leaks).
-     */
-    it('User2 GET /api/areas/:user1AreaId/goals returns empty array, not User1 goals', async () => {
-      cleanDb();
-      const user2 = makeUser2(db);
-
-      const areaRes = await agent()
-        .post('/api/areas')
-        .send({ name: 'Area Goals Leak Test', color: '#CCDDEE' });
-      const areaId = areaRes.body.id;
-
-      await agent()
-        .post(`/api/areas/${areaId}/goals`)
-        .send({ title: 'User1 Sensitive Goal', color: '#CCDDEE' });
-
-      const goalsRes = await user2.agent.get(`/api/areas/${areaId}/goals`);
-      // May be 200 with empty array OR 404 — either is acceptable as long as
-      // User1's goals are not included.
-      if (goalsRes.status === 200) {
-        const leaked = (goalsRes.body || []).filter(
-          (g) => g.title === 'User1 Sensitive Goal'
-        );
-        assert.equal(
-          leaked.length,
-          0,
-          `IDOR: User2 can read User1's goals via area ${areaId}. ` +
-            `Leaked: ${JSON.stringify(leaked)}`
-        );
-      } else {
-        // 404 or similar — no data leak possible
-        assert.ok(
-          goalsRes.status >= 400,
-          `Expected 4xx but got ${goalsRes.status}`
-        );
-      }
-    });
-  });
+  // Scenario 15 (GET goals via area) removed — covered by idor-comprehensive.test.js
 });

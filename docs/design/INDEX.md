@@ -39,3 +39,4 @@
 | [v0.5.1-review-remediation/plan.md](v0.5.1-review-remediation/plan.md) | v0.5.0, 1,841 tests | **Implemented** | 14 findings fixed in v0.5.1 (2FA, encryption, SSRF, webhooks, etc.) |
 | [multi-expert-improvement-review/spec.md](multi-expert-improvement-review/spec.md) | v0.5.1, 1,885 tests | **Reference** | 9-expert panel: 45 recommendations, 25 prioritized items |
 | [multi-expert-improvement-review/plan.md](multi-expert-improvement-review/plan.md) | v0.5.1, 1,885 tests | **Active** | 6 phases, 12 tasks: export, goals, context menus, scheduler, frontend arch |
+| [review-fixes-v2-spec.md](review-fixes-v2-spec.md) | v0.7.51, 3,504 tests | **Implemented** | 8 work items: hex regex fix, factory user_id, IDOR/meta test consolidation, perf thresholds, jsdom tests |

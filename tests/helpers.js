@@ -85,23 +85,23 @@ function teardown() {
 
 function makeArea(overrides = {}) {
   const { db } = setup();
-  const o = { name: 'Test Area', icon: '🧪', color: '#FF0000', position: 0, ...overrides };
-  const r = db.prepare('INSERT INTO life_areas (name,icon,color,position) VALUES (?,?,?,?)').run(o.name, o.icon, o.color, o.position);
+  const o = { name: 'Test Area', icon: '🧪', color: '#FF0000', position: 0, user_id: 1, ...overrides };
+  const r = db.prepare('INSERT INTO life_areas (name,icon,color,position,user_id) VALUES (?,?,?,?,?)').run(o.name, o.icon, o.color, o.position, o.user_id);
   return db.prepare('SELECT * FROM life_areas WHERE id=?').get(r.lastInsertRowid);
 }
 
 function makeGoal(areaId, overrides = {}) {
   const { db } = setup();
-  const o = { title: 'Test Goal', description: '', color: '#6C63FF', status: 'active', due_date: null, position: 0, ...overrides };
-  const r = db.prepare('INSERT INTO goals (area_id,title,description,color,status,due_date,position) VALUES (?,?,?,?,?,?,?)').run(areaId, o.title, o.description, o.color, o.status, o.due_date, o.position);
+  const o = { title: 'Test Goal', description: '', color: '#6C63FF', status: 'active', due_date: null, position: 0, user_id: 1, ...overrides };
+  const r = db.prepare('INSERT INTO goals (area_id,title,description,color,status,due_date,position,user_id) VALUES (?,?,?,?,?,?,?,?)').run(areaId, o.title, o.description, o.color, o.status, o.due_date, o.position, o.user_id);
   return db.prepare('SELECT * FROM goals WHERE id=?').get(r.lastInsertRowid);
 }
 
 function makeTask(goalId, overrides = {}) {
   const { db } = setup();
-  const o = { title: 'Test Task', note: '', status: 'todo', priority: 0, due_date: null, recurring: null, assigned_to: '', my_day: 0, position: 0, list_id: null, ...overrides };
-  const r = db.prepare('INSERT INTO tasks (goal_id,title,note,status,priority,due_date,recurring,assigned_to,my_day,position,list_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(
-    goalId, o.title, o.note, o.status, o.priority, o.due_date, o.recurring, o.assigned_to, o.my_day, o.position, o.list_id
+  const o = { title: 'Test Task', note: '', status: 'todo', priority: 0, due_date: null, recurring: null, assigned_to: '', my_day: 0, position: 0, list_id: null, user_id: 1, ...overrides };
+  const r = db.prepare('INSERT INTO tasks (goal_id,title,note,status,priority,due_date,recurring,assigned_to,my_day,position,list_id,user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run(
+    goalId, o.title, o.note, o.status, o.priority, o.due_date, o.recurring, o.assigned_to, o.my_day, o.position, o.list_id, o.user_id
   );
   return db.prepare('SELECT * FROM tasks WHERE id=?').get(r.lastInsertRowid);
 }
@@ -115,8 +115,8 @@ function makeSubtask(taskId, overrides = {}) {
 
 function makeTag(overrides = {}) {
   const { db } = setup();
-  const o = { name: 'test-tag', color: '#64748B', ...overrides };
-  const r = db.prepare('INSERT INTO tags (name,color) VALUES (?,?)').run(o.name, o.color);
+  const o = { name: 'test-tag', color: '#64748B', user_id: 1, ...overrides };
+  const r = db.prepare('INSERT INTO tags (name,color,user_id) VALUES (?,?,?)').run(o.name, o.color, o.user_id);
   return db.prepare('SELECT * FROM tags WHERE id=?').get(r.lastInsertRowid);
 }
 
@@ -127,15 +127,15 @@ function linkTag(taskId, tagId) {
 
 function makeFocus(taskId, overrides = {}) {
   const { db } = setup();
-  const o = { duration_sec: 1500, type: 'pomodoro', scheduled_at: null, ...overrides };
-  const r = db.prepare('INSERT INTO focus_sessions (task_id, duration_sec, type, scheduled_at) VALUES (?,?,?,?)').run(taskId, o.duration_sec, o.type, o.scheduled_at);
+  const o = { duration_sec: 1500, type: 'pomodoro', scheduled_at: null, user_id: 1, ...overrides };
+  const r = db.prepare('INSERT INTO focus_sessions (task_id, duration_sec, type, scheduled_at, user_id) VALUES (?,?,?,?,?)').run(taskId, o.duration_sec, o.type, o.scheduled_at, o.user_id);
   return db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(r.lastInsertRowid);
 }
 
 function makeList(overrides = {}) {
   const { db } = setup();
-  const o = { name: 'Test List', type: 'checklist', icon: '📋', color: '#2563EB', area_id: null, position: 0, parent_id: null, ...overrides };
-  const r = db.prepare('INSERT INTO lists (name,type,icon,color,area_id,position,parent_id) VALUES (?,?,?,?,?,?,?)').run(o.name, o.type, o.icon, o.color, o.area_id, o.position, o.parent_id);
+  const o = { name: 'Test List', type: 'checklist', icon: '📋', color: '#2563EB', area_id: null, position: 0, parent_id: null, user_id: 1, ...overrides };
+  const r = db.prepare('INSERT INTO lists (name,type,icon,color,area_id,position,parent_id,user_id) VALUES (?,?,?,?,?,?,?,?)').run(o.name, o.type, o.icon, o.color, o.area_id, o.position, o.parent_id, o.user_id);
   return db.prepare('SELECT * FROM lists WHERE id=?').get(r.lastInsertRowid);
 }
 
@@ -148,8 +148,8 @@ function makeListItem(listId, overrides = {}) {
 
 function makeHabit(overrides = {}) {
   const { db } = setup();
-  const o = { name: 'Test Habit', icon: '💪', color: '#22C55E', frequency: 'daily', target: 1, position: 0, area_id: null, ...overrides };
-  const r = db.prepare('INSERT INTO habits (name,icon,color,frequency,target,position,area_id) VALUES (?,?,?,?,?,?,?)').run(o.name, o.icon, o.color, o.frequency, o.target, o.position, o.area_id);
+  const o = { name: 'Test Habit', icon: '💪', color: '#22C55E', frequency: 'daily', target: 1, position: 0, area_id: null, user_id: 1, ...overrides };
+  const r = db.prepare('INSERT INTO habits (name,icon,color,frequency,target,position,area_id,user_id) VALUES (?,?,?,?,?,?,?,?)').run(o.name, o.icon, o.color, o.frequency, o.target, o.position, o.area_id, o.user_id);
   return db.prepare('SELECT * FROM habits WHERE id=?').get(r.lastInsertRowid);
 }
 

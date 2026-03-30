@@ -3,7 +3,7 @@
  */
 const { ZodError } = require('zod');
 
-const COLOR_HEX_RE = /^#[0-9A-Fa-f]{3,6}$/;
+const COLOR_HEX_RE = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 

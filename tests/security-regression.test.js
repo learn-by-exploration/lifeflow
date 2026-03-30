@@ -41,43 +41,7 @@ describe('Security Regression Tests', () => {
     );
   });
 
-  // ── Data isolation checks ──
-
-  it('user2 cannot access user1 inbox', async () => {
-    await agent().post('/api/inbox').send({ title: 'Secret inbox item' });
-    const { agent: agent2 } = makeUser2();
-    const inbox = await agent2.get('/api/inbox');
-    assert.equal(inbox.status, 200);
-    assert.equal(inbox.body.filter(i => i.title === 'Secret inbox item').length, 0);
-  });
-
-  it('user2 cannot access user1 notes', async () => {
-    const area = makeArea();
-    const goal = makeGoal(area.id);
-    await agent().post('/api/notes').send({ title: 'Secret Note', content: 'hidden', goalId: goal.id });
-    const { agent: agent2 } = makeUser2();
-    const notes = await agent2.get('/api/notes');
-    assert.equal(notes.status, 200);
-    assert.equal(notes.body.filter(n => n.title === 'Secret Note').length, 0);
-  });
-
-  it('user2 cannot access user1 focus sessions', async () => {
-    const area = makeArea();
-    const goal = makeGoal(area.id);
-    const task = makeTask(goal.id);
-    await agent().post('/api/focus').send({ taskId: task.id });
-    const { agent: agent2 } = makeUser2();
-    const focus = await agent2.get('/api/focus/history');
-    assert.equal(focus.status, 200);
-    assert.equal(focus.body.items.length, 0, 'user2 should not see user1 focus sessions');
-  });
-
-  it('user2 cannot access user1 templates', async () => {
-    const { agent: agent2 } = makeUser2();
-    const templates = await agent2.get('/api/templates');
-    assert.equal(templates.status, 200);
-    // Only default templates, not user1's custom ones
-  });
+  // Data isolation tests (inbox, notes, focus, templates) removed — covered by idor-comprehensive.test.js
 
   // ── Input boundary tests ──
 

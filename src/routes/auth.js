@@ -14,7 +14,7 @@ const LOCKOUT_WINDOW_MINUTES = 15;    // time window for counting failures
 const LOCKOUT_DURATION_MINUTES = 15;  // how long the lockout lasts
 
 // Color validation helper (used by area/goal routes)
-const COLOR_HEX_RE = /^#[0-9A-Fa-f]{3,6}$/;
+const COLOR_HEX_RE = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
 
 const { validatePassword: _validatePw } = require('../utils/password-policy');
 

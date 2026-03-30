@@ -28,37 +28,7 @@ describe('Multi-User Exhaustive Isolation', () => {
       assert.equal(res.body.length, 0, 'User B should see no areas from User A');
     });
 
-    it('User B cannot GET User A goals via areas endpoint', async () => {
-      const { area } = await u1Setup();
-      const res = await u2.agent.get(`/api/areas/${area.id}/goals`);
-      assert.equal(res.status, 200);
-      assert.equal(res.body.length, 0, 'User B should see no goals from User A area');
-    });
-
-    it('User B cannot GET User A task', async () => {
-      const { task } = await u1Setup();
-      const res = await u2.agent.get(`/api/tasks/${task.id}`);
-      assert.ok([403, 404].includes(res.status), `Expected 403/404, got ${res.status}`);
-    });
-
-    it('User B cannot PUT User A task', async () => {
-      const { task } = await u1Setup();
-      const res = await u2.agent.put(`/api/tasks/${task.id}`).send({ title: 'Hacked' });
-      assert.ok([403, 404].includes(res.status));
-    });
-
-    it('User B cannot DELETE User A task', async () => {
-      const { task } = await u1Setup();
-      const res = await u2.agent.delete(`/api/tasks/${task.id}`);
-      assert.ok([403, 404].includes(res.status));
-    });
-
-    it('User B cannot access User A subtasks', async () => {
-      const { task } = await u1Setup();
-      await agent().post(`/api/tasks/${task.id}/subtasks`).send({ title: 'U1 Subtask' });
-      const res = await u2.agent.get(`/api/tasks/${task.id}/subtasks`);
-      assert.ok([403, 404].includes(res.status));
-    });
+    // IDOR tests for goal/task/subtask access removed — covered by idor-comprehensive.test.js
 
     it('User B cannot see User A tags', async () => {
       await agent().post('/api/tags').send({ name: 'u1-private-tag', color: '#FF0000' });
@@ -76,11 +46,7 @@ describe('Multi-User Exhaustive Isolation', () => {
       assert.ok(!names.includes('U1 Secret Habit'), 'User B should not see User A habits');
     });
 
-    it('User B cannot access User A notes', async () => {
-      const noteRes = await agent().post('/api/notes').send({ title: 'U1 Note', content: 'Secret content' });
-      const res = await u2.agent.get(`/api/notes/${noteRes.body.id}`);
-      assert.ok([403, 404].includes(res.status));
-    });
+    // IDOR test for note/list access by ID removed — covered by idor-comprehensive.test.js
 
     it('User B cannot list User A notes', async () => {
       await agent().post('/api/notes').send({ title: 'U1 Private Note', content: 'Secret' });
@@ -90,11 +56,7 @@ describe('Multi-User Exhaustive Isolation', () => {
       assert.ok(!titles.includes('U1 Private Note'), 'User B should not list User A notes');
     });
 
-    it('User B cannot access User A lists', async () => {
-      const listRes = await agent().post('/api/lists').send({ name: 'U1 List' });
-      const res = await u2.agent.get(`/api/lists/${listRes.body.id}/items`);
-      assert.ok([403, 404].includes(res.status));
-    });
+    // IDOR test for list items access by ID removed — covered by idor-comprehensive.test.js
 
     it('User B cannot list User A lists', async () => {
       await agent().post('/api/lists').send({ name: 'U1 Private List' });
@@ -252,27 +214,7 @@ describe('Multi-User Exhaustive Isolation', () => {
       assert.equal(u1Areas.body[0].name, 'U1 Area', 'User A area order should be unchanged');
     });
 
-    it('User B cannot move User A task to a different goal', async () => {
-      const { task, goal } = await u1Setup();
-      // User B creates their own goal
-      const u2area = await u2.agent.post('/api/areas').send({ name: 'U2 Area', icon: '🟢', color: '#00FF00' });
-      const u2goal = await u2.agent.post(`/api/areas/${u2area.body.id}/goals`).send({ title: 'U2 Goal' });
-
-      const res = await u2.agent.put(`/api/tasks/${task.id}`).send({ goal_id: u2goal.body.id });
-      assert.ok([403, 404].includes(res.status), `Expected 403/404, got ${res.status}`);
-
-      // Verify task still belongs to original goal
-      const taskRes = await agent().get(`/api/tasks/${task.id}`);
-      assert.equal(taskRes.body.goal_id, goal.id, 'Task should still belong to User A goal');
-    });
-
-    it('User B cannot set tags on User A task', async () => {
-      const { task } = await u1Setup();
-      const u2Tag = await u2.agent.post('/api/tags').send({ name: 'u2-tag', color: '#0000FF' });
-
-      const res = await u2.agent.put(`/api/tasks/${task.id}/tags`).send({ tagIds: [u2Tag.body.id] });
-      assert.ok([403, 404].includes(res.status));
-    });
+    // IDOR tests for task move/tags removed — covered by idor-comprehensive.test.js
 
     it('automation rules only list requesting user rules', async () => {
       // User A creates a rule
