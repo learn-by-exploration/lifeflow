@@ -2,6 +2,18 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.20] - 2026-03-30
+
+### Added
+- `tests/schema-integrity.test.js` — 20 tests for database schema integrity
+  - Index existence verification (8 critical indexes)
+  - Foreign key enforcement, WAL mode
+  - Table structure: CHECK constraints on tasks/goals
+  - CASCADE deletion chain (area→goal→task→subtask)
+  - Query performance validation (EXPLAIN QUERY PLAN)
+  - Schema idempotency verification
+  - Transaction safety checks
+
 ## [0.7.19] - 2026-03-30
 
 ### Added

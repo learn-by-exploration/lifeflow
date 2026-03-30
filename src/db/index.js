@@ -278,7 +278,6 @@ function initDatabase(dbDir) {
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_task_tags_tag ON task_tags(tag_id)'); } catch(e) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_task_comments_task ON task_comments(task_id)'); } catch(e) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_goal_milestones_goal ON goal_milestones(goal_id)'); } catch(e) {}
-  try { db.exec('CREATE INDEX IF NOT EXISTS idx_focus_sessions_task ON focus_sessions(task_id)'); } catch(e) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_lists_area ON lists(area_id)'); } catch(e) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_notes_goal ON notes(goal_id)'); } catch(e) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_weekly_reviews_week ON weekly_reviews(week_start)'); } catch(e) {}
@@ -314,6 +313,9 @@ function initDatabase(dbDir) {
   // ─── Focus Session migrations ───
   try { db.exec('ALTER TABLE focus_sessions ADD COLUMN ended_at DATETIME'); } catch(e) {}
   try { db.exec('ALTER TABLE focus_sessions ADD COLUMN scheduled_at DATETIME'); } catch(e) {}
+
+  // ─── Focus Sessions indexes (must be after table creation) ───
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_focus_sessions_task ON focus_sessions(task_id)'); } catch(e) {}
 
   // ─── Focus Session Meta table ───
   db.exec(`CREATE TABLE IF NOT EXISTS focus_session_meta (
