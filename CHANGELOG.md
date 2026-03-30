@@ -2,6 +2,26 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.51] - 2026-03-30
+
+### Added
+- `tests/e2e-smoke.test.js` — End-to-end smoke tests (9 tests): full user lifecycle (register → login → area → goal → task → complete → dashboard → logout), security header verification, CSP validation
+- `tests/a11y-audit.test.js` — Accessibility audit with axe-core (20 tests): WCAG compliance, ARIA landmarks, form labels, skip links, reduced-motion, touch targets, encoding safety
+- `scripts/bump-version.sh` — Automated version bump script for package.json, openapi.yaml, CLAUDE.md, CHANGELOG.md
+- `RELEASING.md` — Release checklist document
+- `public/js/login.js` — Login page script extracted from inline
+- `public/js/share.js` — Share page script extracted from inline
+- `test:smoke` and `test:e2e` npm scripts
+
+### Security
+- Remove `'unsafe-inline'` from CSP `script-src` directive — extracted inline scripts from `login.html` and `share.html` to external JS files
+- Added `aria-label` attributes to 5 `<select>` elements in `index.html` for accessibility compliance
+
+### Fixed
+- FTS5 search index now properly cleaned and rebuilt in test setup (`tests/helpers.js`)
+- Export `rebuildSearchIndex` from `src/server.js` for test consumption
+- Updated `tests/xss-prevention.test.js` to read share.js (external file) instead of expecting inline script in share.html
+
 ## [0.7.50] - 2026-03-30
 
 ### Added

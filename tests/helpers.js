@@ -75,6 +75,7 @@ function cleanDb() {
   try { db.exec('DELETE FROM webhooks'); } catch(e) {}
   try { db.exec('DELETE FROM daily_reviews'); } catch(e) {}
   try { db.exec('DELETE FROM login_attempts'); } catch(e) {}
+  try { db.exec('DELETE FROM search_index'); } catch(e) {}
 }
 
 function teardown() {
@@ -237,4 +238,10 @@ function serverLocalDate(offsetDays = 0) {
   return d.toISOString().slice(0, 10);
 }
 
-module.exports = { setup, cleanDb, teardown, makeArea, makeGoal, makeTask, makeSubtask, makeTag, linkTag, makeFocus, makeList, makeListItem, makeHabit, logHabit, agent, rawAgent, makeUser2, agentAs, today, daysFromNow, serverLocalDate };
+function rebuildSearch() {
+  setup();
+  const server = require('../src/server');
+  if (server.rebuildSearchIndex) server.rebuildSearchIndex();
+}
+
+module.exports = { setup, cleanDb, teardown, makeArea, makeGoal, makeTask, makeSubtask, makeTag, linkTag, makeFocus, makeList, makeListItem, makeHabit, logHabit, agent, rawAgent, makeUser2, agentAs, today, daysFromNow, serverLocalDate, rebuildSearch };

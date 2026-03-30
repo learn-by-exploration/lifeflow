@@ -175,9 +175,9 @@
   <div class="sr-box">
     <div style="position:relative"><span class="material-icons-round sr-icon">search</span><label for="sr-inp" class="sr-only">Search</label><input class="sr-inp" id="sr-inp" placeholder="Search tasks, notes, subtasks..." autocomplete="off"></div>
     <div style="display:flex;gap:6px;margin:6px 0 2px;flex-wrap:wrap">
-      <select id="sr-area" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx2);border-radius:var(--rs)"><option value="">All Areas</option></select>
-      <select id="sr-goal" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx2);border-radius:var(--rs)"><option value="">All Goals</option></select>
-      <select id="sr-status" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx2);border-radius:var(--rs)"><option value="">Any Status</option><option value="todo">To Do</option><option value="done">Done</option></select>
+      <select id="sr-area" aria-label="Filter by area" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx2);border-radius:var(--rs)"><option value="">All Areas</option></select>
+      <select id="sr-goal" aria-label="Filter by goal" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx2);border-radius:var(--rs)"><option value="">All Goals</option></select>
+      <select id="sr-status" aria-label="Filter by status" style="font-size:11px;padding:3px 6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx2);border-radius:var(--rs)"><option value="">Any Status</option><option value="todo">To Do</option><option value="done">Done</option></select>
     </div>
     <div class="sr-results" id="sr-results" role="listbox" aria-label="Search results"></div>
     <div class="sr-hint"><span>↑↓ Navigate · Enter Select · Esc Close</span><span>Type &gt; for commands</span></div>
@@ -364,7 +364,7 @@
       <p style="color:var(--tx2);font-size:13px;margin-bottom:12px">Areas organize your life into categories. Example: <strong>Work</strong>, <strong>Health</strong>, <strong>Finances</strong></p>
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <input type="text" id="onb-area-input" placeholder="e.g., Work" maxlength="100" autocomplete="off" style="flex:1;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px">
-        <select id="onb-area-icon" style="padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px;cursor:pointer">
+        <select id="onb-area-icon" aria-label="Area icon" style="padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px;cursor:pointer">
           <option value="💼">💼 Work</option>
           <option value="💪">💪 Health</option>
           <option value="📚">📚 Learning</option>
@@ -391,7 +391,7 @@
       <p style="color:var(--tx2);font-size:13px;margin-bottom:12px">Tasks are concrete actions. Example: <strong>Email client proposal</strong>, <strong>Buy groceries</strong></p>
       <input type="text" id="onb-task-input" placeholder="What's your first action?" maxlength="200" autocomplete="off" style="width:100%;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px;margin-bottom:12px;box-sizing:border-box">
       <div style="display:flex;gap:8px;margin-bottom:12px">
-        <select id="onb-task-priority" style="flex:1;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px">
+        <select id="onb-task-priority" aria-label="Task priority" style="flex:1;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px">
           <option value="1">Normal Priority</option>
           <option value="2">High Priority</option>
           <option value="3">Critical</option>

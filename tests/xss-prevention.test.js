@@ -128,6 +128,7 @@ describe('XSS Prevention & Output Encoding', () => {
   describe('Frontend static analysis', () => {
     const appJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
     const shareHtml = fs.readFileSync(path.join(__dirname, '..', 'public', 'share.html'), 'utf8');
+    const shareJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'share.js'), 'utf8');
 
     it('app.js: esc() handles null/undefined - uses textContent setter', () => {
       // esc() uses document.createElement + textContent which handles null/undefined safely
@@ -169,11 +170,12 @@ describe('XSS Prevention & Output Encoding', () => {
     });
 
     it('share.html: user content appears in escaped context', () => {
-      const escCount = (shareHtml.match(/esc\(/g) || []).length;
-      // share.html should use esc() for all user-provided data
-      assert.ok(escCount >= 5, `Expected at least 5 esc() calls in share.html, found ${escCount}`);
-      // Verify esc function exists in share.html
-      assert.ok(shareHtml.includes('function esc') || shareHtml.includes('const esc'), 'share.html should define esc');
+      const shareCode = shareHtml + shareJs;
+      const escCount = (shareCode.match(/esc\(/g) || []).length;
+      // share.html/share.js should use esc() for all user-provided data
+      assert.ok(escCount >= 5, `Expected at least 5 esc() calls in share code, found ${escCount}`);
+      // Verify esc function exists in share.js
+      assert.ok(shareJs.includes('function esc') || shareJs.includes('const esc'), 'share.js should define esc');
     });
 
     it('app.js: color values validated with hex regex before style injection', () => {
