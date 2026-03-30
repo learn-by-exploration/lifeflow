@@ -2,6 +2,16 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.21] - 2026-03-30
+
+### Added
+- `tests/e2e-security-workflows.test.js` — 16 E2E security workflow tests
+  - Multi-user isolation (area, goal, task, tag, habit, list, search, export)
+  - Auth + token combined flows (expired session + valid token)
+  - Full lifecycle: create → complete → verify stats
+  - CASCADE deletion verification (area → goal → task → subtask)
+  - Tag persistence through task updates
+
 ## [0.7.20] - 2026-03-30
 
 ### Added
