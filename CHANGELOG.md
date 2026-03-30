@@ -2,6 +2,20 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.49] - 2026-03-30
+
+### Added
+- `tests/coverage-audit.test.js` — 40 code coverage & test audit tests
+  - Route coverage audit: all 11 route files verified ≥70% test coverage
+  - Test file conventions: describe() usage, helpers import, cleanDb patterns
+  - Source code quality: no console.log in src/, no hardcoded secrets, no TODO in security files
+  - Version consistency: package.json ↔ CLAUDE.md ↔ CHANGELOG.md ↔ openapi.yaml
+  - Test suite structure: helper exports, no duplicate test files
+  - Documentation completeness: README, CLAUDE.md, openapi.yaml, CONTRIBUTING.md
+
+### Fixed
+- Fixed package.json and openapi.yaml version (was stuck at 0.7.40, now properly 0.7.49)
+
 ## [0.7.48] - 2026-03-30
 
 ### Added
