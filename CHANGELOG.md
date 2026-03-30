@@ -2,6 +2,14 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.45] - 2026-03-30
+
+### Added
+- `tests/cookie-session-exhaustive.test.js` — 21 cookie & session security tests
+  - Cookie flags (HttpOnly, SameSite, Path, Max-Age, remember-me)
+  - Session lifecycle, hijacking prevention, password invalidation
+  - Account lockout, logout cleanup
+
 ## [0.7.44] - 2026-03-30
 
 ### Added
