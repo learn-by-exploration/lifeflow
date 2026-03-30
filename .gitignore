@@ -9,3 +9,14 @@ coverage/
 .env
 dist/
 lifeflow-backup-*.json
+*.txt
+*.log
+*.zip
+*.tar.gz
+*.tgz
+*.bak
+*.tmp
+*.swp
+*.swo
+.DS_Store
+.idea/
