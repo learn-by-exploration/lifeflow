@@ -2,6 +2,14 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.40] - 2026-03-30
+
+### Added
+- `tests/list-exhaustive.test.js` — 36 list system exhaustive tests
+  - CRUD boundaries, item boundaries, batch create, reorder
+  - Duplicate, clear-checked, uncheck-all operations
+  - Sublist nesting, sharing, deletion cascade
+
 ## [0.7.39] - 2026-03-30
 
 ### Added
