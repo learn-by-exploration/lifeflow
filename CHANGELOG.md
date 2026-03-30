@@ -2,6 +2,17 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.37] - 2026-03-30
+
+### Added
+- `tests/multi-user-exhaustive.test.js` — 33 multi-user isolation tests
+  - Data isolation per entity (areas, goals, tasks, subtasks, tags, habits, notes, lists, focus, custom fields)
+  - Search isolation (results scoped to user)
+  - Stats isolation (counts scoped to user)
+  - Export/import isolation (user data boundaries)
+  - Cross-user operation prevention (reorder, move, set tags)
+  - Session isolation (expire, invalid, concurrent)
+
 ## [0.7.36] - 2026-03-30
 
 ### Added
