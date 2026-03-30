@@ -2,6 +2,15 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.23] - 2026-03-30
+
+### Added
+- `tests/concurrency-safety.test.js` — 8 concurrency safety tests
+  - Concurrent task creation, rapid sequential updates
+  - Parallel reads during writes (WAL mode verification)
+  - Concurrent area/goal/task creation with position conflicts
+  - Transaction isolation and rollback safety
+
 ## [0.7.22] - 2026-03-30
 
 ### Added
