@@ -2,6 +2,13 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.41] - 2026-03-30
+
+### Added
+- `tests/productivity-edges.test.js` — 35 productivity edge case tests
+  - Inbox CRUD, triage workflow, notes CRUD with goal filtering
+  - Weekly reviews, daily reviews, automation rules
+
 ## [0.7.40] - 2026-03-30
 
 ### Added
