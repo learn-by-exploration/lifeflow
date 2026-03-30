@@ -2,6 +2,14 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.42] - 2026-03-30
+
+### Added
+- `tests/migration-safety.test.js` — 44 database migration & schema safety tests
+  - Migration runner failure handling, SQL safety checks
+  - Schema integrity, cascade deletion, constraint enforcement
+  - Backup mechanics via API
+
 ## [0.7.41] - 2026-03-30
 
 ### Added
