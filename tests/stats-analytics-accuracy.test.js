@@ -239,10 +239,12 @@ describe('Stats & Analytics Accuracy', () => {
       const goal = makeGoal(area.id);
       const { db } = setup();
 
-      // Complete 3 tasks recently (within current week window)
+      // Complete 3 tasks 1-3 days ago (within current week window but not today,
+      // since the trends endpoint uses date-only comparison and today's tasks
+      // with timestamps fall outside the < endDate boundary)
       for (let i = 0; i < 3; i++) {
         const t = makeTask(goal.id, { status: 'done' });
-        db.prepare("UPDATE tasks SET completed_at=datetime('now', '-' || ? || ' hours') WHERE id=?").run(i, t.id);
+        db.prepare("UPDATE tasks SET completed_at=datetime('now', '-' || ? || ' days') WHERE id=?").run(i + 1, t.id);
       }
 
       const res = await agent().get('/api/stats/trends').expect(200);

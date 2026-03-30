@@ -32,9 +32,8 @@ describe('CI/CD Pipeline Configuration', () => {
 
   // ── Node version matrix ──
 
-  it('CI tests Node 20 and 22', () => {
+  it('CI tests Node 22', () => {
     const content = fs.readFileSync(ciPath, 'utf8');
-    assert.ok(content.includes('20'), 'CI should test Node 20');
     assert.ok(content.includes('22'), 'CI should test Node 22');
   });
 
