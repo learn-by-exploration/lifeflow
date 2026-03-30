@@ -439,13 +439,11 @@ describe('HTTP Boundary & Edge Case Tests', () => {
       assert.equal(res.status, 401);
     });
 
-    it('Auth cookie on non-existent API route → 200 (SPA fallback catches all GET requests)', async () => {
-      // DOCUMENTED BEHAVIOR: the SPA fallback app.get("/{*splat}") catches ALL unmatched GET
-      // requests — including unknown /api/* GET routes — and returns index.html (200) for
-      // authenticated sessions. This means unrecognized /api/* GET routes do NOT return 404.
-      // POST/DELETE/PATCH to unknown /api/* routes correctly return 404.
+    it('Auth cookie on non-existent API route → 404 (API catch-all)', async () => {
+      // FIXED in v0.7.17: API 404 catch-all added before SPA fallback.
+      // Unknown /api/* GET routes now correctly return 404 JSON.
       const res = await agent().get('/api/definitely-does-not-exist-route');
-      assert.equal(res.status, 200, 'SPA fallback serves index.html for authenticated GET requests');
+      assert.equal(res.status, 404, 'API catch-all returns 404 for unknown API routes');
     });
   });
 
@@ -833,13 +831,12 @@ describe('HTTP Boundary & Edge Case Tests', () => {
   });
 
   describe('API 404 — unknown routes', () => {
-    it('GET /api/nonexistent-route → 200 (BUG: SPA fallback swallows unknown API GET routes)', async () => {
-      // DOCUMENTED BUG: app.get("/{*splat}") catches ALL unmatched GET routes including /api/*.
-      // Unknown GET /api/* routes return 200 + index.html instead of 404.
-      // POST/DELETE/PATCH to unknown routes are NOT caught by the SPA fallback and correctly 404.
+    it('GET /api/nonexistent-route → 404 (API catch-all)', async () => {
+      // FIXED in v0.7.17: API 404 catch-all added before SPA fallback.
+      // Unknown /api/* routes now correctly return 404 JSON instead of SPA HTML.
       const res = await agent().get('/api/nonexistent-route');
-      assert.equal(res.status, 200,
-        'SPA fallback serves index.html even for unknown /api/* GET routes');
+      assert.equal(res.status, 404);
+      assert.ok(res.body.error, 'Must have error property');
     });
 
     it('POST /api/nonexistent → 404 (no SPA fallback for non-GET methods)', async () => {

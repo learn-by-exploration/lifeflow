@@ -169,12 +169,7 @@ app.get('/health', (req, res) => {
   try { db.prepare('SELECT 1').get(); dbOk = true; } catch {}
   const status = dbOk ? 'ok' : 'error';
   const code = dbOk ? 200 : 503;
-  res.status(code).json({
-    status,
-    version: config.version,
-    uptime: Math.floor(process.uptime()),
-    dbOk,
-  });
+  res.status(code).json({ status, dbOk });
 });
 
 app.get('/ready', (req, res) => {
@@ -187,6 +182,11 @@ app.get('/ready', (req, res) => {
 // ─── Login page (accessible without auth) ───
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'login.html'));
+});
+
+// ─── API 404 catch-all (must come before SPA fallback) ───
+app.all('/api/{*splat}', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
 });
 
 // SPA fallback (requires auth — redirect to login if not authenticated)
