@@ -2,6 +2,17 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.27] - 2026-03-30
+
+### Added
+- `tests/area-goal-boundaries.test.js` — 48 area & goal boundary tests
+  - Area name, icon, color validation
+  - Goal title, description, status, due_date, color boundaries
+  - Milestone CRUD boundaries
+
+### Fixed
+- Add Zod validation middleware to `PUT /api/goals/:id` (was missing)
+
 ## [0.7.26] - 2026-03-30
 
 ### Added

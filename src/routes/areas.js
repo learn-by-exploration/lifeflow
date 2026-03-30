@@ -60,7 +60,7 @@ router.post('/api/areas/:areaId/goals', (req, res) => {
   if (color && !isValidColor(color)) return res.status(400).json({ error: 'Invalid hex color' });
   res.status(201).json(areasSvc.createGoal(areaId, req.userId, { title: title.trim(), description: description || '', color: color || '#6C63FF', due_date: due_date || null }));
 });
-router.put('/api/goals/:id', validate(idParam, 'params'), (req, res) => {
+router.put('/api/goals/:id', validate(idParam, 'params'), validate(updateGoal), (req, res) => {
   res.json(areasSvc.updateGoal(req.params.id, req.userId, req.body));
 });
 router.delete('/api/goals/:id', validate(idParam, 'params'), (req, res) => {
