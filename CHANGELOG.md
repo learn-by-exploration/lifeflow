@@ -2,6 +2,17 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.47] - 2026-03-30
+
+### Added
+- `tests/search-nlp-exhaustive.test.js` — 62 search & NLP parser tests
+  - FTS5 global search: empty/whitespace queries, special character handling, limit enforcement, result structure
+  - Task search scoping: keyword, note, area/goal/status filters, combined filters, ordering
+  - NLP parser dates: today, tomorrow, day-after-tomorrow, in N days, next weekday, ISO/MM-DD dates
+  - NLP parser priorities: p1-p3, !1-!3, case insensitive, boundary validation
+  - NLP parser tags: single/multiple, camelCase, hyphenated, underscore
+  - NLP parser edge cases: input limits, my_day flag, unicode, whitespace collapse
+
 ## [0.7.46] - 2026-03-30
 
 ### Added
