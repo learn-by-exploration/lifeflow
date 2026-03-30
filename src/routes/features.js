@@ -590,6 +590,8 @@ router.get('/api/planner/:date', (req, res) => {
     } catch { return true; }
   }
 
+  const MAX_WEBHOOKS_PER_USER = 10;
+
   // Create webhook
   router.post('/api/webhooks', (req, res) => {
     const { name, url, events } = req.body;
@@ -600,21 +602,30 @@ router.get('/api/planner/:date', (req, res) => {
       return res.status(400).json({ error: 'Webhook URL is required' });
     }
     try { new URL(url); } catch { return res.status(400).json({ error: 'Invalid URL' }); }
-    if (!url.startsWith('https://') && !url.startsWith('http://')) {
-      return res.status(400).json({ error: 'URL must use http or https' });
+    if (!url.startsWith('https://')) {
+      return res.status(400).json({ error: 'Webhook URL must use HTTPS' });
     }
     if (isPrivateUrl(url)) {
       return res.status(400).json({ error: 'Webhook URL must not point to private/internal networks' });
     }
 
+    const count = db.prepare('SELECT COUNT(*) as cnt FROM webhooks WHERE user_id = ?').get(req.userId).cnt;
+    if (count >= MAX_WEBHOOKS_PER_USER) {
+      return res.status(400).json({ error: `Maximum of ${MAX_WEBHOOKS_PER_USER} webhooks allowed per user` });
+    }
+
     const eventList = Array.isArray(events) ? events : [];
+    if (eventList.length === 0) {
+      return res.status(400).json({ error: 'At least one event type is required' });
+    }
+    const uniqueEvents = [...new Set(eventList)];
     if (eventList.some(e => !WEBHOOK_EVENTS.includes(e))) {
       return res.status(400).json({ error: 'Invalid event type', allowed: WEBHOOK_EVENTS });
     }
 
     const crypto = require('crypto');
     const secret = crypto.randomBytes(32).toString('hex');
-    const eventsJson = JSON.stringify(eventList);
+    const eventsJson = JSON.stringify(uniqueEvents);
 
     const result = db.prepare(
       'INSERT INTO webhooks (user_id, name, url, events, secret) VALUES (?,?,?,?,?)'
@@ -624,7 +635,7 @@ router.get('/api/planner/:date', (req, res) => {
       id: Number(result.lastInsertRowid),
       name: name.trim().slice(0, 100),
       url,
-      events: Array.isArray(events) ? events : [],
+      events: uniqueEvents,
       secret,
       active: true,
       created_at: new Date().toISOString()
@@ -657,6 +668,9 @@ router.get('/api/planner/:date', (req, res) => {
     if (name !== undefined) updates.name = String(name).trim().slice(0, 100);
     if (url !== undefined) {
       try { new URL(url); } catch { return res.status(400).json({ error: 'Invalid URL' }); }
+      if (!url.startsWith('https://')) {
+        return res.status(400).json({ error: 'Webhook URL must use HTTPS' });
+      }
       if (isPrivateUrl(url)) {
         return res.status(400).json({ error: 'Webhook URL must not point to private/internal networks' });
       }

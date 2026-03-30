@@ -2,6 +2,25 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.19] - 2026-03-30
+
+### Added
+- `tests/webhook-security.test.js` — 23 tests for webhook security
+  - URL validation: reject http://, localhost, private IPs (10.x, 172.16-31.x, 192.168.x, 169.254.x)
+  - SSRF prevention: cloud metadata endpoint blocked
+  - HMAC-SHA256 signing verification, AbortController timeout
+  - Event validation: invalid events rejected, duplicates deduplicated
+  - Max 10 webhooks per user enforced
+  - IDOR: cross-user read/update/delete protection
+  - List endpoint excludes secret from response
+  - Update endpoint enforces HTTPS and SSRF checks
+
+### Security
+- Webhook URL must use HTTPS (http:// rejected)
+- Max 10 webhooks per user limit
+- Duplicate events deduplicated on creation
+- At least one event required for webhook creation
+
 ## [0.7.18] - 2026-03-30
 
 ### Added

@@ -28,12 +28,11 @@ describe('Webhooks — Extensive Tests', () => {
     assert.equal(res.status, 400);
   });
 
-  it('create webhook with empty events array → stores successfully', async () => {
+  it('create webhook with empty events array → rejected (at least one required)', async () => {
     const res = await agent().post('/api/webhooks').send({
       name: 'No Events', url: 'https://example.com/hook', events: []
     });
-    assert.equal(res.status, 201);
-    assert.deepEqual(res.body.events, []);
+    assert.equal(res.status, 400);
   });
 
   it('list webhooks → returns all user webhooks', async () => {
