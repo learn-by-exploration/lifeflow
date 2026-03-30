@@ -319,17 +319,16 @@ describe('HTTP Boundary & Edge Case Tests', () => {
   });
 
   describe('Large tagIds array in task tag update', () => {
-    it('PUT /api/tasks/:id/tags with non-existent tag IDs → 500 (FOREIGN KEY constraint)', async () => {
+    it('PUT /api/tasks/:id/tags with non-existent tag IDs → 200 (gracefully ignored)', async () => {
       const area = makeArea();
       const goal = makeGoal(area.id);
       const task = makeTask(goal.id);
-      // Non-existent tag IDs violate the task_tags → tags foreign key constraint.
-      // DOCUMENTED BUG: the route does not pre-filter tagIds to only existing tags,
-      // so passing IDs for tags that don't exist causes a FK constraint failure → 500.
-      // A robust implementation would use INSERT OR IGNORE and validate tags first.
+      // Non-existent tag IDs are now gracefully ignored (try/catch around FK insert).
+      // Previously this was a documented bug that caused 500.
       const tagIds = [99999, 99998, 99997]; // non-existent tag IDs
       const res = await agent().put(`/api/tasks/${task.id}/tags`).send({ tagIds });
-      assert.equal(res.status, 500);
+      assert.equal(res.status, 200);
+      assert.equal(res.body.tags.length, 0); // none of the IDs exist, so no tags associated
     });
 
     it('PUT /api/tasks/:id/tags with existing tags → 200', async () => {

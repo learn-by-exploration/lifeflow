@@ -61,7 +61,9 @@ class TagsRepository {
   setTaskTags(taskId, tagIds) {
     this._stmts.clearTaskTags.run(taskId);
     for (const tid of tagIds) {
-      if (Number.isInteger(tid)) this._stmts.addTaskTag.run(taskId, tid);
+      if (Number.isInteger(tid)) {
+        try { this._stmts.addTaskTag.run(taskId, tid); } catch { /* ignore FK violations for non-existent tag IDs */ }
+      }
     }
   }
 }

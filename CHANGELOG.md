@@ -2,6 +2,30 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.28] - 2026-03-30
+
+### Added
+- `tests/subtask-tag-boundaries.test.js` — 37 subtask & tag boundary tests
+  - Subtask title/note/done/position edge cases
+  - Tag name/color validation boundaries
+  - Task-tag association: duplicates, non-existent IDs, stress (20 tags)
+  - Subtask operations on deleted tasks
+
+### Fixed
+- Fix FK constraint crash when setting non-existent tag IDs on tasks (was 500, now gracefully ignored)
+- Update `http-edge-cases.test.js` to reflect fixed behavior
+
+## [0.7.28] - 2026-03-30
+
+### Added
+- `tests/subtask-tag-boundaries.test.js` — 37 subtask & tag boundary tests
+  - Subtask title, note, done toggle, position boundaries
+  - Tag name, color validation, task-tag associations
+  - CRUD on non-existent/deleted tasks
+
+### Fixed
+- `setTaskTags` gracefully ignores non-existent tag IDs (was 500 FK crash)
+
 ## [0.7.27] - 2026-03-30
 
 ### Added
