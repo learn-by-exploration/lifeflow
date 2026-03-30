@@ -2,6 +2,17 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.36] - 2026-03-30
+
+### Added
+- `tests/tag-filter-field-interactions.test.js` — 30 tag/filter/custom-field interaction tests
+  - Filter by tag, multi-tag, tag+status combined
+  - Smart filters (stale, quickwins, blocked)
+  - Custom field lifecycle with type constraints
+  - Tag stats accuracy and usage counts
+  - Saved filter CRUD and execution
+  - Cross-entity multi-field filtering with pagination
+
 ## [0.7.35] - 2026-03-30
 
 ### Added
