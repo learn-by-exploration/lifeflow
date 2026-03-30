@@ -2,6 +2,14 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.43] - 2026-03-30
+
+### Added
+- `tests/performance-baselines.test.js` — 15 performance baseline tests
+  - Response time assertions for bulk endpoints
+  - Bulk operation and concurrent request handling
+  - Search and export performance verification
+
 ## [0.7.42] - 2026-03-30
 
 ### Added
