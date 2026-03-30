@@ -2,6 +2,15 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.31] - 2026-03-30
+
+### Added
+- `tests/content-type-enforcement.test.js` — 24 content-type & request body enforcement tests
+  - Wrong/missing Content-Type handling (text/plain, form-encoded, multipart)
+  - Request size limits and large body behavior
+  - Empty/malformed body handling (null, array, deeply nested)
+  - Non-JSON content (XML, binary, empty string)
+
 ## [0.7.30] - 2026-03-30
 
 ### Added
