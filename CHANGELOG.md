@@ -2,6 +2,22 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.25] - 2026-03-30
+
+### Added
+- `tests/test-suite-health.test.js` — 18 test suite health & coverage audit tests
+  - Test infrastructure validation (strict assertions, describe blocks, helper exports)
+  - Route coverage audit (all route files loaded, critical endpoints verified)
+  - Security baseline (auth required on all routes, security headers, CORS)
+  - Database integrity (schema audit, WAL mode, foreign keys)
+  - Code quality (no console.log, package.json completeness, version consistency)
+  - Error handling (404 for unknown routes, invalid JSON 400 not 500)
+
+### Summary (v0.7.1 – v0.7.25)
+- 25 iterations of security hardening and test improvements
+- From ~2,031 tests to 2,571+ tests across 117 test files
+- Zero new features — pure quality, coverage, and security focus
+
 ## [0.7.24] - 2026-03-30
 
 ### Added
