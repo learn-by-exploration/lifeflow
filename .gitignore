@@ -20,3 +20,5 @@ lifeflow-backup-*.json
 *.swo
 .DS_Store
 .idea/
+/run-*.sh
+/git-*.sh

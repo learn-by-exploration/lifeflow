@@ -130,6 +130,76 @@
 			"label": "find-failure-v039",
 			"type": "shell",
 			"command": "source ~/.nvm/nvm.sh 2>/dev/null; cd /home/shyam/personal/lifeflow && npm test 2>&1 | grep -B1 -A15 'not ok' | grep -v 'subtestsFailed' | head -30; echo 'FAIL_FIND_DONE'"
+		},
+		{
+			"label": "verify-idor-cleanup",
+			"type": "shell",
+			"command": "cd /home/shyam/personal/lifeflow && python3 -c \"lines=open('/tmp/idor-check.txt').readlines(); [print(l.strip()) for l in lines if l.strip().startswith('# tests') or l.strip().startswith('# pass') or l.strip().startswith('# fail') or l.strip().startswith('EXIT') or (l.strip().startswith('not ok') and 'subtestsFailed' not in l)]\""
+		},
+		{
+			"label": "idor-cleanup-verify",
+			"type": "shell",
+			"command": "cd /home/shyam/personal/lifeflow && node --test --test-force-exit tests/multi-user-exhaustive.test.js tests/e2e-security-workflows.test.js tests/security-regression.test.js tests/idor-auth.test.js 2>&1 | python3 -c \"import sys; lines=sys.stdin.readlines(); nok=[l.rstrip() for l in lines if l.strip().startswith('not ok') and 'subtestsFailed' not in l]; print('FAILURES:', len(nok)); [print(l.strip()[:140]) for l in nok]; [print(l.strip()) for l in lines if l.strip().startswith('# tests') or l.strip().startswith('# pass') or l.strip().startswith('# fail')]; print('IDOR_CLEANUP_DONE')\""
+		},
+		{
+			"label": "run-project-health",
+			"type": "shell",
+			"command": "cd /home/shyam/personal/lifeflow && node --test --test-force-exit tests/project-health.test.js 2>&1 | grep -E '(not ok|# tests|# pass|# fail)' | grep -v subtestsFailed | head -20 && echo 'PHT_DONE'"
+		},
+		{
+			"label": "ph-test-run",
+			"type": "shell",
+			"command": "node --test --test-force-exit tests/project-health.test.js > /tmp/ph2.txt 2>&1; echo EXIT=$? >> /tmp/ph2.txt; python3 -c \"lines=open('/tmp/ph2.txt').readlines();[print(l.strip()[:140]) for l in lines if l.strip().startswith('not ok') and 'subtestsFailed' not in l];[print(l.strip()) for l in lines if l.strip().startswith('# tests') or l.strip().startswith('# pass') or l.strip().startswith('# fail') or l.strip().startswith('EXIT=')]; print('TASK_DONE')\""
+		},
+		{
+			"label": "ph-script-run",
+			"type": "shell",
+			"command": "bash /home/shyam/personal/lifeflow/run-ph-test.sh"
+		},
+		{
+			"label": "ph-script-v2",
+			"type": "shell",
+			"command": "bash /home/shyam/personal/lifeflow/run-ph-test.sh"
+		},
+		{
+			"label": "ph-script-v3",
+			"type": "shell",
+			"command": "bash /home/shyam/personal/lifeflow/run-ph-test.sh"
+		},
+		{
+			"label": "ph-delete-and-test",
+			"type": "shell",
+			"command": "bash /home/shyam/personal/lifeflow/run-ph-test.sh"
+		},
+		{
+			"label": "full-suite-ph",
+			"type": "shell",
+			"command": "bash /home/shyam/personal/lifeflow/run-ph-test.sh"
+		},
+		{
+			"label": "ph-lint",
+			"type": "shell",
+			"command": "bash /home/shyam/personal/lifeflow/run-ph-test.sh"
+		},
+		{
+			"label": "run-fu-test",
+			"type": "shell",
+			"command": "cd /home/shyam/personal/lifeflow && node --test --test-force-exit tests/frontend-units.test.js 2>&1 | python3 -c \"import sys; lines=sys.stdin.readlines(); [print(l.strip()[:140]) for l in lines if l.strip().startswith('not ok') or l.strip().startswith('# tests') or l.strip().startswith('# pass') or l.strip().startswith('# fail')]; print('FU_DONE')\""
+		},
+		{
+			"label": "fu-test-run",
+			"type": "shell",
+			"command": "export PATH=$HOME/.nvm/versions/node/v22.14.0/bin:$PATH && cd /home/shyam/personal/lifeflow && node --test --test-force-exit tests/frontend-units.test.js 2>&1 | python3 -c \"import sys; lines=sys.stdin.readlines(); [print(l.strip()[:140]) for l in lines if l.strip().startswith('not ok') or l.strip().startswith('# tests') or l.strip().startswith('# pass') or l.strip().startswith('# fail')]; print('FU_R_DONE')\""
+		},
+		{
+			"label": "fu-test-debug",
+			"type": "shell",
+			"command": "source ~/.nvm/nvm.sh 2>/dev/null; cd /home/shyam/personal/lifeflow && node --test --test-force-exit tests/frontend-units.test.js 2>&1 | tail -30; echo 'FU_TAIL_DONE'"
+		},
+		{
+			"label": "fu-test-summary",
+			"type": "shell",
+			"command": "source ~/.nvm/nvm.sh 2>/dev/null; cd /home/shyam/personal/lifeflow && node --test --test-force-exit tests/frontend-units.test.js 2>&1 | grep -E '^(ok |# tests|# pass|# fail)'; echo 'FU_SUMMARY_DONE'"
 		}
 	]
 }
