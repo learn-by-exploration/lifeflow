@@ -2,6 +2,13 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.39] - 2026-03-30
+
+### Added
+- `tests/focus-edges.test.js` — 31 focus system edge case tests
+  - Session lifecycle, meta boundaries, steps, streak, insights
+  - Stats accuracy, daily goal, task deletion orphan handling
+
 ## [0.7.38] - 2026-03-30
 
 ### Added
