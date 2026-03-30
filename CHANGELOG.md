@@ -2,6 +2,16 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.30] - 2026-03-30
+
+### Added
+- `tests/api-contracts.test.js` — 54 API contract tests verifying response shapes
+  - Task, Area/Goal, Tag/Filter, List/Item, Auth, Stats response shapes
+  - Error response consistency (400/401/403/404 all have { error: string })
+  - Pagination contracts (total, hasMore, offset, page, pages)
+  - Status code consistency (201 create, 200 update, 200 delete)
+  - Content-Type headers (JSON, iCal, export attachment)
+
 ## [0.7.29] - 2026-03-30
 
 ### Added
