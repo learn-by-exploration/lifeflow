@@ -2,6 +2,15 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.29] - 2026-03-30
+
+### Added
+- `tests/task-state-machine.test.js` — 38 task status state machine tests
+  - Valid transitions (todo↔doing↔done, reopen)
+  - completed_at lifecycle (set/clear/preserve)
+  - Recurring spawn on complete (daily/weekly/monthly, tag/subtask copying)
+  - Bulk status change, automation triggers, my_day interaction
+
 ## [0.7.28] - 2026-03-30
 
 ### Added
@@ -14,17 +23,6 @@ All notable changes to LifeFlow are documented in this file.
 ### Fixed
 - Fix FK constraint crash when setting non-existent tag IDs on tasks (was 500, now gracefully ignored)
 - Update `http-edge-cases.test.js` to reflect fixed behavior
-
-## [0.7.28] - 2026-03-30
-
-### Added
-- `tests/subtask-tag-boundaries.test.js` — 37 subtask & tag boundary tests
-  - Subtask title, note, done toggle, position boundaries
-  - Tag name, color validation, task-tag associations
-  - CRUD on non-existent/deleted tasks
-
-### Fixed
-- `setTaskTags` gracefully ignores non-existent tag IDs (was 500 FK crash)
 
 ## [0.7.27] - 2026-03-30
 

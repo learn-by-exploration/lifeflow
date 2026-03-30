@@ -20,7 +20,7 @@ info:
     | 404  | Resource not found |
     | 409  | Conflict (constraint violation) |
     | 500  | Internal server error |
-  version: 0.7.28
+  version: 0.7.29
   license:
     name: MIT
 
