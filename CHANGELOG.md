@@ -2,6 +2,18 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.48] - 2026-03-30
+
+### Added
+- `tests/service-worker.test.js` — 34 service worker & offline queue tests
+  - SW file structure: lifecycle events, cache version, event listeners
+  - Cache strategy: network-first pattern, cache cleanup, API exclusion, response cloning
+  - Offline mutation handling: POST/PUT/DELETE interception, 503 response, client messaging
+  - Store.js: mutation queue, event system, syncQueue, strict mode
+  - Push notifications: push/notificationclick handlers, URL sanitization, same-origin check
+  - PWA manifest: required fields, display mode, icons, theme/background colors
+  - SPA offline fallback to cached root document
+
 ## [0.7.47] - 2026-03-30
 
 ### Added
