@@ -17,8 +17,8 @@ TIMESTAMP=$(date +%Y-%m-%d_%H%M%S)
 mkdir -p "$BACKUP_DIR"
 
 if [ ! -f "$DB_PATH" ]; then
-  echo "ERROR: Database not found at $DB_PATH"
-  exit 1
+  echo "SKIP: Database not found at $DB_PATH (CI or fresh install)"
+  exit 0
 fi
 
 BACKUP_FILE="${BACKUP_DIR}/lifeflow-${TIMESTAMP}.db"
