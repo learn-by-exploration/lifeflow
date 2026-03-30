@@ -2,6 +2,16 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.32] - 2026-03-30
+
+### Added
+- `tests/cors-exhaustive.test.js` — 22 CORS exhaustive scenario tests
+  - Preflight OPTIONS requests and headers
+  - Access-Control header verification
+  - Credentials behavior and cookie handling  
+  - ALLOWED_ORIGINS config parsing
+  - Public endpoint CORS behavior
+
 ## [0.7.31] - 2026-03-30
 
 ### Added
