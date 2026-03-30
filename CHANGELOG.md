@@ -2,6 +2,14 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.44] - 2026-03-30
+
+### Added
+- `tests/error-recovery.test.js` — 23 error recovery & graceful degradation tests
+  - Malformed JSON recovery, constraint violations, error handler chain
+  - No sensitive info leakage, middleware error handling
+  - Health endpoint resilience, concurrent error handling
+
 ## [0.7.43] - 2026-03-30
 
 ### Added
