@@ -337,12 +337,19 @@ module.exports = function(deps) {
   // ─── API Token Management ───
 
   // Create a new API token
+  const MAX_TOKENS_PER_USER = 10;
+
   router.post('/api/auth/tokens', (req, res) => {
     if (!req.userId) return res.status(401).json({ error: 'Authentication required' });
 
     const { name, expires_in_days } = req.body;
     if (!name || typeof name !== 'string' || !name.trim()) {
       return res.status(400).json({ error: 'Token name is required' });
+    }
+
+    const count = db.prepare('SELECT COUNT(*) as cnt FROM api_tokens WHERE user_id = ?').get(req.userId).cnt;
+    if (count >= MAX_TOKENS_PER_USER) {
+      return res.status(400).json({ error: `Maximum of ${MAX_TOKENS_PER_USER} tokens allowed per user` });
     }
 
     const token = crypto.randomBytes(32).toString('hex');

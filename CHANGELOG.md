@@ -2,6 +2,57 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.18] - 2026-03-30
+
+### Added
+- `tests/api-token-security.test.js` — 13 tests for API token security
+  - Token creation returns value once, stored as SHA-256 hash
+  - Bearer token auth: valid access, invalid → 401, expired → 401
+  - Token revocation: deleted token rejected on subsequent use
+  - List endpoint excludes token value and hash from response
+  - Token limit: max 10 tokens per user enforced
+  - Cross-user isolation: cannot access or delete other user's tokens
+  - `last_used_at` tracking on bearer auth usage
+  - Token name validation (required, non-empty)
+
+### Security
+- Add max 10 API tokens per user limit to prevent abuse
+- Security finding: API token exhaustion vector addressed
+
+## [0.7.17] - 2026-03-30
+
+### Added
+- `tests/error-handling.test.js` — 17 tests for error handler & information leakage
+  - Error response shape validation (400, 404 return `{ error: "message" }`)
+  - Malformed JSON → 400 (not 500), wrong Content-Type → 400
+  - API 404 catch-all: unknown `/api/*` routes return 404 JSON (not SPA HTML)
+  - No stack traces, file paths, or SQL leaked in error responses
+  - Health endpoint stripped of version/uptime (security finding #18)
+  - Static analysis: error handler source verified safe
+
+### Fixed
+- Health endpoint no longer exposes `version` or `uptime` fields
+- Unknown `/api/*` GET routes now correctly return 404 instead of SPA fallback HTML
+- API 404 catch-all route added before SPA wildcard
+
+### Security
+- Security findings #18 (health version leak), #152, #153 addressed
+
+## [0.7.16] - 2026-03-30
+
+### Added
+- `tests/csrf-integration.test.js` — 17 tests for CSRF integration verification
+  - Middleware structure: factory function, server loading, /api mount
+  - Cookie attributes: SameSite=Strict, Path=/, NOT HttpOnly, 64-char hex token
+  - Token management: persists across requests, ensureTokenCookie guards regeneration
+  - Source code analysis: header-vs-cookie validation, GET/HEAD/OPTIONS exemption
+  - Bearer auth bypass: API token auth sets authMethod='bearer'
+  - Frontend api.js: getCsrf(), X-CSRF-Token header, document.cookie parsing
+  - Test mode short-circuit verified via config.isTest guard
+
+### Security
+- Security findings #4, #80 addressed (CSRF integration testing)
+
 ## [0.7.15] - 2026-03-30
 
 ### Added

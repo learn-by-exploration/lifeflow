@@ -26,13 +26,13 @@ describe('Release Hygiene', () => {
 
   // ── Task 0.1: Version Sync ──
 
-  it('GET /health returns version matching package.json version', async () => {
-    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+  it('GET /health returns status without leaking version (v0.7.17+)', async () => {
     const res = await supertest(app).get('/health');
     assert.equal(res.status, 200);
-    assert.equal(res.body.version, pkg.version);
-    // Version should be current, not a stale fallback
-    assert.ok(res.body.version.startsWith('0.'), 'version should be a valid semver');
+    assert.equal(res.body.status, 'ok');
+    // v0.7.17: version/uptime stripped from health to prevent info leakage
+    assert.ok(!res.body.version, 'health must not expose version');
+    assert.ok(res.body.uptime === undefined, 'health must not expose uptime');
   });
 
   it('package.json has engines.node constraint', () => {

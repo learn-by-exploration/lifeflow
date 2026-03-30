@@ -1,6 +1,6 @@
 {
   "name": "lifeflow",
-  "version": "0.7.15",
+  "version": "0.7.18",
   "description": "Self-hosted personal task planner with 4-level hierarchy, 25+ views, and zero cloud dependencies",
   "main": "src/server.js",
   "scripts": {
