@@ -2,6 +2,13 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.38] - 2026-03-30
+
+### Added
+- `tests/habit-edges.test.js` — 37 habit system edge case tests
+  - Streak calculation, multi-target habits, frequency types
+  - Log boundaries, archived habits, area association, heatmap data
+
 ## [0.7.37] - 2026-03-30
 
 ### Added
