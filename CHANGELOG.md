@@ -2,6 +2,17 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.26] - 2026-03-30
+
+### Added
+- `tests/task-boundaries.test.js` — 54 task CRUD boundary value tests
+  - Title boundaries (empty, whitespace, max length, unicode, emoji, XSS)
+  - Note boundaries (null, empty, max length, markdown)
+  - Priority boundaries (-1 to 4, null, boolean, float, string)
+  - Due date boundaries (null, past, future, leap year, invalid)
+  - Status transitions (todo↔doing↔done, invalid, reopen)
+  - Position and estimated_minutes boundaries
+
 ## [0.7.25] - 2026-03-30
 
 ### Added
