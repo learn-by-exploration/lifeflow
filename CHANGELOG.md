@@ -2,6 +2,17 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.33] - 2026-03-30
+
+### Added
+- `tests/import-export-roundtrip.test.js` — 33 import/export roundtrip fidelity tests
+  - Full roundtrip: export → wipe → import → verify field-by-field
+  - Per-entity preservation (areas, goals, tasks, tags, subtasks, habits, lists)
+  - ID remapping verification (tags→task_tags, areas→goals, goals→tasks)
+  - Corrupt import handling and edge cases
+  - Todoist/Trello import format tests
+  - iCal export (VCALENDAR, RRULE, priority mapping)
+
 ## [0.7.32] - 2026-03-30
 
 ### Added
