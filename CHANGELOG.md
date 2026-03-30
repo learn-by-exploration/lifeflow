@@ -2,6 +2,42 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.15] - 2026-03-30
+
+### Added
+- `tests/recurrence-safety.test.js` — 23 tests for recurrence & business logic safety
+  - Month-end clamping: Jan 31 → Feb 28/29, Mar 31 → Apr 30, bi-monthly
+  - Infinite loop protection: empty days array, all 7 days, invalid day numbers
+  - Null due date guard: null due_date, null recurrence, end date reached
+  - Field preservation on spawn: tags, subtasks, priority, estimated_minutes, time_block, assigned_to_user_id
+  - Transaction safety: atomic spawn with tags + subtasks
+
+### Fixed
+- Recurring spawn now copies `assigned_to_user_id` to next occurrence (was lost)
+
+### Security
+- Security findings #117, #120, #121, #50, #53 addressed (recurrence safety)
+
+## [0.7.14] - 2026-03-30
+
+### Added
+- `tests/sql-safety.test.js` — 14 tests for SQL injection resistance and query safety
+  - SQL injection in task title, area name, tag name, note content, comment text
+  - Union-based and boolean-based injection attempts
+  - Search query injection resistance
+  - Query boundary tests (bulk operations, search limits)
+  - Static analysis: no string concatenation in SQL, all queries use ? placeholders
+
+### Fixed
+- Bulk PUT `/api/tasks/bulk`: max 100 IDs per request (was unbounded)
+- Bulk PATCH `/api/tasks/batch`: max 100 IDs per request (was unbounded)
+- POST `/api/tasks/bulk-myday`: max 100 IDs per request (was unbounded)
+- POST `/api/tasks/reschedule`: max 100 IDs per request (was unbounded)
+
+### Security
+- Security findings #46, #47 addressed (unbounded query protection)
+- All SQL queries verified as parameterized via static analysis tests
+
 ## [0.7.13] - 2026-03-30
 
 ### Added

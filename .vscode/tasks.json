@@ -40,6 +40,26 @@
 			"label": "lint-check",
 			"type": "shell",
 			"command": "source ~/.nvm/nvm.sh 2>/dev/null; npx eslint tests/test-organization.test.js 2>&1; echo LINT_EXIT=$?"
+		},
+		{
+			"label": "run-recurrence-tests",
+			"type": "shell",
+			"command": "source ~/.nvm/nvm.sh 2>/dev/null; cd /home/shyam/personal/lifeflow && node --test --test-force-exit tests/recurrence-safety.test.js > /home/shyam/personal/lifeflow/test-rec-out.txt 2>&1; echo \"DONE_EXIT=$?\""
+		},
+		{
+			"label": "run-recurrence-tests-green",
+			"type": "shell",
+			"command": "source ~/.nvm/nvm.sh 2>/dev/null; cd /home/shyam/personal/lifeflow && node --test --test-force-exit tests/recurrence-safety.test.js > /home/shyam/personal/lifeflow/test-rec-out.txt 2>&1; echo \"DONE_EXIT=$?\""
+		},
+		{
+			"label": "full-test-v0715",
+			"type": "shell",
+			"command": "source ~/.nvm/nvm.sh 2>/dev/null; cd /home/shyam/personal/lifeflow && npm test > /home/shyam/personal/lifeflow/test-full-v0715.txt 2>&1; echo \"FULL_TEST_EXIT=$?\""
+		},
+		{
+			"label": "lint-recurrence",
+			"type": "shell",
+			"command": "source ~/.nvm/nvm.sh 2>/dev/null; cd /home/shyam/personal/lifeflow && npx eslint tests/recurrence-safety.test.js src/services/recurring.service.js 2>&1; echo \"LINT_EXIT=$?\""
 		}
 	]
 }

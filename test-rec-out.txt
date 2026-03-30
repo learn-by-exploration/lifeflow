@@ -1,0 +1,191 @@
+TAP version 13
+# [dotenv@17.3.1] injecting env (0) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+# Subtest: Recurrence Safety
+    # Subtest: Month-end clamping
+        # Subtest: Jan 31 + monthly → Feb 28 (non-leap year)
+        ok 1 - Jan 31 + monthly → Feb 28 (non-leap year)
+          ---
+          duration_ms: 859.73195
+          type: 'test'
+          ...
+        # Subtest: Jan 31 + monthly → Feb 29 (leap year 2028)
+        ok 2 - Jan 31 + monthly → Feb 29 (leap year 2028)
+          ---
+          duration_ms: 0.513382
+          type: 'test'
+          ...
+        # Subtest: Mar 31 + monthly → Apr 30
+        ok 3 - Mar 31 + monthly → Apr 30
+          ---
+          duration_ms: 0.743953
+          type: 'test'
+          ...
+        # Subtest: Monthly from 31st: never skips a month
+        ok 4 - Monthly from 31st: never skips a month
+          ---
+          duration_ms: 0.66436
+          type: 'test'
+          ...
+        # Subtest: Jan 29 + monthly → Feb 28 (non-leap) then Mar 29
+        ok 5 - Jan 29 + monthly → Feb 28 (non-leap) then Mar 29
+          ---
+          duration_ms: 0.640286
+          type: 'test'
+          ...
+        # Subtest: Bi-monthly from 31st: clamped correctly
+        ok 6 - Bi-monthly from 31st: clamped correctly
+          ---
+          duration_ms: 0.571992
+          type: 'test'
+          ...
+        # Subtest: Simple string monthly also clamps month-end
+        ok 7 - Simple string monthly also clamps month-end
+          ---
+          duration_ms: 0.514044
+          type: 'test'
+          ...
+        1..7
+    ok 1 - Month-end clamping
+      ---
+      duration_ms: 864.070726
+      type: 'suite'
+      ...
+    # Subtest: Infinite loop protection
+        # Subtest: Specific-days with empty days array does not hang
+        ok 1 - Specific-days with empty days array does not hang
+          ---
+          duration_ms: 0.543865
+          type: 'test'
+          ...
+        # Subtest: Specific-days with all 7 days terminates
+        ok 2 - Specific-days with all 7 days terminates
+          ---
+          duration_ms: 0.522461
+          type: 'test'
+          ...
+        # Subtest: Specific-days with invalid day numbers returns null
+        ok 3 - Specific-days with invalid day numbers returns null
+          ---
+          duration_ms: 0.463323
+          type: 'test'
+          ...
+        # Subtest: nextDueDate calculation completes within 100ms
+        ok 4 - nextDueDate calculation completes within 100ms
+          ---
+          duration_ms: 0.5564
+          type: 'test'
+          ...
+        1..4
+    ok 2 - Infinite loop protection
+      ---
+      duration_ms: 2.278421
+      type: 'suite'
+      ...
+    # Subtest: Null due date guard
+        # Subtest: Recurring task with due_date=null returns null
+        ok 1 - Recurring task with due_date=null returns null
+          ---
+          duration_ms: 0.459664
+          type: 'test'
+          ...
+        # Subtest: Recurring task with recurrence=null returns null
+        ok 2 - Recurring task with recurrence=null returns null
+          ---
+          duration_ms: 0.381662
+          type: 'test'
+          ...
+        # Subtest: Recurring task that reaches end date: no new task spawned
+        ok 3 - Recurring task that reaches end date: no new task spawned
+          ---
+          duration_ms: 32.427583
+          type: 'test'
+          ...
+        # Subtest: Complete recurring task: spawns next only if nextDueDate is not null
+        ok 4 - Complete recurring task: spawns next only if nextDueDate is not null
+          ---
+          duration_ms: 6.672647
+          type: 'test'
+          ...
+        1..4
+    ok 3 - Null due date guard
+      ---
+      duration_ms: 40.117767
+      type: 'suite'
+      ...
+    # Subtest: Field preservation on spawn
+        # Subtest: Recurring spawn copies tags
+        ok 1 - Recurring spawn copies tags
+          ---
+          duration_ms: 8.584897
+          type: 'test'
+          ...
+        # Subtest: Recurring spawn copies subtasks
+        ok 2 - Recurring spawn copies subtasks
+          ---
+          duration_ms: 6.813843
+          type: 'test'
+          ...
+        # Subtest: Recurring spawn copies priority
+        ok 3 - Recurring spawn copies priority
+          ---
+          duration_ms: 16.452497
+          type: 'test'
+          ...
+        # Subtest: Recurring spawn preserves estimated_minutes
+        ok 4 - Recurring spawn preserves estimated_minutes
+          ---
+          duration_ms: 6.14186
+          type: 'test'
+          ...
+        # Subtest: Recurring spawn copies time_block_start/end
+        ok 5 - Recurring spawn copies time_block_start/end
+          ---
+          duration_ms: 5.375732
+          type: 'test'
+          ...
+        # Subtest: Recurring spawn copies assigned_to_user_id
+        ok 6 - Recurring spawn copies assigned_to_user_id
+          ---
+          duration_ms: 5.764784
+          type: 'test'
+          ...
+        1..6
+    ok 4 - Field preservation on spawn
+      ---
+      duration_ms: 49.512076
+      type: 'suite'
+      ...
+    # Subtest: Transaction safety
+        # Subtest: Complete recurring task wraps spawn in transaction
+        ok 1 - Complete recurring task wraps spawn in transaction
+          ---
+          duration_ms: 6.316118
+          type: 'test'
+          ...
+        # Subtest: Original task completion succeeds even when spawn has no next date
+        ok 2 - Original task completion succeeds even when spawn has no next date
+          ---
+          duration_ms: 4.874151
+          type: 'test'
+          ...
+        1..2
+    ok 5 - Transaction safety
+      ---
+      duration_ms: 11.378733
+      type: 'suite'
+      ...
+    1..5
+ok 1 - Recurrence Safety
+  ---
+  duration_ms: 972.358718
+  type: 'suite'
+  ...
+1..1
+# tests 23
+# suites 6
+# pass 23
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1074.92192

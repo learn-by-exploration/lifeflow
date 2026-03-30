@@ -288,6 +288,7 @@ router.get('/api/tasks/:id', (req, res) => {
 router.put('/api/tasks/bulk', (req, res) => {
   const { ids, changes } = req.body;
   if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
+  if (ids.length > 100) return res.status(400).json({ error: 'Too many IDs (max 100)' });
   if (!changes || typeof changes !== 'object') return res.status(400).json({ error: 'changes object required' });
   if (changes.status !== undefined && !['todo','doing','done'].includes(changes.status)) return res.status(400).json({ error: 'Invalid status' });
   if (changes.priority !== undefined && (typeof changes.priority === 'boolean' || ![0,1,2,3].includes(Number(changes.priority)))) return res.status(400).json({ error: 'Priority must be 0-3' });
@@ -338,6 +339,7 @@ router.put('/api/tasks/bulk', (req, res) => {
 router.patch('/api/tasks/batch', (req, res) => {
   const { ids, updates, add_tags } = req.body;
   if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
+  if (ids.length > 100) return res.status(400).json({ error: 'Too many IDs (max 100)' });
   if (!updates && !add_tags) return res.status(400).json({ error: 'updates or add_tags required' });
   // Validate all IDs belong to user
   const selectTask = db.prepare('SELECT id FROM tasks WHERE id=? AND user_id=?');
@@ -508,6 +510,7 @@ router.post('/api/tasks/parse', (req, res) => {
 router.post('/api/tasks/bulk-myday', (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids array required' });
+  if (ids.length > 100) return res.status(400).json({ error: 'Too many IDs (max 100)' });
   const stmt = db.prepare('UPDATE tasks SET my_day=1 WHERE id=? AND user_id=?');
   ids.forEach(id => stmt.run(Number(id), req.userId));
   res.json({ updated: ids.length });
@@ -517,6 +520,7 @@ router.post('/api/tasks/bulk-myday', (req, res) => {
 router.post('/api/tasks/reschedule', (req, res) => {
   const { ids, due_date, clear_myday } = req.body;
   if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids array required' });
+  if (ids.length > 100) return res.status(400).json({ error: 'Too many IDs (max 100)' });
   if (due_date !== undefined && due_date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(due_date)) {
     return res.status(400).json({ error: 'due_date must be YYYY-MM-DD' });
   }

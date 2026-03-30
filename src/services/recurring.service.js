@@ -33,12 +33,13 @@ class RecurringService {
     const pos = this.getNextPosition('tasks', 'goal_id', task.goal_id);
     const spawnTx = db.transaction(() => {
       const r = db.prepare(
-        'INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,time_block_start,time_block_end,estimated_minutes,list_id,user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+        'INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,time_block_start,time_block_end,estimated_minutes,list_id,user_id,assigned_to_user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
       ).run(
         task.goal_id, task.title, task.note, task.priority, nd,
         task.due_time, newRecurring, task.assigned_to, 0, pos,
         task.time_block_start || null, task.time_block_end || null,
-        task.estimated_minutes || null, task.list_id || null, userId
+        task.estimated_minutes || null, task.list_id || null, userId,
+        task.assigned_to_user_id || null
       );
       // Copy tags to new task
       const oldTags = db.prepare('SELECT tag_id FROM task_tags WHERE task_id=?').all(task.id);
