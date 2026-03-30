@@ -2,6 +2,14 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.7.22] - 2026-03-30
+
+### Added
+- `tests/e2e-task-lifecycle.test.js` — 10 E2E task lifecycle tests
+  - Full CRUD lifecycle (create, subtask, update, complete, delete)
+  - Reorder, my_day toggle, calendar view, board view
+  - Overdue tasks, habits, lists, goals, areas CRUD workflows
+
 ## [0.7.21] - 2026-03-30
 
 ### Added
