@@ -225,17 +225,33 @@ describe('Lists API', () => {
     it('returns list templates', async () => {
       const res = await agent().get('/api/lists/templates').expect(200);
       assert.ok(Array.isArray(res.body));
-      assert.equal(res.body.length, 15);
+      assert.equal(res.body.length, 27);
       assert.ok(res.body.some(t => t.id === 'weekly-groceries'));
       assert.ok(res.body.some(t => t.id === 'movies-to-watch'));
+      assert.ok(res.body.some(t => t.id === 'meeting-agenda'));
+      assert.ok(res.body.some(t => t.id === 'savings-goals'));
+      assert.ok(res.body.some(t => t.id === 'spring-cleaning'));
     });
 
     it('each template has category field', async () => {
       const res = await agent().get('/api/lists/templates').expect(200);
-      const validCategories = ['Home & Life', 'Entertainment & Media', 'Travel & Events', 'Personal', 'Health & Wellness'];
+      const validCategories = ['Home & Life', 'Entertainment & Media', 'Travel & Events', 'Personal', 'Health & Wellness', 'Work & Productivity', 'Finance', 'Education & Learning', 'Seasonal & Situational'];
       res.body.forEach(t => {
         assert.ok(typeof t.category === 'string' && t.category.length > 0, `template ${t.id} missing category`);
         assert.ok(validCategories.includes(t.category), `template ${t.id} has invalid category: ${t.category}`);
+      });
+    });
+
+    it('all template IDs are unique', async () => {
+      const res = await agent().get('/api/lists/templates').expect(200);
+      const ids = res.body.map(t => t.id);
+      assert.equal(new Set(ids).size, ids.length);
+    });
+
+    it('each template has 8-12 items', async () => {
+      const res = await agent().get('/api/lists/templates').expect(200);
+      res.body.forEach(t => {
+        assert.ok(t.items.length >= 8 && t.items.length <= 12, `template ${t.id} has ${t.items.length} items`);
       });
     });
   });
@@ -262,6 +278,21 @@ describe('Lists API', () => {
       const items = await agent().get('/api/lists/' + res.body.id + '/items').expect(200);
       assert.equal(items.body.length, 10);
       assert.ok(items.body.some(i => i.title === 'Inception'));
+    });
+
+    it('creates list from meeting-agenda template', async () => {
+      const res = await agent().post('/api/lists/from-template').send({ template_id: 'meeting-agenda' }).expect(201);
+      assert.equal(res.body.name, 'Meeting Agenda');
+      assert.equal(res.body.type, 'checklist');
+      const items = await agent().get('/api/lists/' + res.body.id + '/items').expect(200);
+      assert.equal(items.body.length, 10);
+    });
+
+    it('creates list from spring-cleaning template', async () => {
+      const res = await agent().post('/api/lists/from-template').send({ template_id: 'spring-cleaning' }).expect(201);
+      assert.equal(res.body.name, 'Spring Cleaning');
+      const items = await agent().get('/api/lists/' + res.body.id + '/items').expect(200);
+      assert.equal(items.body.length, 12);
     });
 
     it('rejects invalid template id', async () => {

@@ -1641,7 +1641,7 @@ paths:
     get:
       tags: [Lists]
       summary: Get list templates
-      description: Returns 15 built-in list templates across 5 categories
+      description: Returns 27 built-in list templates across 9 categories
       responses:
         '200':
           description: Array of list templates
@@ -1656,7 +1656,7 @@ paths:
                     name: { type: string }
                     icon: { type: string }
                     type: { type: string, enum: [checklist, grocery, notes] }
-                    category: { type: string, enum: ['Home & Life', 'Entertainment & Media', 'Travel & Events', 'Personal', 'Health & Wellness'] }
+                    category: { type: string, enum: ['Home & Life', 'Entertainment & Media', 'Travel & Events', 'Personal', 'Health & Wellness', 'Work & Productivity', 'Finance', 'Education & Learning', 'Seasonal & Situational'] }
                     items:
                       type: array
                       items: { type: string }
