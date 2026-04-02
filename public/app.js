@@ -459,7 +459,7 @@ function updateBC(){
 }
 
 // ─── MY DAY ───
-let todayTab='list';
+let todayTab=localStorage.getItem('todayTab')||'list';
 let completionCount=0;
 function getGreeting(){const hr=new Date().getHours();if(hr<12)return 'Good morning';if(hr<17)return 'Good afternoon';return 'Good evening'}
 function streakEmoji(n){if(n>=30)return '⚡';if(n>=14)return '🔥🔥';if(n>=7)return '🔥';if(n>=3)return '🌱';return ''}
@@ -484,6 +484,7 @@ async function renderToday(){
   let h=`<div style="font-size:15px;font-weight:600;margin-bottom:4px">${getGreeting()}</div>`;
   h+=`<div style="font-size:13px;color:var(--tx2);margin-bottom:10px">${ds} · ${t.filter(x=>x.status!=='done').length} tasks today</div>`;
   // Stats bar with progress ring
+  if(todayTab!=='focus'){
   h+=`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
     <div class="today-stat">${progressRingSvg(pct)}</div>
     <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--ok)">check_circle</span>${stats.done||0}/${stats.total||0} done</div>
@@ -491,10 +492,13 @@ async function renderToday(){
     <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--warn)">local_fire_department</span>${sEmoji?sEmoji+' ':''}${streakData.streak||0} streak</div>
     ${overdue.length?`<div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--err)">warning</span>${overdue.length} overdue</div>`:''}
   </div>`;
+  }
   // Tab toggle
   h+=`<div style="display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--brd);padding-bottom:8px">
     <button class="btn-c today-tab${todayTab==='list'?' active':''}" data-ttab="list" style="font-size:12px;padding:6px 14px;${todayTab==='list'?'background:var(--brand);color:#fff;border-color:var(--brand)':''}">
       <span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">list</span>List</button>
+    <button class="btn-c today-tab${todayTab==='focus'?' active':''}" data-ttab="focus" style="font-size:12px;padding:6px 14px;${todayTab==='focus'?'background:var(--brand);color:#fff;border-color:var(--brand)':''}">
+      <span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">center_focus_strong</span>Focus</button>
     <button class="btn-c today-tab${todayTab==='timeline'?' active':''}" data-ttab="timeline" style="font-size:12px;padding:6px 14px;${todayTab==='timeline'?'background:var(--brand);color:#fff;border-color:var(--brand)':''}">
       <span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">schedule</span>Timeline</button>
   </div>`;
@@ -531,7 +535,13 @@ async function renderToday(){
     }
     const p=t.filter(x=>x.status!=='done'),d=t.filter(x=>x.status==='done');
     if(p.length){h+=`<div class="sl">To Do <span class="c">${p.length}</span></div>`;p.forEach(tk=>h+=tcHtml(tk,true))}
-    if(d.length&&appSettings.showCompleted!=='false'){h+=`<div class="sl" style="color:var(--ok)">Done <span class="c">${d.length}</span></div>`;d.forEach(tk=>h+=tcHtml(tk,true))}
+    if(d.length&&appSettings.showCompleted!=='false'){
+      const doneExpanded=sessionStorage.getItem('today-done-expanded')==='1';
+      h+=`<div class="sl today-done-toggle" style="color:var(--ok);cursor:pointer;user-select:none"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;transition:transform .2s">${doneExpanded?'expand_more':'chevron_right'}</span> Done <span class="c">${d.length}</span></div>`;
+      h+=`<div class="today-done-list" style="${doneExpanded?'':'display:none'}">`;
+      d.forEach(tk=>h+=tcHtml(tk,true));
+      h+=`</div>`;
+    }
     // "What's Next?" suggestions when few pending tasks
     if(p.length<3){
       try{
@@ -548,6 +558,23 @@ async function renderToday(){
           });
         }
       }catch(e){}
+    }
+  }else if(todayTab==='focus'){
+    // Focus mode — minimal task list
+    const p=t.filter(x=>x.status!=='done');
+    if(overdue.length){
+      h+=`<div class="sl" style="color:var(--err)"><span class="material-icons-round" style="font-size:14px;vertical-align:middle">warning</span> Overdue <span class="c">${overdue.length}</span></div>`;
+      overdue.forEach(tk=>h+=tcMinHtml(tk));
+    }
+    if(p.length){
+      p.forEach(tk=>h+=tcMinHtml(tk));
+    }
+    const doneCount=t.filter(x=>x.status==='done').length;
+    if(doneCount){
+      h+=`<div style="text-align:center;padding:12px;color:var(--txd);font-size:12px">✓ ${doneCount} completed today</div>`;
+    }
+    if(!p.length&&!overdue.length){
+      h+=`<div class="all-done-card"><span class="material-icons-round" style="font-size:48px;color:var(--ok)">celebration</span><h3 style="margin:8px 0 4px">All done! 🎉</h3></div>`;
     }
   }else{
     // Timeline tab — inline planner
@@ -577,7 +604,8 @@ async function renderToday(){
     });
     h+=`</div></div></div>`;
   }
-  // Daily micro-review banner (after 6pm, dismissible)
+  // Daily micro-review banner (after 6pm, dismissible) — not in focus mode
+  if(todayTab!=='focus'){
   const _drHour=new Date().getHours();
   const _drKey='daily-review-'+_toDateStr(new Date());
   if(_drHour>=18&&!localStorage.getItem(_drKey)){
@@ -591,7 +619,17 @@ async function renderToday(){
   }
   // Habits strip
   h+=todayHabitsStrip(habits);
+  }
   c.innerHTML=h;attachTE();wireHints();wireTodayTabs(c);wireTodayHabits(c);wireBalanceDismiss(c);
+  // Done section collapse/expand toggle
+  c.querySelectorAll('.today-done-toggle').forEach(el=>el.addEventListener('click',()=>{
+    const list=c.querySelector('.today-done-list');if(!list)return;
+    const icon=el.querySelector('.material-icons-round');
+    const isOpen=list.style.display!=='none';
+    list.style.display=isOpen?'none':'';
+    icon.textContent=isOpen?'chevron_right':'expand_more';
+    sessionStorage.setItem('today-done-expanded',isOpen?'0':'1');
+  }));
   // Daily review banner handlers
   c.querySelectorAll('.dr-dismiss').forEach(el=>el.addEventListener('click',()=>{
     localStorage.setItem('daily-review-'+_toDateStr(new Date()),'1');
@@ -652,7 +690,7 @@ function todayHabitsStrip(habits){
   return h;
 }
 function wireTodayTabs(c){
-  c.querySelectorAll('.today-tab').forEach(btn=>btn.addEventListener('click',()=>{todayTab=btn.dataset.ttab;renderToday()}));
+  c.querySelectorAll('.today-tab').forEach(btn=>btn.addEventListener('click',()=>{todayTab=btn.dataset.ttab;localStorage.setItem('todayTab',todayTab);renderToday()}));
 }
 function wireTodayHabits(c){
   c.querySelectorAll('.today-hab').forEach(btn=>btn.addEventListener('click',async()=>{
@@ -1189,6 +1227,17 @@ async function renderCal(target){
     // Pre-fill date in quick capture
     setTimeout(()=>{const inp=document.querySelector('.qc-input input');if(inp)inp.value=`due:${date} `},100);
   }));
+}
+
+// ─── Focus mode minimal task card ───
+function tcMinHtml(t){
+  const cls=['tc','tc-min'];
+  if(t.status==='done')cls.push('done');
+  if(t.priority===3)cls.push('p3');else if(t.priority===2)cls.push('p2');else if(t.priority===1)cls.push('p1');
+  return `<div class="${cls.join(' ')}" data-id="${t.id}">
+    <div class="tk" data-id="${t.id}" role="checkbox" tabindex="0" aria-checked="${t.status==='done'}" aria-label="Complete task"><span class="material-icons-round">check</span></div>
+    <span class="tc-min-title">${esc(t.title)}</span>
+  </div>`;
 }
 
 // ─── Task card HTML ───
@@ -5798,7 +5847,10 @@ document.addEventListener('keydown',e=>{
     }
     return;
   }
-  if(e.key==='f'||e.key==='F'){/* focus needs a task selected */return}
+  if(e.key==='f'||e.key==='F'){
+    if(currentView==='myday'){todayTab=todayTab==='focus'?'list':'focus';localStorage.setItem('todayTab',todayTab);renderToday()}
+    return;
+  }
 });
 // Also handle Ctrl+K when in inputs
 document.addEventListener('keydown',e=>{if(e.key==='k'&&(e.ctrlKey||e.metaKey)){e.preventDefault();openSearch()}});

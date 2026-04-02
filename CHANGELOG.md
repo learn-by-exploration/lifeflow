@@ -2,6 +2,27 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.8.0] - 2026-04-02
+
+### Added
+- **List templates v2:** 27 templates across 9 categories (was 4)
+  - New categories: Work & Productivity, Finance, Education & Learning, Seasonal & Situational
+  - 12 new templates: meeting-agenda, project-launch, onboarding-checklist, monthly-bills, subscription-tracker, savings-goals, study-plan, course-progress, language-learning, spring-cleaning, holiday-prep, new-apartment
+- **Deadline notification scheduler job:** Server-side push notifications for overdue/due-today tasks
+  - Runs every 30 min, 24h dedup via push_notification_log, grouped per user
+  - Only fires when VAPID keys configured; no-op otherwise
+- **Today view Focus mode:** Minimal task list (checkbox + title + priority border only)
+  - New "Focus" tab in List | Focus | Timeline tab bar
+  - Hides stats bar, habits strip, balance alerts, metadata badges, action buttons
+  - `F` keyboard shortcut to toggle between List and Focus
+  - Tab preference persists to localStorage
+- **Done tasks collapse:** Done section in Today view collapsed by default
+  - Click "Done (N)" header to expand; sessionStorage persistence
+  - `showCompleted='false'` setting still hides completely
+
+### Fixed
+- OpenAPI spec: `templateId` → `template_id` field name correction
+
 ## [0.7.52] - 2026-03-30
 
 ### Fixed

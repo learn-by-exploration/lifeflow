@@ -294,6 +294,10 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .tc:hover{background:var(--bg-h)}
 .tc.done .tt{text-decoration:line-through;color:var(--txd)}
 .tc.p3{border-left:3px solid var(--err)}.tc.p2{border-left:3px solid var(--warn)}.tc.p1{border-left:3px solid var(--brand)}
+/* Focus mode minimal task card */
+.tc.tc-min{display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:2px;border-radius:var(--rs);border-left:3px solid transparent}
+.tc.tc-min .tc-min-title{flex:1;font-size:14px;line-height:1.4;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tc.tc-min.done{opacity:.5}.tc.tc-min.done .tc-min-title{text-decoration:line-through}
 .tk{width:18px;height:18px;border-radius:50%;border:2px solid var(--txd);flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;margin-top:1px}
 .tk:hover{border-color:var(--ok)}.tc.done .tk{background:var(--ok);border-color:var(--ok)}
 .tk .material-icons-round{font-size:12px;display:none;color:#fff}.tc.done .tk .material-icons-round{display:block}
