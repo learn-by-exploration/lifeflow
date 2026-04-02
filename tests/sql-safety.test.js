@@ -211,7 +211,7 @@ describe('SQL Safety', () => {
             'sets.join', 'clauses.join', 'whereParts.join', // joined clauses
             'sets',                                         // SET clause variables
             'sql',                                          // full SQL variable
-            'habitIds.map', 'taskIds.map', 'goalIds.map', 'listIds.map', // placeholder builders
+            'habitIds.map', 'taskIds.map', 'goalIds.map', 'listIds.map', 'fsIds.map', // placeholder builders
           ];
           const isSafe = safeVars.some(sv => expr.includes(sv));
           if (!isSafe) {

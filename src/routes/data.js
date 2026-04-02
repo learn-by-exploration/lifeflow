@@ -11,22 +11,87 @@ module.exports = function(deps) {
   const backupDir = path.join(dbDir, 'backups');
   if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
 
-  function runBackup(userId) {
+  // Helper: query ALL user data for backup/export (single source of truth)
+  function queryAllUserData(userId) {
     const areas = db.prepare('SELECT * FROM life_areas WHERE user_id=? ORDER BY position').all(userId);
     const goals = db.prepare('SELECT * FROM goals WHERE user_id=? ORDER BY area_id, position').all(userId);
     const tasks = enrichTasks(db.prepare('SELECT * FROM tasks WHERE user_id=? ORDER BY goal_id, position').all(userId));
     const tags = db.prepare('SELECT * FROM tags WHERE user_id=? ORDER BY name').all(userId);
+
+    const taskIds = tasks.map(t => t.id);
+    const goalIds = goals.map(g => g.id);
+    const habitIds = [];
+
+    // Habits + habit logs
     const habits = db.prepare('SELECT * FROM habits WHERE user_id=? ORDER BY position').all(userId);
-    const habitIds = habits.map(h => h.id);
+    habits.forEach(h => habitIds.push(h.id));
     const habit_logs = habitIds.length
       ? db.prepare(`SELECT * FROM habit_logs WHERE habit_id IN (${habitIds.map(() => '?').join(',')}) ORDER BY date`).all(...habitIds)
       : [];
+
+    // Focus sessions + meta + steps
+    const focus_sessions = db.prepare('SELECT * FROM focus_sessions WHERE user_id=?').all(userId);
+    const fsIds = focus_sessions.map(f => f.id);
+    const focus_session_meta = fsIds.length
+      ? db.prepare(`SELECT * FROM focus_session_meta WHERE session_id IN (${fsIds.map(() => '?').join(',')})`).all(...fsIds)
+      : [];
+    const focus_steps = fsIds.length
+      ? db.prepare(`SELECT * FROM focus_steps WHERE session_id IN (${fsIds.map(() => '?').join(',')}) ORDER BY position`).all(...fsIds)
+      : [];
+
+    // Task-linked data
+    const task_comments = taskIds.length
+      ? db.prepare(`SELECT * FROM task_comments WHERE task_id IN (${taskIds.map(() => '?').join(',')}) ORDER BY created_at`).all(...taskIds)
+      : [];
+    const task_deps = taskIds.length
+      ? db.prepare(`SELECT * FROM task_deps WHERE task_id IN (${taskIds.map(() => '?').join(',')})`).all(...taskIds)
+      : [];
+    const task_custom_values = taskIds.length
+      ? db.prepare(`SELECT * FROM task_custom_values WHERE task_id IN (${taskIds.map(() => '?').join(',')})`).all(...taskIds)
+      : [];
+
+    // Goal-linked
+    const goal_milestones = goalIds.length
+      ? db.prepare(`SELECT * FROM goal_milestones WHERE goal_id IN (${goalIds.map(() => '?').join(',')}) ORDER BY position`).all(...goalIds)
+      : [];
+
+    // User-scoped tables
+    const notes = db.prepare('SELECT * FROM notes WHERE user_id=? ORDER BY updated_at DESC').all(userId);
+    const lists = db.prepare('SELECT * FROM lists WHERE user_id=? ORDER BY position').all(userId);
+    const listIds = lists.map(l => l.id);
+    const list_items = listIds.length
+      ? db.prepare(`SELECT * FROM list_items WHERE list_id IN (${listIds.map(() => '?').join(',')}) ORDER BY position`).all(...listIds)
+      : [];
+    const custom_field_defs = db.prepare('SELECT * FROM custom_field_defs WHERE user_id=? ORDER BY position').all(userId);
+    const automation_rules = db.prepare('SELECT * FROM automation_rules WHERE user_id=?').all(userId);
+    const saved_filters = db.prepare('SELECT * FROM saved_filters WHERE user_id=? ORDER BY position').all(userId);
+    const task_templates = db.prepare('SELECT * FROM task_templates WHERE user_id=?').all(userId);
+    const weekly_reviews = db.prepare('SELECT * FROM weekly_reviews WHERE user_id=? ORDER BY week_start DESC').all(userId);
+    const daily_reviews = db.prepare('SELECT * FROM daily_reviews WHERE user_id=? ORDER BY date DESC').all(userId);
+    const inbox = db.prepare('SELECT * FROM inbox WHERE user_id=? ORDER BY created_at').all(userId);
+    const badges = db.prepare('SELECT * FROM badges WHERE user_id=?').all(userId);
+    const settings = db.prepare("SELECT * FROM settings WHERE user_id=? AND key NOT LIKE '\\_%' ESCAPE '\\'").all(userId);
+
+    return {
+      areas, goals, tasks, tags,
+      habits, habit_logs,
+      focus_sessions, focus_session_meta, focus_steps,
+      task_comments, task_deps, task_custom_values,
+      goal_milestones,
+      notes, lists, list_items,
+      custom_field_defs, automation_rules, saved_filters, task_templates,
+      weekly_reviews, daily_reviews, inbox, badges, settings,
+    };
+  }
+
+  function runBackup(userId) {
+    const d = queryAllUserData(userId);
     // Safety: don't overwrite good backups with empty data
-    if (areas.length === 0 && goals.length === 0 && tasks.length === 0) {
+    if (d.areas.length === 0 && d.goals.length === 0 && d.tasks.length === 0) {
       logger.warn({ userId }, 'Skipping backup — database appears empty, refusing to overwrite valid backups');
       return null;
     }
-    const data = JSON.stringify({ backupDate: new Date().toISOString(), areas, goals, tasks, tags, habits, habit_logs });
+    const data = JSON.stringify({ backupDate: new Date().toISOString(), ...d });
     const fname = `lifeflow-backup-${new Date().toISOString().slice(0, 10)}.json`;
     fs.writeFileSync(path.join(backupDir, fname), data);
     // Rotate: keep last 14
@@ -34,7 +99,12 @@ module.exports = function(deps) {
     while (files.length > 14) { fs.unlinkSync(path.join(backupDir, files.shift())); }
     // Update data watermark — stores last known good counts for startup integrity check
     try {
-      const watermark = JSON.stringify({ areas: areas.length, goals: goals.length, tasks: tasks.length, tags: tags.length, habits: habits.length, at: new Date().toISOString() });
+      const watermark = JSON.stringify({
+        areas: d.areas.length, goals: d.goals.length, tasks: d.tasks.length,
+        tags: d.tags.length, habits: d.habits.length,
+        focus_sessions: d.focus_sessions.length, notes: d.notes.length,
+        lists: d.lists.length, at: new Date().toISOString(),
+      });
       db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (0, '_data_watermark', ?)").run(watermark);
     } catch (e) { logger.error({ err: e }, 'Failed to update data watermark'); }
     return fname;
@@ -57,56 +127,10 @@ module.exports = function(deps) {
 
   // ─── Export ───
   router.get('/api/export', (req, res) => {
-    const areas = db.prepare('SELECT * FROM life_areas WHERE user_id=? ORDER BY position').all(req.userId);
-    const goals = db.prepare('SELECT * FROM goals WHERE user_id=? ORDER BY area_id, position').all(req.userId);
-    const tasks = enrichTasks(db.prepare('SELECT * FROM tasks WHERE user_id=? ORDER BY goal_id, position').all(req.userId));
-    const tags = db.prepare('SELECT * FROM tags WHERE user_id=? ORDER BY name').all(req.userId);
-    // Extended tables
-    const habits = db.prepare('SELECT * FROM habits WHERE user_id=? ORDER BY position').all(req.userId);
-    const habitIds = habits.map(h => h.id);
-    const habit_logs = habitIds.length
-      ? db.prepare(`SELECT * FROM habit_logs WHERE habit_id IN (${habitIds.map(() => '?').join(',')}) ORDER BY date`).all(...habitIds)
-      : [];
-    const focus_sessions = db.prepare('SELECT * FROM focus_sessions WHERE user_id=?').all(req.userId);
-    const taskIds = tasks.map(t => t.id);
-    const task_comments = taskIds.length
-      ? db.prepare(`SELECT * FROM task_comments WHERE task_id IN (${taskIds.map(() => '?').join(',')}) ORDER BY created_at`).all(...taskIds)
-      : [];
-    const task_deps = taskIds.length
-      ? db.prepare(`SELECT * FROM task_deps WHERE task_id IN (${taskIds.map(() => '?').join(',')})`)
-          .all(...taskIds)
-      : [];
-    const notes = db.prepare('SELECT * FROM notes WHERE user_id=? ORDER BY updated_at DESC').all(req.userId);
-    const lists = db.prepare('SELECT * FROM lists WHERE user_id=? ORDER BY position').all(req.userId);
-    const listIds = lists.map(l => l.id);
-    const list_items = listIds.length
-      ? db.prepare(`SELECT * FROM list_items WHERE list_id IN (${listIds.map(() => '?').join(',')}) ORDER BY position`).all(...listIds)
-      : [];
-    const custom_field_defs = db.prepare('SELECT * FROM custom_field_defs WHERE user_id=? ORDER BY position').all(req.userId);
-    const task_custom_values = taskIds.length
-      ? db.prepare(`SELECT * FROM task_custom_values WHERE task_id IN (${taskIds.map(() => '?').join(',')})`)
-          .all(...taskIds)
-      : [];
-    const automation_rules = db.prepare('SELECT * FROM automation_rules WHERE user_id=?').all(req.userId);
-    const saved_filters = db.prepare('SELECT * FROM saved_filters WHERE user_id=? ORDER BY position').all(req.userId);
-    const task_templates = db.prepare('SELECT * FROM task_templates WHERE user_id=?').all(req.userId);
-    const weekly_reviews = db.prepare('SELECT * FROM weekly_reviews WHERE user_id=? ORDER BY week_start DESC').all(req.userId);
-    const inbox = db.prepare('SELECT * FROM inbox WHERE user_id=? ORDER BY created_at').all(req.userId);
-    const badges = db.prepare('SELECT * FROM badges WHERE user_id=?').all(req.userId);
-    const settings = db.prepare('SELECT * FROM settings WHERE user_id=?').all(req.userId);
-    const goalIds = goals.map(g => g.id);
-    const goal_milestones = goalIds.length
-      ? db.prepare(`SELECT * FROM goal_milestones WHERE goal_id IN (${goalIds.map(() => '?').join(',')}) ORDER BY position`).all(...goalIds)
-      : [];
+    const d = queryAllUserData(req.userId);
     res.setHeader('Content-Disposition', 'attachment; filename=lifeflow-export.json');
     if (audit) audit.log(req.userId, 'data_export', 'export', null, req);
-    res.json({
-      exportDate: new Date().toISOString(), areas, goals, tasks, tags,
-      habits, habit_logs, focus_sessions, task_comments, task_deps,
-      notes, lists, list_items, custom_field_defs, task_custom_values,
-      automation_rules, saved_filters, task_templates, weekly_reviews,
-      inbox, badges, settings, goal_milestones,
-    });
+    res.json({ exportDate: new Date().toISOString(), ...d });
   });
 
   // ─── Import ───

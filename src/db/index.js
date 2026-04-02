@@ -604,12 +604,14 @@ function initDatabase(dbDir) {
                 .run(t.name, t.color || '#64748B', userId);
               tagMap[t.id] = r.lastInsertRowid;
             }
+            const taskMap = {};
             for (const t of data.tasks) {
               const newGoalId = goalMap[t.goal_id];
               if (!newGoalId) continue;
               const r = db.prepare('INSERT INTO tasks (goal_id,title,note,status,priority,due_date,recurring,assigned_to,my_day,position,user_id,completed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
                 .run(newGoalId, t.title, t.note || '', t.status || 'todo', t.priority || 0, t.due_date || null,
                   t.recurring || null, t.assigned_to || '', t.my_day || 0, t.position || 0, userId, t.completed_at || null);
+              taskMap[t.id] = r.lastInsertRowid;
               if (t.tags && t.tags.length) {
                 for (const tag of t.tags) {
                   const newTagId = tagMap[tag.id];
@@ -634,6 +636,135 @@ function initDatabase(dbDir) {
               const newHabitId = habitMap[l.habit_id];
               if (newHabitId) db.prepare('INSERT OR IGNORE INTO habit_logs (habit_id,date,count) VALUES (?,?,?)').run(newHabitId, l.date, l.count || 1);
             }
+
+            // Restore focus sessions + meta + steps
+            const fsMap = {};
+            for (const f of (data.focus_sessions || [])) {
+              const newTaskId = f.task_id ? (taskMap[f.task_id] || null) : null;
+              const r = db.prepare('INSERT INTO focus_sessions (task_id,started_at,duration_sec,type,user_id) VALUES (?,?,?,?,?)')
+                .run(newTaskId, f.started_at, f.duration_sec || 0, f.type || 'pomodoro', userId);
+              fsMap[f.id] = r.lastInsertRowid;
+            }
+            for (const m of (data.focus_session_meta || [])) {
+              const newSid = fsMap[m.session_id];
+              if (newSid) {
+                db.prepare('INSERT OR IGNORE INTO focus_session_meta (session_id,intention,reflection,focus_rating,steps_planned,steps_completed,strategy) VALUES (?,?,?,?,?,?,?)')
+                  .run(newSid, m.intention || null, m.reflection || null, m.focus_rating || 0, m.steps_planned || 0, m.steps_completed || 0, m.strategy || 'pomodoro');
+              }
+            }
+            for (const s of (data.focus_steps || [])) {
+              const newSid = fsMap[s.session_id];
+              if (newSid) {
+                db.prepare('INSERT INTO focus_steps (session_id,text,done,position,completed_at) VALUES (?,?,?,?,?)')
+                  .run(newSid, s.text, s.done || 0, s.position || 0, s.completed_at || null);
+              }
+            }
+
+            // Restore task comments
+            for (const c of (data.task_comments || [])) {
+              const newTaskId = taskMap[c.task_id];
+              if (newTaskId) {
+                db.prepare('INSERT INTO task_comments (task_id,text,created_at) VALUES (?,?,?)')
+                  .run(newTaskId, c.text || c.content || '', c.created_at || new Date().toISOString());
+              }
+            }
+
+            // Restore task dependencies
+            for (const d of (data.task_deps || [])) {
+              const t1 = taskMap[d.task_id], t2 = taskMap[d.blocked_by_id];
+              if (t1 && t2) db.prepare('INSERT OR IGNORE INTO task_deps (task_id,blocked_by_id) VALUES (?,?)').run(t1, t2);
+            }
+
+            // Restore goal milestones
+            for (const m of (data.goal_milestones || [])) {
+              const newGoalId = goalMap[m.goal_id];
+              if (newGoalId) {
+                db.prepare('INSERT INTO goal_milestones (goal_id,title,done,position,completed_at) VALUES (?,?,?,?,?)')
+                  .run(newGoalId, m.title, m.done || 0, m.position || 0, m.completed_at || null);
+              }
+            }
+
+            // Restore notes
+            for (const n of (data.notes || [])) {
+              db.prepare('INSERT INTO notes (title,content,goal_id,user_id,created_at,updated_at) VALUES (?,?,?,?,?,?)')
+                .run(n.title, n.content || '', n.goal_id ? (goalMap[n.goal_id] || null) : null, userId, n.created_at || new Date().toISOString(), n.updated_at || new Date().toISOString());
+            }
+
+            // Restore lists + list items
+            const listMap = {};
+            for (const l of (data.lists || [])) {
+              const r = db.prepare('INSERT INTO lists (name,type,icon,color,position,user_id) VALUES (?,?,?,?,?,?)')
+                .run(l.name, l.type || 'checklist', l.icon || '📋', l.color || '#2563EB', l.position || 0, userId);
+              listMap[l.id] = r.lastInsertRowid;
+            }
+            for (const i of (data.list_items || [])) {
+              const newListId = listMap[i.list_id];
+              if (newListId) {
+                db.prepare('INSERT INTO list_items (list_id,title,checked,category,quantity,note,position) VALUES (?,?,?,?,?,?,?)')
+                  .run(newListId, i.title, i.checked || 0, i.category || null, i.quantity || null, i.note || '', i.position || 0);
+              }
+            }
+
+            // Restore custom field defs + values
+            const fieldMap = {};
+            for (const f of (data.custom_field_defs || [])) {
+              const r = db.prepare('INSERT INTO custom_field_defs (name,field_type,options,position,required,show_in_card,user_id) VALUES (?,?,?,?,?,?,?)')
+                .run(f.name, f.field_type, f.options || null, f.position || 0, f.required || 0, f.show_in_card || 0, userId);
+              fieldMap[f.id] = r.lastInsertRowid;
+            }
+            for (const v of (data.task_custom_values || [])) {
+              const newTaskId = taskMap[v.task_id], newFieldId = fieldMap[v.field_id];
+              if (newTaskId && newFieldId) db.prepare('INSERT OR IGNORE INTO task_custom_values (task_id,field_id,value) VALUES (?,?,?)').run(newTaskId, newFieldId, v.value);
+            }
+
+            // Restore automation rules
+            for (const r of (data.automation_rules || [])) {
+              db.prepare('INSERT INTO automation_rules (name,trigger_type,trigger_config,action_type,action_config,enabled,user_id) VALUES (?,?,?,?,?,?,?)')
+                .run(r.name, r.trigger_type, r.trigger_config || '{}', r.action_type, r.action_config || '{}', r.enabled !== undefined ? r.enabled : 1, userId);
+            }
+
+            // Restore saved filters
+            for (const f of (data.saved_filters || [])) {
+              db.prepare('INSERT INTO saved_filters (name,icon,color,filters,position,user_id) VALUES (?,?,?,?,?,?)')
+                .run(f.name, f.icon || '🔍', f.color || '#2563EB', f.filters || '{}', f.position || 0, userId);
+            }
+
+            // Restore task templates
+            for (const t of (data.task_templates || [])) {
+              db.prepare('INSERT INTO task_templates (name,description,icon,tasks,user_created,source_type,user_id) VALUES (?,?,?,?,?,?,?)')
+                .run(t.name, t.description || '', t.icon || '📋', t.tasks || '[]', t.user_created || 0, t.source_type || 'task', userId);
+            }
+
+            // Restore weekly reviews
+            for (const r of (data.weekly_reviews || [])) {
+              db.prepare('INSERT INTO weekly_reviews (week_start,tasks_completed,tasks_created,top_accomplishments,reflection,next_week_priorities,rating,user_id) VALUES (?,?,?,?,?,?,?,?)')
+                .run(r.week_start, r.tasks_completed || 0, r.tasks_created || 0, r.top_accomplishments || '[]', r.reflection || '', r.next_week_priorities || '[]', r.rating || null, userId);
+            }
+
+            // Restore daily reviews
+            for (const r of (data.daily_reviews || [])) {
+              db.prepare('INSERT OR IGNORE INTO daily_reviews (user_id,date,note,completed_count) VALUES (?,?,?,?)')
+                .run(userId, r.date, r.note || '', r.completed_count || 0);
+            }
+
+            // Restore inbox
+            for (const i of (data.inbox || [])) {
+              db.prepare('INSERT INTO inbox (title,note,priority,user_id) VALUES (?,?,?,?)')
+                .run(i.title, i.note || '', i.priority || 0, userId);
+            }
+
+            // Restore badges
+            for (const b of (data.badges || [])) {
+              try { db.prepare('INSERT OR IGNORE INTO badges (type,earned_at,user_id) VALUES (?,?,?)').run(b.type, b.earned_at || new Date().toISOString(), userId); } catch(e) {}
+            }
+
+            // Restore settings (user prefs only, not system keys)
+            for (const s of (data.settings || [])) {
+              if (s.key && !s.key.startsWith('_')) {
+                db.prepare('INSERT OR REPLACE INTO settings (user_id,key,value) VALUES (?,?,?)').run(userId, s.key, s.value);
+              }
+            }
+
             logger.info({ backup: bfile }, 'Auto-restore complete');
             break;
           } catch (e) {
