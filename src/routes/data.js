@@ -99,13 +99,21 @@ module.exports = function(deps) {
     // Rotate: keep last 14
     const files = fs.readdirSync(backupDir).filter(f => f.startsWith('lifeflow-backup-')).sort();
     while (files.length > 14) { fs.unlinkSync(path.join(backupDir, files.shift())); }
-    // Update data watermark — stores last known good counts for startup integrity check
+    // Update data watermark — ratchet upward only (never decrease)
+    // This prevents corrupt/seed data from lowering the watermark and masking real data loss
     try {
+      const existingWm = db.prepare("SELECT value FROM settings WHERE key='_data_watermark' AND user_id=0").get();
+      const prev = existingWm ? JSON.parse(existingWm.value) : {};
       const watermark = JSON.stringify({
-        areas: d.areas.length, goals: d.goals.length, tasks: d.tasks.length,
-        tags: d.tags.length, habits: d.habits.length,
-        focus_sessions: d.focus_sessions.length, notes: d.notes.length,
-        lists: d.lists.length, at: new Date().toISOString(),
+        areas: Math.max(d.areas.length, prev.areas || 0),
+        goals: Math.max(d.goals.length, prev.goals || 0),
+        tasks: Math.max(d.tasks.length, prev.tasks || 0),
+        tags: Math.max(d.tags.length, prev.tags || 0),
+        habits: Math.max(d.habits.length, prev.habits || 0),
+        focus_sessions: Math.max(d.focus_sessions.length, prev.focus_sessions || 0),
+        notes: Math.max(d.notes.length, prev.notes || 0),
+        lists: Math.max(d.lists.length, prev.lists || 0),
+        at: new Date().toISOString(),
       });
       db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (0, '_data_watermark', ?)").run(watermark);
     } catch (e) { logger.error({ err: e }, 'Failed to update data watermark'); }
