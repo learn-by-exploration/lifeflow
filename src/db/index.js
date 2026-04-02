@@ -563,10 +563,14 @@ function initDatabase(dbDir) {
       } else if (wm.areas > 0 && areaCount === 0) {
         shouldRestore = true;
         reason = `Areas dropped from ${wm.areas} to 0 (watermark: ${wm.at})`;
-      } else if (wm.tasks > 5 && taskCount < wm.tasks * 0.5) {
-        // >50% task loss when we had a meaningful number of tasks
-        logger.warn({ watermark: wm, current: { tasks: taskCount, areas: areaCount } },
-          'Significant data loss detected but not total — check manually');
+      } else if (wm.tasks > 3 && taskCount < wm.tasks * 0.5) {
+        // >50% task loss — restore automatically (seed data masks total loss)
+        shouldRestore = true;
+        reason = `Tasks dropped from ${wm.tasks} to ${taskCount} (>50% loss, watermark: ${wm.at})`;
+      } else if (wm.areas > 3 && areaCount < wm.areas * 0.5) {
+        // >50% area loss
+        shouldRestore = true;
+        reason = `Areas dropped from ${wm.areas} to ${areaCount} (>50% loss, watermark: ${wm.at})`;
       }
     }
 
@@ -584,6 +588,35 @@ function initDatabase(dbDir) {
             const userId = firstUser ? firstUser.id : 1;
             logger.warn({ backup: bfile, reason, backupAreas: data.areas.length, backupTasks: data.tasks.length },
               'Data integrity violation — auto-restoring from backup');
+            // Clear stale/seed data before restoring (cascading deletes handle children)
+            db.prepare('DELETE FROM habit_logs WHERE habit_id IN (SELECT id FROM habits WHERE user_id=?)').run(userId);
+            db.prepare('DELETE FROM habits WHERE user_id=?').run(userId);
+            db.prepare('DELETE FROM focus_session_meta WHERE session_id IN (SELECT id FROM focus_sessions WHERE user_id=?)').run(userId);
+            db.prepare('DELETE FROM focus_steps WHERE session_id IN (SELECT id FROM focus_sessions WHERE user_id=?)').run(userId);
+            db.prepare('DELETE FROM focus_sessions WHERE user_id=?').run(userId);
+            db.prepare('DELETE FROM task_custom_values WHERE task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(userId);
+            db.prepare('DELETE FROM task_comments WHERE task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(userId);
+            db.prepare('DELETE FROM task_deps WHERE task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(userId);
+            db.prepare('DELETE FROM task_tags WHERE task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(userId);
+            db.prepare('DELETE FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(userId);
+            db.prepare('DELETE FROM tasks WHERE user_id=?').run(userId);
+            db.prepare('DELETE FROM goal_milestones WHERE goal_id IN (SELECT id FROM goals WHERE user_id=?)').run(userId);
+            db.prepare('DELETE FROM goals WHERE user_id=?').run(userId);
+            db.prepare('DELETE FROM life_areas WHERE user_id=?').run(userId);
+            db.prepare('DELETE FROM tags WHERE user_id=?').run(userId);
+            db.prepare('DELETE FROM notes WHERE user_id=?').run(userId);
+            db.prepare('DELETE FROM list_items WHERE list_id IN (SELECT id FROM lists WHERE user_id=?)').run(userId);
+            db.prepare('DELETE FROM lists WHERE user_id=?').run(userId);
+            db.prepare('DELETE FROM custom_field_defs WHERE user_id=?').run(userId);
+            db.prepare('DELETE FROM automation_rules WHERE user_id=?').run(userId);
+            db.prepare('DELETE FROM saved_filters WHERE user_id=?').run(userId);
+            db.prepare('DELETE FROM task_templates WHERE user_id=?').run(userId);
+            db.prepare('DELETE FROM weekly_reviews WHERE user_id=?').run(userId);
+            db.prepare('DELETE FROM daily_reviews WHERE user_id=?').run(userId);
+            db.prepare('DELETE FROM inbox WHERE user_id=?').run(userId);
+            try { db.prepare('DELETE FROM badges WHERE user_id=?').run(userId); } catch(e) { /* ok */ }
+            db.prepare("DELETE FROM settings WHERE user_id=? AND key NOT LIKE '\\_%' ESCAPE '\\'").run(userId);
+
             const areaMap = {};
             for (const a of data.areas) {
               const r = db.prepare('INSERT INTO life_areas (name,icon,color,position,user_id) VALUES (?,?,?,?,?)')
