@@ -33,19 +33,19 @@ const SETTINGS_KEYS = new Set(Object.keys(SETTINGS_DEFAULTS));
 // ─── Reminders (upcoming + overdue summary) ───
 router.get('/api/reminders', (req, res) => {
   const overdue = enrichTasks(db.prepare(`
-    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.due_date < date('now') AND t.status != 'done' AND t.user_id=?
     ORDER BY t.due_date, t.priority DESC
   `).all(req.userId));
   const today = enrichTasks(db.prepare(`
-    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.due_date = date('now') AND t.status != 'done' AND t.user_id=?
     ORDER BY t.priority DESC
   `).all(req.userId));
   const upcoming = enrichTasks(db.prepare(`
-    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.due_date > date('now') AND t.due_date <= date('now', '+3 days') AND t.status != 'done' AND t.user_id=?
     ORDER BY t.due_date, t.priority DESC
@@ -457,19 +457,19 @@ router.get('/api/planner/suggest', (req, res) => {
   const today = new Date().toISOString().split('T')[0];
   const in3days = new Date(Date.now() + 3*86400000).toISOString().split('T')[0];
 
-  const overdue = enrichTasks(db.prepare(`SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+  const overdue = enrichTasks(db.prepare(`SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.status!='done' AND t.due_date < ? AND t.user_id=? ORDER BY t.due_date LIMIT 20`).all(today, req.userId));
 
-  const dueToday = enrichTasks(db.prepare(`SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+  const dueToday = enrichTasks(db.prepare(`SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.status!='done' AND t.due_date=? AND t.my_day=0 AND t.user_id=? ORDER BY t.priority DESC LIMIT 20`).all(today, req.userId));
 
-  const highPriority = enrichTasks(db.prepare(`SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+  const highPriority = enrichTasks(db.prepare(`SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.status!='done' AND t.priority>=2 AND t.my_day=0 AND (t.due_date IS NULL OR t.due_date>=?) AND t.user_id=? ORDER BY t.priority DESC LIMIT 10`).all(today, req.userId));
 
-  const upcoming = enrichTasks(db.prepare(`SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+  const upcoming = enrichTasks(db.prepare(`SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.status!='done' AND t.due_date>? AND t.due_date<=? AND t.my_day=0 AND t.user_id=? ORDER BY t.due_date LIMIT 10`).all(today, in3days, req.userId));
 
@@ -480,7 +480,7 @@ router.get('/api/planner/suggest', (req, res) => {
 router.get('/api/planner/smart', (req, res) => {
   const maxMin = Number(req.query.max_minutes) || 240;
   const tasks = db.prepare(`
-    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.status != 'done' AND t.my_day = 0 AND t.user_id=?
     ORDER BY t.priority DESC, t.due_date
@@ -520,7 +520,7 @@ router.get('/api/planner/:date', (req, res) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Invalid date format' });
   // Get all tasks for this date: either due on this date OR time-blocked on this date
   const tasks = db.prepare(`
-    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE (t.due_date=? OR (t.time_block_start IS NOT NULL AND t.due_date=?)) AND t.status!='done' AND t.user_id=?
     ORDER BY t.time_block_start, t.priority DESC

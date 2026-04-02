@@ -17,7 +17,7 @@ router.get('/api/goals/:goalId/tasks', (req, res) => {
 });
 router.get('/api/tasks/my-day', (req, res) => {
   res.json(enrichTasks(db.prepare(`
-    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE (t.my_day=1 OR t.due_date=date('now')) AND t.user_id=?
     ORDER BY t.priority DESC, t.position
@@ -29,14 +29,14 @@ router.get('/api/tasks/all', (req, res) => {
     const offset = Math.max(0, Number(req.query.offset) || 0);
     const total = db.prepare('SELECT COUNT(*) as c FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id WHERE t.user_id=?').get(req.userId).c;
     const items = enrichTasks(db.prepare(`
-      SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+      SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
       FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
       WHERE t.user_id=? ORDER BY t.status, t.priority DESC, t.due_date LIMIT ? OFFSET ?
     `).all(req.userId, limit, offset));
     return res.json({ items, total, hasMore: offset + limit < total, offset });
   }
   res.json(enrichTasks(db.prepare(`
-    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.user_id=?
     ORDER BY t.status, t.priority DESC, t.due_date
@@ -54,7 +54,7 @@ router.get('/api/tasks/board', (req, res) => {
   if (tagId && Number.isInteger(tagId)) { clauses.push('t.id IN (SELECT task_id FROM task_tags WHERE tag_id=?)'); params.push(tagId); }
   const where = clauses.length ? 'WHERE ' + clauses.join(' AND ') : '';
   res.json(enrichTasks(db.prepare(`
-    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.id as area_id
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color, a.id as area_id
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     ${where} ORDER BY t.priority DESC, t.position
   `).all(...params)));
@@ -63,7 +63,7 @@ router.get('/api/tasks/calendar', (req, res) => {
   const { start, end } = req.query;
   if (!start || !end) return res.status(400).json({ error: 'start and end required' });
   res.json(enrichTasks(db.prepare(`
-    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.due_date BETWEEN ? AND ? AND t.user_id=? ORDER BY t.due_date, t.priority DESC
   `).all(start, end, req.userId)));
@@ -72,7 +72,7 @@ router.get('/api/tasks/timeline', (req, res) => {
   const { start, end } = req.query;
   if (!start || !end) return res.status(400).json({ error: 'start and end required' });
   const tasks = enrichTasks(db.prepare(`
-    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.id as area_id
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color, a.id as area_id
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.due_date BETWEEN ? AND ? AND t.user_id=? ORDER BY t.due_date, t.priority DESC
   `).all(start, end, req.userId));
@@ -160,7 +160,7 @@ router.get('/api/tasks/search', (req, res) => {
   if (req.query.status && ['todo','doing','done'].includes(req.query.status)) { whereParts.push('t.status=?'); params.push(req.query.status); }
   const whereClause = whereParts.length ? 'WHERE ' + whereParts.join(' AND ') : '';
   res.json(enrichTasks(db.prepare(`
-    SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     LEFT JOIN subtasks s ON s.task_id=t.id
     ${whereClause}
@@ -173,7 +173,7 @@ router.get('/api/tasks/search', (req, res) => {
 router.get('/api/tasks/suggested', (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   const tasks = enrichTasks(db.prepare(`
-    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.status != 'done' AND t.my_day = 0 AND (t.due_date IS NULL OR t.due_date != ?) AND t.user_id=?
   `).all(today, req.userId));
@@ -196,7 +196,7 @@ router.get('/api/tasks/suggested', (req, res) => {
 // ─── Overdue (before :id to avoid param capture) ───
 router.get('/api/tasks/overdue', (req, res) => {
   res.json(enrichTasks(db.prepare(`
-    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.due_date < date('now') AND t.status != 'done' AND t.user_id=?
     ORDER BY t.due_date, t.priority DESC
@@ -209,13 +209,13 @@ router.get('/api/tasks/recurring', (req, res) => {
     const limit = Math.min(Math.max(1, Number(req.query.limit) || 50), 500);
     const offset = Math.max(0, Number(req.query.offset) || 0);
     const total = db.prepare(`SELECT COUNT(DISTINCT t.id) as c FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id WHERE t.recurring IS NOT NULL AND t.status!='done' AND t.user_id=?`).get(req.userId).c;
-    const items = enrichTasks(db.prepare(`SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    const items = enrichTasks(db.prepare(`SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
       FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
       WHERE t.recurring IS NOT NULL AND t.status!='done' AND t.user_id=?
       ORDER BY t.due_date LIMIT ? OFFSET ?`).all(req.userId, limit, offset));
     return res.json({ items, total, hasMore: offset + limit < total, offset });
   }
-  const tasks = enrichTasks(db.prepare(`SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+  const tasks = enrichTasks(db.prepare(`SELECT DISTINCT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.recurring IS NOT NULL AND t.status!='done' AND t.user_id=?
     ORDER BY t.due_date`).all(req.userId));
@@ -251,7 +251,7 @@ router.get('/api/tasks/table', (req, res) => {
 
   const total = db.prepare(`SELECT COUNT(*) as c FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id ${where}`).get(...params).c;
   const tasks = enrichTasks(db.prepare(`
-    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.id as area_id
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color, a.id as area_id
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     ${where} ORDER BY ${nullsOrder} LIMIT ? OFFSET ?
   `).all(...params, limit, offset));
@@ -277,7 +277,7 @@ router.get('/api/tasks/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!isPositiveInt(id)) return res.status(400).json({ error: 'Invalid ID' });
   const t = db.prepare(`
-    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id WHERE t.id=? AND t.user_id=?
   `).get(id, req.userId);
   if (!t) return res.status(404).json({ error: 'Not found' });

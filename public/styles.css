@@ -10,7 +10,7 @@
 [data-theme="nord"]{--bg:#2E3440;--bg-s:#3B4252;--bg-c:#434C5E;--bg-h:#4C566A;--tx:#ECEFF4;--tx2:#D8DEE9;--txd:#81A1C1;--brand:#88C0D0;--brand-h:#81A1C1;--ok:#A3BE8C;--err:#BF616A;--warn:#EBCB8B;--brd:rgba(255,255,255,.06);--shd:0 8px 32px rgba(0,0,0,.3);--ck-bg:transparent;--ck-bd:var(--txd)}
 [data-theme="sunset"]{--bg:#1A1423;--bg-s:#261B33;--bg-c:#352646;--bg-h:#44335A;--tx:#F3E5F5;--tx2:#CE93D8;--txd:#AB47BC;--brand:#FF7043;--brand-h:#F4511E;--ok:#66BB6A;--err:#EF5350;--warn:#FFC107;--brd:rgba(255,255,255,.06);--shd:0 8px 32px rgba(0,0,0,.5);--ck-bg:transparent;--ck-bd:var(--txd)}
 
-:root{--r:12px;--rs:10px}
+:root{--r:12px;--rs:10px;--bg2:var(--bg-s);--bd:var(--brd);--crd:var(--bg-c);--dn:var(--err);--tx-s:var(--txd)}
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:100vh;display:flex;overflow:hidden}
 
 /* Toast */

@@ -308,7 +308,7 @@ router.get('/api/activity', (req, res) => {
   const offset = (page - 1) * limit;
   const total = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='done' AND completed_at IS NOT NULL AND user_id=?").get(req.userId).c;
   const items = db.prepare(`
-    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
     WHERE t.status='done' AND t.completed_at IS NOT NULL AND t.user_id=?
     ORDER BY t.completed_at DESC LIMIT ? OFFSET ?

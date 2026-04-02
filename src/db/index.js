@@ -816,7 +816,14 @@ function initDatabase(dbDir) {
               at: new Date().toISOString(),
             });
             db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (0, '_data_watermark', ?)").run(restoredWm);
-            logger.info({ backup: bfile }, 'Auto-restore complete — watermark updated');
+            // Mark seed as completed so seeding doesn't overwrite restored data
+            db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (0, '_seed_completed', '1')").run();
+            // CRITICAL: Checkpoint WAL to persist restored data to main DB file
+            // Without this, restored data lives only in WAL and can be lost on crash/restart
+            try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (cpErr) {
+              logger.warn({ err: cpErr }, 'WAL checkpoint after restore failed');
+            }
+            logger.info({ backup: bfile }, 'Auto-restore complete — watermark updated, WAL checkpointed');
           } catch (e) {
             logger.error({ err: e, backup: bestFile }, 'Auto-restore from backup failed');
           }
