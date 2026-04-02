@@ -3700,7 +3700,7 @@ function vimMove(delta){
 }
 
 // ─── CUSTOM FIELDS SETTINGS ───
-async function renderCustomFieldsSettings(c, tabsHtml){
+async function renderCustomFieldsSettings(c, tabsHtml, wireSettingsTabs){
   const fields=await api.get('/api/custom-fields');
   const TYPES=[{v:'text',l:'Text'},{v:'number',l:'Number'},{v:'date',l:'Date'},{v:'select',l:'Select'}];
   let h=tabsHtml+`<div class="settings-grid"><section class="settings-section"><h3>Custom Fields</h3>
@@ -3828,7 +3828,7 @@ async function renderSettings(){
     return;
   }
   if(window._settingsTab==='customfields'){
-    await renderCustomFieldsSettings(c, tabsHtml);
+    await renderCustomFieldsSettings(c, tabsHtml, wireSettingsTabs);
     return;
   }
   if(window._settingsTab==='areas'){
