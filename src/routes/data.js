@@ -16,12 +16,17 @@ module.exports = function(deps) {
     const goals = db.prepare('SELECT * FROM goals WHERE user_id=? ORDER BY area_id, position').all(userId);
     const tasks = enrichTasks(db.prepare('SELECT * FROM tasks WHERE user_id=? ORDER BY goal_id, position').all(userId));
     const tags = db.prepare('SELECT * FROM tags WHERE user_id=? ORDER BY name').all(userId);
+    const habits = db.prepare('SELECT * FROM habits WHERE user_id=? ORDER BY position').all(userId);
+    const habitIds = habits.map(h => h.id);
+    const habit_logs = habitIds.length
+      ? db.prepare(`SELECT * FROM habit_logs WHERE habit_id IN (${habitIds.map(() => '?').join(',')}) ORDER BY date`).all(...habitIds)
+      : [];
     // Safety: don't overwrite good backups with empty data
     if (areas.length === 0 && goals.length === 0 && tasks.length === 0) {
       logger.warn({ userId }, 'Skipping backup — database appears empty, refusing to overwrite valid backups');
       return null;
     }
-    const data = JSON.stringify({ backupDate: new Date().toISOString(), areas, goals, tasks, tags });
+    const data = JSON.stringify({ backupDate: new Date().toISOString(), areas, goals, tasks, tags, habits, habit_logs });
     const fname = `lifeflow-backup-${new Date().toISOString().slice(0, 10)}.json`;
     fs.writeFileSync(path.join(backupDir, fname), data);
     // Rotate: keep last 14
@@ -29,7 +34,7 @@ module.exports = function(deps) {
     while (files.length > 14) { fs.unlinkSync(path.join(backupDir, files.shift())); }
     // Update data watermark — stores last known good counts for startup integrity check
     try {
-      const watermark = JSON.stringify({ areas: areas.length, goals: goals.length, tasks: tasks.length, tags: tags.length, at: new Date().toISOString() });
+      const watermark = JSON.stringify({ areas: areas.length, goals: goals.length, tasks: tasks.length, tags: tags.length, habits: habits.length, at: new Date().toISOString() });
       db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (0, '_data_watermark', ?)").run(watermark);
     } catch (e) { logger.error({ err: e }, 'Failed to update data watermark'); }
     return fname;

@@ -622,6 +622,18 @@ function initDatabase(dbDir) {
                 }
               }
             }
+            // Restore habits + habit logs
+            const habitMap = {};
+            for (const h of (data.habits || [])) {
+              const newAreaId = h.area_id ? areaMap[h.area_id] || null : null;
+              const r = db.prepare('INSERT INTO habits (name,icon,color,frequency,target,position,area_id,user_id,preferred_time) VALUES (?,?,?,?,?,?,?,?,?)')
+                .run(h.name, h.icon || '💪', h.color || '#6c63ff', h.frequency || 'daily', h.target || 1, h.position || 0, newAreaId, userId, h.preferred_time || null);
+              habitMap[h.id] = r.lastInsertRowid;
+            }
+            for (const l of (data.habit_logs || [])) {
+              const newHabitId = habitMap[l.habit_id];
+              if (newHabitId) db.prepare('INSERT OR IGNORE INTO habit_logs (habit_id,date,count) VALUES (?,?,?)').run(newHabitId, l.date, l.count || 1);
+            }
             logger.info({ backup: bfile }, 'Auto-restore complete');
             break;
           } catch (e) {
