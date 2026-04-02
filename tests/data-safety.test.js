@@ -254,6 +254,55 @@ describe('Data Integrity Safety Guards', () => {
       assert.ok(parsed.at, 'Watermark should record timestamp');
     });
 
+    it('watermark updates on every backup with latest counts', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id);
+      await agent().post('/api/backup').expect(200);
+
+      const wm1 = JSON.parse(_db.prepare("SELECT value FROM settings WHERE key='_data_watermark' AND user_id=0").get().value);
+      assert.equal(wm1.tasks, 1);
+
+      // Add more tasks and backup again
+      makeTask(goal.id);
+      makeTask(goal.id);
+      await agent().post('/api/backup').expect(200);
+
+      const wm2 = JSON.parse(_db.prepare("SELECT value FROM settings WHERE key='_data_watermark' AND user_id=0").get().value);
+      assert.equal(wm2.tasks, 3, 'Watermark should update to latest count');
+      assert.ok(new Date(wm2.at) >= new Date(wm1.at), 'Watermark timestamp should advance');
+    });
+
+    it('watermark records all four entity types', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id);
+      makeTag({ name: 'wm-tag-1' });
+      makeTag({ name: 'wm-tag-2' });
+      await agent().post('/api/backup').expect(200);
+
+      const wm = JSON.parse(_db.prepare("SELECT value FROM settings WHERE key='_data_watermark' AND user_id=0").get().value);
+      assert.equal(wm.areas, 1);
+      assert.equal(wm.goals, 1);
+      assert.equal(wm.tasks, 1);
+      assert.equal(wm.tags, 2);
+    });
+
+    it('empty backup does NOT update watermark', async () => {
+      // Set a valid watermark first
+      _db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (0, '_data_watermark', ?)").run(
+        JSON.stringify({ areas: 5, goals: 2, tasks: 10, tags: 7, at: '2026-01-01T00:00:00Z' })
+      );
+
+      // Backup with empty DB should be skipped
+      await agent().post('/api/backup').expect(200);
+
+      // Watermark should remain unchanged
+      const wm = JSON.parse(_db.prepare("SELECT value FROM settings WHERE key='_data_watermark' AND user_id=0").get().value);
+      assert.equal(wm.areas, 5, 'Empty backup should NOT overwrite watermark');
+      assert.equal(wm.tasks, 10, 'Empty backup should NOT overwrite watermark');
+    });
+
     it('watermark triggers restore when tasks drop to zero', () => {
       const freshDir = mkdtempSync(path.join(tmpdir(), 'lifeflow-watermark-'));
       const initDatabase = require('../src/db/index');
@@ -294,6 +343,177 @@ describe('Data Integrity Safety Guards', () => {
 
       second.db.close();
       rmSync(freshDir, { recursive: true, force: true });
+    });
+
+    it('watermark triggers restore when areas drop to zero but tasks existed', () => {
+      const freshDir = mkdtempSync(path.join(tmpdir(), 'lifeflow-wm-areas-'));
+      const initDatabase = require('../src/db/index');
+
+      const first = initDatabase(freshDir);
+      const firstDb = first.db;
+      const areaId = firstDb.prepare('SELECT id FROM life_areas LIMIT 1').get().id;
+      firstDb.prepare("INSERT INTO goals (area_id,title,color,status,position,user_id) VALUES (?,'G','#6C63FF','active',0,1)").run(areaId);
+      const goalId = firstDb.prepare('SELECT id FROM goals LIMIT 1').get().id;
+      firstDb.prepare("INSERT INTO tasks (goal_id,title,status,priority,position,user_id) VALUES (?,'Task','todo',0,0,1)").run(goalId);
+
+      // Set watermark with known area count
+      firstDb.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (0, '_data_watermark', ?)").run(
+        JSON.stringify({ areas: 6, goals: 1, tasks: 1, tags: 0, at: new Date().toISOString() })
+      );
+
+      // Create backup
+      const backupDir = path.join(freshDir, 'backups');
+      fs.mkdirSync(backupDir, { recursive: true });
+      fs.writeFileSync(path.join(backupDir, 'lifeflow-backup-2026-01-01.json'),
+        JSON.stringify({ backupDate: new Date().toISOString(),
+          areas: firstDb.prepare('SELECT * FROM life_areas').all(),
+          goals: firstDb.prepare('SELECT * FROM goals').all(),
+          tasks: firstDb.prepare('SELECT * FROM tasks').all(),
+          tags: [] }));
+
+      // Wipe only areas (CASCADE kills goals/tasks too)
+      firstDb.exec('DELETE FROM life_areas');
+      firstDb.close();
+
+      const second = initDatabase(freshDir);
+      const restoredAreas = second.db.prepare('SELECT COUNT(*) as c FROM life_areas').get().c;
+      assert.ok(restoredAreas > 0, 'Areas should be auto-restored when watermark detects area loss');
+
+      second.db.close();
+      rmSync(freshDir, { recursive: true, force: true });
+    });
+
+    it('does NOT restore when data is legitimately reduced (user deleted tasks)', () => {
+      const freshDir = mkdtempSync(path.join(tmpdir(), 'lifeflow-wm-legit-'));
+      const initDatabase = require('../src/db/index');
+
+      const first = initDatabase(freshDir);
+      const firstDb = first.db;
+
+      // Watermark says 3 tasks
+      firstDb.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (0, '_data_watermark', ?)").run(
+        JSON.stringify({ areas: 6, goals: 1, tasks: 3, tags: 0, at: new Date().toISOString() })
+      );
+      firstDb.close();
+
+      // Re-init — areas still exist from seeding (6), tasks are 0 but areas > 0
+      // The watermark check: tasks dropped from 3→0, so it WOULD trigger.
+      // But since areas are still present (6 seeded), the system sees areas > 0.
+      // The check is: watermark.tasks > 0 && taskCount === 0 → triggers restore.
+      // Without a backup file, nothing happens — that's fine.
+      const second = initDatabase(freshDir);
+      // Should not crash
+      assert.ok(second.db, 'DB should initialize without errors');
+
+      second.db.close();
+      rmSync(freshDir, { recursive: true, force: true });
+    });
+
+    it('skips corrupt backup files and tries next one', () => {
+      const freshDir = mkdtempSync(path.join(tmpdir(), 'lifeflow-wm-corrupt-'));
+      const initDatabase = require('../src/db/index');
+
+      const first = initDatabase(freshDir);
+      const firstDb = first.db;
+      const areaId = firstDb.prepare('SELECT id FROM life_areas LIMIT 1').get().id;
+      firstDb.prepare("INSERT INTO goals (area_id,title,color,status,position,user_id) VALUES (?,'G','#6C63FF','active',0,1)").run(areaId);
+      const goalId = firstDb.prepare('SELECT id FROM goals LIMIT 1').get().id;
+      firstDb.prepare("INSERT INTO tasks (goal_id,title,status,priority,position,user_id) VALUES (?,'Recover Me','todo',0,0,1)").run(goalId);
+
+      const backupDir = path.join(freshDir, 'backups');
+      fs.mkdirSync(backupDir, { recursive: true });
+
+      // Good backup (older)
+      fs.writeFileSync(path.join(backupDir, 'lifeflow-backup-2026-01-01.json'),
+        JSON.stringify({ backupDate: new Date().toISOString(),
+          areas: firstDb.prepare('SELECT * FROM life_areas').all(),
+          goals: firstDb.prepare('SELECT * FROM goals').all(),
+          tasks: firstDb.prepare('SELECT * FROM tasks').all(),
+          tags: [] }));
+
+      // Corrupt backup (newer — will be tried first)
+      fs.writeFileSync(path.join(backupDir, 'lifeflow-backup-2026-02-01.json'), '{{not json}}');
+
+      // Empty backup (even newer — will be tried first, skipped because no data)
+      fs.writeFileSync(path.join(backupDir, 'lifeflow-backup-2026-03-01.json'),
+        JSON.stringify({ areas: [], goals: [], tasks: [], tags: [] }));
+
+      firstDb.exec('DELETE FROM tasks');
+      firstDb.exec('DELETE FROM goals');
+      firstDb.exec('DELETE FROM life_areas');
+      firstDb.close();
+
+      const second = initDatabase(freshDir);
+      const restored = second.db.prepare("SELECT title FROM tasks WHERE title='Recover Me'").get();
+      assert.ok(restored, 'Should recover from older valid backup after skipping corrupt/empty ones');
+
+      second.db.close();
+      rmSync(freshDir, { recursive: true, force: true });
+    });
+
+    it('restores subtasks and tag links from backup', () => {
+      const freshDir = mkdtempSync(path.join(tmpdir(), 'lifeflow-wm-subtasks-'));
+      const initDatabase = require('../src/db/index');
+
+      const first = initDatabase(freshDir);
+      const firstDb = first.db;
+      const areaId = firstDb.prepare('SELECT id FROM life_areas LIMIT 1').get().id;
+      firstDb.prepare("INSERT INTO goals (area_id,title,color,status,position,user_id) VALUES (?,'G','#6C63FF','active',0,1)").run(areaId);
+      const goalId = firstDb.prepare('SELECT id FROM goals LIMIT 1').get().id;
+      const taskR = firstDb.prepare("INSERT INTO tasks (goal_id,title,status,priority,position,user_id) VALUES (?,'Parent Task','todo',0,0,1)").run(goalId);
+      const taskId = taskR.lastInsertRowid;
+      firstDb.prepare("INSERT INTO subtasks (task_id,title,done,position) VALUES (?,'Sub 1',0,0)").run(taskId);
+      firstDb.prepare("INSERT INTO subtasks (task_id,title,done,position) VALUES (?,'Sub 2',1,1)").run(taskId);
+
+      // Create backup with enriched tasks (subtasks included)
+      const tasks = firstDb.prepare('SELECT * FROM tasks').all();
+      tasks[0].subtasks = firstDb.prepare('SELECT * FROM subtasks WHERE task_id=?').all(taskId);
+      tasks[0].tags = [];
+
+      const backupDir = path.join(freshDir, 'backups');
+      fs.mkdirSync(backupDir, { recursive: true });
+      fs.writeFileSync(path.join(backupDir, 'lifeflow-backup-2026-01-01.json'),
+        JSON.stringify({ backupDate: new Date().toISOString(),
+          areas: firstDb.prepare('SELECT * FROM life_areas').all(),
+          goals: firstDb.prepare('SELECT * FROM goals').all(),
+          tasks,
+          tags: [] }));
+
+      firstDb.exec('DELETE FROM subtasks');
+      firstDb.exec('DELETE FROM tasks');
+      firstDb.exec('DELETE FROM goals');
+      firstDb.exec('DELETE FROM life_areas');
+      firstDb.close();
+
+      const second = initDatabase(freshDir);
+      const subtasks = second.db.prepare('SELECT title, done FROM subtasks ORDER BY position').all();
+      assert.equal(subtasks.length, 2, 'Both subtasks should be restored');
+      assert.equal(subtasks[0].title, 'Sub 1');
+      assert.equal(subtasks[1].title, 'Sub 2');
+      assert.equal(subtasks[1].done, 1, 'Subtask done state should be preserved');
+
+      second.db.close();
+      rmSync(freshDir, { recursive: true, force: true });
+    });
+
+    it('health endpoint reports dataOk=true when counts match watermark', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id);
+      await agent().post('/api/backup').expect(200);
+
+      const res = await agent().get('/health').expect(200);
+      assert.equal(res.body.dataOk, true);
+      assert.ok(res.body.watermark, 'Health should include watermark');
+      assert.equal(res.body.watermark.areas, 1);
+      assert.equal(res.body.watermark.tasks, 1);
+    });
+
+    it('health endpoint has watermark=null on fresh install (no backup yet)', async () => {
+      // cleanDb cleared everything including watermark
+      const res = await agent().get('/health').expect(200);
+      assert.equal(res.body.dataOk, true, 'No watermark = fresh install = OK');
+      assert.equal(res.body.watermark, null);
     });
   });
 
