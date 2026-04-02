@@ -471,10 +471,13 @@ describe('CSS Integrity', () => {
     }
 
     const undefined_ = [...usedVars].filter(v => !definedVars.has(v));
-    if (undefined_.length > 0) {
+    // Dynamic vars set via inline style="" in JS at runtime
+    const dynamicVars = new Set(['swatch']);
+    const realUndefined = undefined_.filter(v => !dynamicVars.has(v));
+    if (realUndefined.length > 0) {
       assert.fail(
         `CSS custom properties used but never defined:\n` +
-        undefined_.map(v => `  - var(--${v})`).join('\n')
+        realUndefined.map(v => `  - var(--${v})`).join('\n')
       );
     }
   });

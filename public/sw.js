@@ -1,7 +1,7 @@
 // Service Worker for LifeFlow push notifications
 // Handles background notifications + offline support
 
-const CACHE_VERSION = 'v4-' + '20260325';
+const CACHE_VERSION = 'v5-' + '20260402';
 const CACHE_NAME = `lifeflow-${CACHE_VERSION}`;
 
 const urlsToCache = [

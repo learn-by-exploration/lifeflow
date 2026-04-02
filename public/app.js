@@ -3459,8 +3459,8 @@ async function renderTags(){
   h+=`<div style="display:grid;gap:8px;margin-top:8px">`;
   tags.forEach(t=>{
     h+=`<div class="tc" style="cursor:default;padding:10px 12px;display:flex;align-items:center;gap:10px" data-tag-id="${t.id}">
-      <div class="sw swatch-pick" data-tid="${t.id}" style="background:${escA(t.color)};width:24px;height:24px;border-radius:50%;cursor:pointer;flex-shrink:0" title="Change color"></div>
-      <input type="text" class="tag-name-inp" data-tid="${t.id}" value="${escA(t.name)}" style="flex:1;border:1px solid var(--bd);border-radius:6px;padding:4px 8px;font-size:13px;background:var(--bg);color:var(--tx)">
+      <div class="swatch-pick" data-tid="${t.id}" style="width:22px;height:22px;border-radius:50%;cursor:pointer;flex-shrink:0;border:2.5px solid ${escA(t.color)};background:transparent;display:flex;align-items:center;justify-content:center" title="Change color"><div style="width:10px;height:10px;border-radius:50%;background:${escA(t.color)}"></div></div>
+      <input type="text" class="tag-name-inp" data-tid="${t.id}" value="${escA(t.name)}" style="flex:1;border:1px solid var(--brd);border-radius:6px;padding:5px 10px;font-size:13px;background:var(--bg-c);color:var(--tx)">
       <span style="font-size:11px;color:var(--tx2);white-space:nowrap">${t.usage_count} task${t.usage_count!==1?'s':''}</span>
       <button class="material-icons-round tag-save" data-tid="${t.id}" style="font-size:18px;color:var(--brand);cursor:pointer;border:none;background:none" title="Save">check</button>
       <button class="material-icons-round tag-del" data-tid="${t.id}" style="font-size:18px;color:var(--err);cursor:pointer;border:none;background:none" title="Delete">delete_outline</button>
@@ -3843,7 +3843,7 @@ async function renderSettings(){
         <span class="material-icons-round sa-grip" style="font-size:16px;color:var(--txd);cursor:grab">drag_indicator</span>
         <span style="font-size:20px">${esc(a.icon)}</span>
         <span style="flex:1;font-size:13px;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</span>
-        <span class="sa-color" style="width:16px;height:16px;border-radius:50%;background:${escA(a.color)}"></span>
+        <span class="sa-color" style="width:16px;height:16px;border-radius:50%;border:2.5px solid ${escA(a.color)};background:transparent"></span>
         <button class="btn-c sa-move-up" data-aid="${a.id}" title="Move up"${i===0?' disabled':''}><span class="material-icons-round" style="font-size:16px">arrow_upward</span></button>
         <button class="btn-c sa-move-dn" data-aid="${a.id}" title="Move down"${i===active.length-1?' disabled':''}><span class="material-icons-round" style="font-size:16px">arrow_downward</span></button>
         <button class="btn-c sa-edit" data-aid="${a.id}" title="Edit"><span class="material-icons-round" style="font-size:16px">edit</span></button>
@@ -3976,10 +3976,10 @@ async function renderSettings(){
   <section class="settings-section">
     <h3>Custom Priority Labels &amp; Colors</h3>
     <p style="font-size:11px;color:var(--txd);margin-bottom:8px">Rename priorities and customize their colors.</p>
-    <div class="set-row"><label>None</label><input type="text" id="pl-0" value="${esc(pl['0'])}" style="width:100px;padding:6px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px"><input type="color" id="pc-0" value="${pc['0']}" style="width:32px;height:32px;border:none;cursor:pointer"></div>
-    <div class="set-row"><label>Normal</label><input type="text" id="pl-1" value="${esc(pl['1'])}" style="width:100px;padding:6px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px"><input type="color" id="pc-1" value="${pc['1']}" style="width:32px;height:32px;border:none;cursor:pointer"></div>
-    <div class="set-row"><label>High</label><input type="text" id="pl-2" value="${esc(pl['2'])}" style="width:100px;padding:6px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px"><input type="color" id="pc-2" value="${pc['2']}" style="width:32px;height:32px;border:none;cursor:pointer"></div>
-    <div class="set-row"><label>Critical</label><input type="text" id="pl-3" value="${esc(pl['3'])}" style="width:100px;padding:6px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px"><input type="color" id="pc-3" value="${pc['3']}" style="width:32px;height:32px;border:none;cursor:pointer"></div>
+    <div class="set-row"><label>None</label><input type="text" id="pl-0" value="${esc(pl['0'])}" style="width:100px;padding:6px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px"><label class="color-pick" style="--swatch:${pc['0']}"><input type="color" id="pc-0" value="${pc['0']}"></label></div>
+    <div class="set-row"><label>Normal</label><input type="text" id="pl-1" value="${esc(pl['1'])}" style="width:100px;padding:6px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px"><label class="color-pick" style="--swatch:${pc['1']}"><input type="color" id="pc-1" value="${pc['1']}"></label></div>
+    <div class="set-row"><label>High</label><input type="text" id="pl-2" value="${esc(pl['2'])}" style="width:100px;padding:6px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px"><label class="color-pick" style="--swatch:${pc['2']}"><input type="color" id="pc-2" value="${pc['2']}"></label></div>
+    <div class="set-row"><label>Critical</label><input type="text" id="pl-3" value="${esc(pl['3'])}" style="width:100px;padding:6px 8px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--bg-c);color:var(--tx);font-size:13px"><label class="color-pick" style="--swatch:${pc['3']}"><input type="color" id="pc-3" value="${pc['3']}"></label></div>
     <div style="margin-top:8px;text-align:right"><button class="btn-s" id="pl-save" style="font-size:12px;padding:6px 14px">Save Priorities</button></div>
   </section>
   <section class="settings-section">
