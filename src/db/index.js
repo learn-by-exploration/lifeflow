@@ -587,7 +587,7 @@ function initDatabase(dbDir) {
             if (!data.areas || !data.areas.length) continue;
             const score = (data.areas?.length || 0) + (data.tasks?.length || 0) + (data.habits?.length || 0) + (data.tags?.length || 0);
             if (score > bestScore) { bestScore = score; bestFile = bfile; bestData = data; }
-          } catch (e) { /* skip corrupt files */ }
+          } catch (e) { logger.warn({ file: bfile, err: e.message }, 'Skipped corrupt/unreadable backup'); }
         }
         if (bestFile && bestData) {
           try {
@@ -806,7 +806,16 @@ function initDatabase(dbDir) {
               }
             }
 
-            logger.info({ backup: bfile }, 'Auto-restore complete');
+            // Update watermark to match restored data so future losses are detected
+            const restoredWm = JSON.stringify({
+              areas: data.areas.length, goals: (data.goals || []).length,
+              tasks: data.tasks.length, tags: (data.tags || []).length,
+              habits: (data.habits || []).length, focus_sessions: (data.focus_sessions || []).length,
+              notes: (data.notes || []).length, lists: (data.lists || []).length,
+              at: new Date().toISOString(),
+            });
+            db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (0, '_data_watermark', ?)").run(restoredWm);
+            logger.info({ backup: bfile }, 'Auto-restore complete — watermark updated');
           } catch (e) {
             logger.error({ err: e, backup: bestFile }, 'Auto-restore from backup failed');
           }
