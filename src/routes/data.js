@@ -16,12 +16,17 @@ module.exports = function(deps) {
     const goals = db.prepare('SELECT * FROM goals WHERE user_id=? ORDER BY area_id, position').all(userId);
     const tasks = enrichTasks(db.prepare('SELECT * FROM tasks WHERE user_id=? ORDER BY goal_id, position').all(userId));
     const tags = db.prepare('SELECT * FROM tags WHERE user_id=? ORDER BY name').all(userId);
+    // Safety: don't overwrite good backups with empty data
+    if (areas.length === 0 && goals.length === 0 && tasks.length === 0) {
+      logger.warn({ userId }, 'Skipping backup — database appears empty, refusing to overwrite valid backups');
+      return null;
+    }
     const data = JSON.stringify({ backupDate: new Date().toISOString(), areas, goals, tasks, tags });
     const fname = `lifeflow-backup-${new Date().toISOString().slice(0, 10)}.json`;
     fs.writeFileSync(path.join(backupDir, fname), data);
-    // Rotate: keep last 7
+    // Rotate: keep last 14
     const files = fs.readdirSync(backupDir).filter(f => f.startsWith('lifeflow-backup-')).sort();
-    while (files.length > 7) { fs.unlinkSync(path.join(backupDir, files.shift())); }
+    while (files.length > 14) { fs.unlinkSync(path.join(backupDir, files.shift())); }
     return fname;
   }
 

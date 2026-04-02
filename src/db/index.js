@@ -13,6 +13,8 @@ function initDatabase(dbDir) {
   const db = new Database(path.join(dbDir, 'lifeflow.db'));
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
+  // Force WAL checkpoint on open to ensure main DB file is up-to-date
+  try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch {}
 
   // ─── Auth tables ───
   db.exec(`
@@ -460,10 +462,15 @@ function initDatabase(dbDir) {
   }
   rebuildSearchIndex();
 
-  // ─── Seed default data for user 1 (if first boot and user exists) ───
+  // ─── Seed default data for new users (ONLY on true first boot) ───
+  // Safety: Never re-seed if tasks/goals/subtasks exist — that indicates a DB with real data
+  // whose areas may have been lost to WAL corruption. Re-seeding would mask data loss.
   const cnt = db.prepare('SELECT COUNT(*) as c FROM life_areas').get();
   const firstUser = db.prepare('SELECT id FROM users ORDER BY id LIMIT 1').get();
-  if (cnt.c === 0 && firstUser) {
+  const hasExistingData = db.prepare('SELECT COUNT(*) as c FROM tasks').get().c > 0
+    || db.prepare('SELECT COUNT(*) as c FROM goals').get().c > 0;
+  const seedDone = db.prepare("SELECT value FROM settings WHERE key='_seed_completed' AND user_id=0").get();
+  if (cnt.c === 0 && firstUser && !hasExistingData && !seedDone) {
     const uid = firstUser.id;
     const ins = db.prepare('INSERT INTO life_areas (name,icon,color,position,user_id) VALUES (?,?,?,?,?)');
     ins.run('Health','💪','#22C55E',0,uid);
@@ -474,14 +481,14 @@ function initDatabase(dbDir) {
     ins.run('Learning','📚','#0F766E',5,uid);
   }
   const tc = db.prepare('SELECT COUNT(*) as c FROM tags').get();
-  if (tc.c === 0 && firstUser) {
+  if (tc.c === 0 && firstUser && !hasExistingData && !seedDone) {
     const uid = firstUser.id;
     const it = db.prepare('INSERT INTO tags (name,color,user_id) VALUES (?,?,?)');
     it.run('urgent','#EF4444',uid); it.run('blocked','#F59E0B',uid); it.run('quick-win','#22C55E',uid);
     it.run('research','#7C3AED',uid); it.run('waiting','#64748B',uid);
   }
   const tmplC = db.prepare('SELECT COUNT(*) as c FROM task_templates').get();
-  if (tmplC.c === 0 && firstUser) {
+  if (tmplC.c === 0 && firstUser && !hasExistingData && !seedDone) {
     const uid = firstUser.id;
     const it = db.prepare('INSERT INTO task_templates (name, description, icon, tasks, user_id) VALUES (?, ?, ?, ?, ?)');
     it.run('Sprint Planning', 'Agile sprint setup checklist', '🏃', JSON.stringify([
@@ -523,6 +530,10 @@ function initDatabase(dbDir) {
       { title: 'Deploy to production', priority: 1, subtasks: [] },
       { title: 'Monitor post-launch', priority: 1, subtasks: [] }
     ]), uid);
+  }
+  // Mark seeding as completed so it never re-triggers (even after data loss)
+  if (firstUser && !seedDone) {
+    db.prepare("INSERT OR IGNORE INTO settings (user_id, key, value) VALUES (0, '_seed_completed', '1')").run();
   }
 
   // ─── API Tokens table ───

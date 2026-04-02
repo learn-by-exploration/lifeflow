@@ -207,6 +207,10 @@ describe('Misc API – exhaustive edge-case coverage', () => {
 
   describe('Backup Edge Cases', () => {
     it('POST /api/backup creates file on disk (response has filename)', async () => {
+      // Backup requires non-empty data (safety guard against overwriting good backups)
+      const a = makeArea({ name: 'Backup Test Area' });
+      const g = makeGoal(a.id, { title: 'Backup Test Goal' });
+      makeTask(g.id, { title: 'Backup Test Task' });
       const res = await agent().post('/api/backup').send({});
       assert.equal(res.status, 200);
       assert.equal(res.body.ok, true);

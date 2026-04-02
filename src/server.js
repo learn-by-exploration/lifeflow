@@ -166,10 +166,16 @@ app.get('/share/:token', (req, res) => {
 // ─── Health & readiness checks ───
 app.get('/health', (req, res) => {
   let dbOk = false;
-  try { db.prepare('SELECT 1').get(); dbOk = true; } catch {}
-  const status = dbOk ? 'ok' : 'error';
+  let walOk = false;
+  try {
+    db.prepare('SELECT 1').get();
+    dbOk = true;
+    const walMode = db.pragma('journal_mode', { simple: true });
+    walOk = walMode === 'wal';
+  } catch {}
+  const status = dbOk && walOk ? 'ok' : 'degraded';
   const code = dbOk ? 200 : 503;
-  res.status(code).json({ status, dbOk });
+  res.status(code).json({ status, dbOk, walOk });
 });
 
 app.get('/ready', (req, res) => {
@@ -235,14 +241,25 @@ if (require.main === module) {
     scheduler.stop();
     server.close(() => {
       logger.info('HTTP server closed');
-      try { db.close(); } catch {}
+      try {
+        // Force WAL checkpoint before closing — flushes all WAL data into main DB file
+        db.pragma('wal_checkpoint(TRUNCATE)');
+        logger.info('WAL checkpoint completed');
+        db.close();
+      } catch (e) {
+        logger.error({ err: e }, 'Error during DB shutdown');
+        try { db.close(); } catch {}
+      }
       logger.info('Database closed');
       process.exit(0);
     });
     // Force exit after timeout
     setTimeout(() => {
       logger.warn('Forcing shutdown after timeout');
-      try { db.close(); } catch {}
+      try {
+        db.pragma('wal_checkpoint(TRUNCATE)');
+        db.close();
+      } catch {}
       process.exit(1);
     }, config.shutdownTimeoutMs || 10000);
   }
