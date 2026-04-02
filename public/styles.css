@@ -110,6 +110,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .ni-label{white-space:nowrap;overflow:hidden;transition:opacity .15s ease,width .2s ease}
 
 /* ── Collapsed sidebar (icon rail) ── */
+/* Section group icons — hidden in normal mode, shown in collapsed sidebar when section is toggled closed */
+.sec-icon{display:none}
 .sb.collapsed{width:56px}
 .sb.collapsed .sb-brand{padding:14px 12px;justify-content:center;gap:0}
 .sb.collapsed .sb-brand h1{opacity:0;width:0;overflow:hidden;pointer-events:none}
@@ -123,10 +125,12 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .sb.collapsed .ns-label .sb-arrow,
 .sb.collapsed .ns-label #add-area-btn,
 .sb.collapsed .ns-label span:not(.material-icons-round){display:none}
-/* Hide Life Areas, Filters, Lists sections in collapsed mode — too many items for icon rail */
-.sb.collapsed .sb-collapsible:has(#sb-areas),
-.sb.collapsed .sb-collapsible:has(#sb-filters),
-.sb.collapsed .sb-collapsible:has(#sb-lists){display:none}
+/* When section is collapsed in icon-rail mode: show parent icon, hide separator */
+.sb.collapsed .ns-label:has(+ .sb-sec.collapsed){pointer-events:auto;cursor:pointer;padding:0}
+.sb.collapsed .ns-label:has(+ .sb-sec.collapsed)::after{display:none}
+.sb.collapsed .ns-label:has(+ .sb-sec.collapsed) .sec-icon{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:var(--rs);font-size:20px;color:var(--txd);margin:0 auto;transition:all .12s}
+.sb.collapsed .ns-label:has(+ .sb-sec.collapsed) .sec-icon:hover{background:var(--bg-h);color:var(--tx)}
+/* In collapsed sidebar, section-collapsed items are hidden (parent icon shows instead) */
 .sb.collapsed .ni{justify-content:center;padding:8px;gap:0;position:relative}
 .sb.collapsed .ni .ni-label{opacity:0;width:0;overflow:hidden;position:absolute;pointer-events:none}
 .sb.collapsed .ni .badge{position:absolute;top:2px;right:2px;padding:0;width:8px;height:8px;min-width:0;font-size:0;border-radius:50%;background:var(--brand)}
@@ -153,7 +157,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .sb.collapsed .sb-user{padding:6px 4px;gap:0;justify-content:center;border-top:1px solid var(--brd)}
 .sb.collapsed .sb-user #sb-user-name,.sb.collapsed .sb-user #sb-logout-btn{display:none}
 /* Tooltip on hover in collapsed mode */
-.sb.collapsed .ni:hover::after,.sb.collapsed .ai:hover::after,.sb.collapsed .sf-item:hover::after,.sb.collapsed .ab:hover::after{content:attr(title);position:absolute;left:100%;top:50%;transform:translateY(-50%);margin-left:8px;background:var(--bg);color:var(--tx);padding:4px 10px;border-radius:6px;font-size:12px;white-space:nowrap;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.25);pointer-events:none;border:1px solid var(--brd)}
+.sb.collapsed .ni:hover::after,.sb.collapsed .ai:hover::after,.sb.collapsed .sf-item:hover::after,.sb.collapsed .ab:hover::after,.sb.collapsed .sec-icon:hover::after{content:attr(title);position:absolute;left:100%;top:50%;transform:translateY(-50%);margin-left:8px;background:var(--bg);color:var(--tx);padding:4px 10px;border-radius:6px;font-size:12px;white-space:nowrap;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.25);pointer-events:none;border:1px solid var(--brd)}
+.sb.collapsed .sec-icon{position:relative}
 /* Don't show collapse on mobile */
 @media(max-width:768px){.sb-collapse-btn{display:none!important}.sb.collapsed{width:280px}}
 .ns{padding:0 10px;margin-bottom:2px}
@@ -167,8 +172,6 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .sb-arrow{font-size:16px;transition:transform .2s}
 .sb-sec{overflow:hidden;transition:max-height .25s ease}
 .sb-sec.collapsed{max-height:0!important;overflow:hidden}
-/* When sidebar is in icon-rail mode, always show nav items even if section is collapsed */
-.sb.collapsed .sb-sec.collapsed{max-height:none!important;overflow:visible}
 /* Quick Reschedule Dropdown */
 .snooze-dd{position:absolute;right:0;top:100%;z-index:50;background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--rs);box-shadow:var(--shd);padding:4px 0;min-width:140px;font-size:12px;overflow:hidden}
 .snooze-dd .snz-opt{padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:6px}
