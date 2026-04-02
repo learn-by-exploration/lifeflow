@@ -538,58 +538,59 @@ function initDatabase(dbDir) {
     db.prepare("INSERT OR IGNORE INTO settings (user_id, key, value) VALUES (0, '_seed_completed', '1')").run();
   }
 
-  // ─── Startup data integrity check (watermark-based) ───
-  // Compares current data counts against last known good watermark from backup.
-  // If data dropped to zero (or >50% loss), auto-restore from latest backup.
+  // ─── Startup data integrity check ───
+  // Defense-in-depth: compare current DB data against the richest backup.
+  // If a backup has significantly more data, auto-restore from it.
+  // This catches data loss even when WAL files are lost (watermark may be in WAL too).
   try {
-    const seedMarker = db.prepare("SELECT value FROM settings WHERE key='_seed_completed' AND user_id=0").get();
-    const watermarkRow = db.prepare("SELECT value FROM settings WHERE key='_data_watermark' AND user_id=0").get();
     const taskCount = db.prepare('SELECT COUNT(*) as c FROM tasks').get().c;
     const areaCount = db.prepare('SELECT COUNT(*) as c FROM life_areas').get().c;
+
+    // Find the richest backup
+    const backupDir = path.join(dbDir, 'backups');
+    let bestFile = null, bestScore = 0, bestData = null;
+    if (fs.existsSync(backupDir)) {
+      const backupFiles = fs.readdirSync(backupDir)
+        .filter(f => f.startsWith('lifeflow-backup-') && f.endsWith('.json'));
+      for (const bfile of backupFiles) {
+        try {
+          const data = JSON.parse(fs.readFileSync(path.join(backupDir, bfile), 'utf8'));
+          if (!data.areas || !data.areas.length) continue;
+          const score = (data.areas?.length || 0) + (data.tasks?.length || 0) + (data.habits?.length || 0) + (data.tags?.length || 0);
+          if (score > bestScore) { bestScore = score; bestFile = bfile; bestData = data; }
+        } catch (e) { logger.warn({ file: bfile, err: e.message }, 'Skipped corrupt/unreadable backup'); }
+      }
+    }
+
+    // Score uses areas + tasks only (tags/habits are secondary — seeded tags could inflate score)
+    const bestAreas = bestData ? (bestData.areas?.length || 0) : 0;
+    const bestTasks = bestData ? (bestData.tasks?.length || 0) : 0;
+    const bestPrimary = bestAreas + bestTasks;
+    const currentPrimary = areaCount + taskCount;
 
     let shouldRestore = false;
     let reason = '';
 
-    if (seedMarker && taskCount === 0 && areaCount === 0) {
-      // Total wipeout — DB was in use but now empty
+    // Primary check: backup has significantly more core data (areas+tasks) than current DB
+    if (bestFile && bestPrimary > 3 && currentPrimary < bestPrimary * 0.5) {
       shouldRestore = true;
-      reason = 'DB completely empty after previous use';
-    } else if (watermarkRow) {
-      // Compare against watermark
+      reason = `Backup "${bestFile}" has ${bestAreas} areas + ${bestTasks} tasks vs current ${areaCount} + ${taskCount} (>50% data loss)`;
+    }
+
+    // Secondary check: watermark-based (catches cases where backup was recently created with less data)
+    const watermarkRow = db.prepare("SELECT value FROM settings WHERE key='_data_watermark' AND user_id=0").get();
+    if (!shouldRestore && watermarkRow) {
       const wm = JSON.parse(watermarkRow.value);
-      if (wm.tasks > 0 && taskCount === 0) {
+      if (wm.tasks > 3 && taskCount < wm.tasks * 0.5) {
         shouldRestore = true;
-        reason = `Tasks dropped from ${wm.tasks} to 0 (watermark: ${wm.at})`;
-      } else if (wm.areas > 0 && areaCount === 0) {
-        shouldRestore = true;
-        reason = `Areas dropped from ${wm.areas} to 0 (watermark: ${wm.at})`;
-      } else if (wm.tasks > 3 && taskCount < wm.tasks * 0.5) {
-        // >50% task loss — restore automatically (seed data masks total loss)
-        shouldRestore = true;
-        reason = `Tasks dropped from ${wm.tasks} to ${taskCount} (>50% loss, watermark: ${wm.at})`;
+        reason = `Tasks dropped from ${wm.tasks} to ${taskCount} (watermark: ${wm.at})`;
       } else if (wm.areas > 3 && areaCount < wm.areas * 0.5) {
-        // >50% area loss
         shouldRestore = true;
-        reason = `Areas dropped from ${wm.areas} to ${areaCount} (>50% loss, watermark: ${wm.at})`;
+        reason = `Areas dropped from ${wm.areas} to ${areaCount} (watermark: ${wm.at})`;
       }
     }
 
-    if (shouldRestore) {
-      const backupDir = path.join(dbDir, 'backups');
-      if (fs.existsSync(backupDir)) {
-        const backupFiles = fs.readdirSync(backupDir)
-          .filter(f => f.startsWith('lifeflow-backup-') && f.endsWith('.json'));
-        // Score each backup by data richness — pick the one with the most data, not just the newest date
-        let bestFile = null, bestScore = 0, bestData = null;
-        for (const bfile of backupFiles) {
-          try {
-            const data = JSON.parse(fs.readFileSync(path.join(backupDir, bfile), 'utf8'));
-            if (!data.areas || !data.areas.length) continue;
-            const score = (data.areas?.length || 0) + (data.tasks?.length || 0) + (data.habits?.length || 0) + (data.tags?.length || 0);
-            if (score > bestScore) { bestScore = score; bestFile = bfile; bestData = data; }
-          } catch (e) { logger.warn({ file: bfile, err: e.message }, 'Skipped corrupt/unreadable backup'); }
-        }
-        if (bestFile && bestData) {
+    if (shouldRestore && bestFile && bestData) {
           try {
           const data = bestData;
           const bfile = bestFile;
@@ -819,8 +820,6 @@ function initDatabase(dbDir) {
           } catch (e) {
             logger.error({ err: e, backup: bestFile }, 'Auto-restore from backup failed');
           }
-        }
-      }
     }
   } catch (e) {
     logger.error({ err: e }, 'Startup integrity check failed');
