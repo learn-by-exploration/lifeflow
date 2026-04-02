@@ -3,6 +3,8 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 
+const logger = (() => { try { return require('../logger'); } catch { return console; } })();
+
 /**
  * Initialise the database: open, schema, migrations, seeds, FTS.
  * Returns { db, rebuildSearchIndex } so callers keep using the same
@@ -534,6 +536,78 @@ function initDatabase(dbDir) {
   // Mark seeding as completed so it never re-triggers (even after data loss)
   if (firstUser && !seedDone) {
     db.prepare("INSERT OR IGNORE INTO settings (user_id, key, value) VALUES (0, '_seed_completed', '1')").run();
+  }
+
+  // ─── Auto-restore from backup if data was lost ───
+  // If _seed_completed exists (not a fresh install) but the DB is empty,
+  // it means data was lost. Auto-restore from the latest backup.
+  try {
+    const seedMarker = db.prepare("SELECT value FROM settings WHERE key='_seed_completed' AND user_id=0").get();
+    const taskCount = db.prepare('SELECT COUNT(*) as c FROM tasks').get().c;
+    const areaCount = db.prepare('SELECT COUNT(*) as c FROM life_areas').get().c;
+    if (seedMarker && taskCount === 0 && areaCount === 0) {
+      const backupDir = path.join(dbDir, 'backups');
+      if (fs.existsSync(backupDir)) {
+        const backups = fs.readdirSync(backupDir)
+          .filter(f => f.startsWith('lifeflow-backup-') && f.endsWith('.json'))
+          .sort()
+          .reverse();
+        for (const bfile of backups) {
+          try {
+            const data = JSON.parse(fs.readFileSync(path.join(backupDir, bfile), 'utf8'));
+            if (!data.areas || !data.areas.length || !data.tasks || !data.tasks.length) continue;
+            // Found a good backup — restore it
+            const userId = firstUser ? firstUser.id : 1;
+            logger.warn({ backup: bfile, areas: data.areas.length, tasks: data.tasks.length },
+              'DB appears empty after previous use — auto-restoring from backup');
+            const areaMap = {};
+            for (const a of data.areas) {
+              const r = db.prepare('INSERT INTO life_areas (name,icon,color,position,user_id) VALUES (?,?,?,?,?)')
+                .run(a.name, a.icon || '📁', a.color || '#6C63FF', a.position || 0, userId);
+              areaMap[a.id] = r.lastInsertRowid;
+            }
+            const goalMap = {};
+            for (const g of (data.goals || [])) {
+              const newAreaId = areaMap[g.area_id];
+              if (!newAreaId) continue;
+              const r = db.prepare('INSERT INTO goals (area_id,title,description,color,status,due_date,position,user_id) VALUES (?,?,?,?,?,?,?,?)')
+                .run(newAreaId, g.title, g.description || '', g.color || '#6C63FF', g.status || 'active', g.due_date || null, g.position || 0, userId);
+              goalMap[g.id] = r.lastInsertRowid;
+            }
+            const tagMap = {};
+            for (const t of (data.tags || [])) {
+              const r = db.prepare('INSERT OR IGNORE INTO tags (name,color,user_id) VALUES (?,?,?)')
+                .run(t.name, t.color || '#64748B', userId);
+              tagMap[t.id] = r.lastInsertRowid;
+            }
+            for (const t of data.tasks) {
+              const newGoalId = goalMap[t.goal_id];
+              if (!newGoalId) continue;
+              const r = db.prepare('INSERT INTO tasks (goal_id,title,note,status,priority,due_date,recurring,assigned_to,my_day,position,user_id,completed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+                .run(newGoalId, t.title, t.note || '', t.status || 'todo', t.priority || 0, t.due_date || null,
+                  t.recurring || null, t.assigned_to || '', t.my_day || 0, t.position || 0, userId, t.completed_at || null);
+              if (t.tags && t.tags.length) {
+                for (const tag of t.tags) {
+                  const newTagId = tagMap[tag.id];
+                  if (newTagId) db.prepare('INSERT OR IGNORE INTO task_tags (task_id,tag_id) VALUES (?,?)').run(r.lastInsertRowid, newTagId);
+                }
+              }
+              if (t.subtasks && t.subtasks.length) {
+                for (const s of t.subtasks) {
+                  db.prepare('INSERT INTO subtasks (task_id,title,done,position) VALUES (?,?,?,?)').run(r.lastInsertRowid, s.title, s.done || 0, s.position || 0);
+                }
+              }
+            }
+            logger.info({ backup: bfile }, 'Auto-restore complete');
+            break;
+          } catch (e) {
+            logger.error({ err: e, backup: bfile }, 'Auto-restore from backup failed, trying next');
+          }
+        }
+      }
+    }
+  } catch (e) {
+    logger.error({ err: e }, 'Auto-restore check failed');
   }
 
   // ─── API Tokens table ───

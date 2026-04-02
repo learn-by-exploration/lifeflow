@@ -121,6 +121,74 @@ describe('Data Integrity Safety Guards', () => {
       fresh.db.close();
       rmSync(freshDir, { recursive: true, force: true });
     });
+
+    it('auto-restores from backup when DB is empty after previous use', () => {
+      const freshDir = mkdtempSync(path.join(tmpdir(), 'lifeflow-autorestore-'));
+      const initDatabase = require('../src/db/index');
+
+      // First init — seeds data + sets marker
+      const first = initDatabase(freshDir);
+      const firstDb = first.db;
+
+      // Simulate real user adding data
+      const areaId = firstDb.prepare('SELECT id FROM life_areas LIMIT 1').get().id;
+      firstDb.prepare("INSERT INTO goals (area_id,title,color,status,position,user_id) VALUES (?,'User Goal','#6C63FF','active',0,1)").run(areaId);
+      const goalId = firstDb.prepare('SELECT id FROM goals LIMIT 1').get().id;
+      firstDb.prepare("INSERT INTO tasks (goal_id,title,status,priority,position,user_id) VALUES (?,'Important task','todo',2,0,1)").run(goalId);
+
+      // Create a backup (simulating what the scheduler does)
+      const backupDir = path.join(freshDir, 'backups');
+      fs.mkdirSync(backupDir, { recursive: true });
+      const areas = firstDb.prepare('SELECT * FROM life_areas').all();
+      const goals = firstDb.prepare('SELECT * FROM goals').all();
+      const tasks = firstDb.prepare('SELECT * FROM tasks').all();
+      const tags = firstDb.prepare('SELECT * FROM tags').all();
+      fs.writeFileSync(path.join(backupDir, 'lifeflow-backup-2026-01-01.json'),
+        JSON.stringify({ backupDate: new Date().toISOString(), areas, goals, tasks, tags }));
+
+      // Simulate total data loss (but marker and user survive)
+      firstDb.exec('DELETE FROM tasks');
+      firstDb.exec('DELETE FROM goals');
+      firstDb.exec('DELETE FROM life_areas');
+      firstDb.exec('DELETE FROM tags');
+      firstDb.close();
+
+      // Re-initialize — should auto-restore
+      const second = initDatabase(freshDir);
+      const restoredAreas = second.db.prepare('SELECT COUNT(*) as c FROM life_areas').get().c;
+      const restoredTasks = second.db.prepare('SELECT COUNT(*) as c FROM tasks').get().c;
+      assert.ok(restoredAreas > 0, 'Areas should be auto-restored from backup');
+      assert.ok(restoredTasks > 0, 'Tasks should be auto-restored from backup');
+      const taskTitle = second.db.prepare("SELECT title FROM tasks WHERE title='Important task'").get();
+      assert.ok(taskTitle, 'Specific user task should be restored');
+
+      second.db.close();
+      rmSync(freshDir, { recursive: true, force: true });
+    });
+
+    it('does NOT auto-restore on fresh install (no marker)', () => {
+      const freshDir = mkdtempSync(path.join(tmpdir(), 'lifeflow-norestore-'));
+
+      // Create a fake backup BEFORE first init
+      const backupDir = path.join(freshDir, 'backups');
+      fs.mkdirSync(backupDir, { recursive: true });
+      fs.writeFileSync(path.join(backupDir, 'lifeflow-backup-2026-01-01.json'),
+        JSON.stringify({ backupDate: new Date().toISOString(),
+          areas: [{ id: 1, name: 'Fake', icon: '📁', color: '#FF0000', position: 0 }],
+          goals: [{ id: 1, area_id: 1, title: 'Fake Goal' }],
+          tasks: [{ goal_id: 1, title: 'Fake Task', status: 'todo' }],
+          tags: [] }));
+
+      const initDatabase = require('../src/db/index');
+      const fresh = initDatabase(freshDir);
+
+      // Should have default seeded data, not the fake backup
+      const fakeTask = fresh.db.prepare("SELECT title FROM tasks WHERE title='Fake Task'").get();
+      assert.equal(fakeTask, undefined, 'Should NOT restore from backup on fresh install');
+
+      fresh.db.close();
+      rmSync(freshDir, { recursive: true, force: true });
+    });
   });
 
   describe('Backup safety — never overwrite good backups with empty data', () => {
