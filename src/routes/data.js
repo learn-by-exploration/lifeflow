@@ -27,6 +27,11 @@ module.exports = function(deps) {
     // Rotate: keep last 14
     const files = fs.readdirSync(backupDir).filter(f => f.startsWith('lifeflow-backup-')).sort();
     while (files.length > 14) { fs.unlinkSync(path.join(backupDir, files.shift())); }
+    // Update data watermark — stores last known good counts for startup integrity check
+    try {
+      const watermark = JSON.stringify({ areas: areas.length, goals: goals.length, tasks: tasks.length, tags: tags.length, at: new Date().toISOString() });
+      db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (0, '_data_watermark', ?)").run(watermark);
+    } catch (e) { logger.error({ err: e }, 'Failed to update data watermark'); }
     return fname;
   }
 

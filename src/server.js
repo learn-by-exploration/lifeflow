@@ -167,15 +167,28 @@ app.get('/share/:token', (req, res) => {
 app.get('/health', (req, res) => {
   let dbOk = false;
   let walOk = false;
+  let dataOk = false;
+  let watermark = null;
   try {
     db.prepare('SELECT 1').get();
     dbOk = true;
     const walMode = db.pragma('journal_mode', { simple: true });
     walOk = walMode === 'wal';
+    // Data integrity check against watermark
+    const wmRow = db.prepare("SELECT value FROM settings WHERE key='_data_watermark' AND user_id=0").get();
+    const taskCount = db.prepare('SELECT COUNT(*) as c FROM tasks').get().c;
+    const areaCount = db.prepare('SELECT COUNT(*) as c FROM life_areas').get().c;
+    if (wmRow) {
+      watermark = JSON.parse(wmRow.value);
+      // Data is OK if counts haven't dropped to zero when watermark says they shouldn't be
+      dataOk = !(watermark.tasks > 0 && taskCount === 0) && !(watermark.areas > 0 && areaCount === 0);
+    } else {
+      dataOk = true; // No watermark yet = fresh install
+    }
   } catch {}
-  const status = dbOk && walOk ? 'ok' : 'degraded';
+  const status = dbOk && walOk && dataOk ? 'ok' : 'degraded';
   const code = dbOk ? 200 : 503;
-  res.status(code).json({ status, dbOk, walOk });
+  res.status(code).json({ status, dbOk, walOk, dataOk, watermark });
 });
 
 app.get('/ready', (req, res) => {

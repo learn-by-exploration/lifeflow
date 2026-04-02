@@ -538,14 +538,39 @@ function initDatabase(dbDir) {
     db.prepare("INSERT OR IGNORE INTO settings (user_id, key, value) VALUES (0, '_seed_completed', '1')").run();
   }
 
-  // ─── Auto-restore from backup if data was lost ───
-  // If _seed_completed exists (not a fresh install) but the DB is empty,
-  // it means data was lost. Auto-restore from the latest backup.
+  // ─── Startup data integrity check (watermark-based) ───
+  // Compares current data counts against last known good watermark from backup.
+  // If data dropped to zero (or >50% loss), auto-restore from latest backup.
   try {
     const seedMarker = db.prepare("SELECT value FROM settings WHERE key='_seed_completed' AND user_id=0").get();
+    const watermarkRow = db.prepare("SELECT value FROM settings WHERE key='_data_watermark' AND user_id=0").get();
     const taskCount = db.prepare('SELECT COUNT(*) as c FROM tasks').get().c;
     const areaCount = db.prepare('SELECT COUNT(*) as c FROM life_areas').get().c;
+
+    let shouldRestore = false;
+    let reason = '';
+
     if (seedMarker && taskCount === 0 && areaCount === 0) {
+      // Total wipeout — DB was in use but now empty
+      shouldRestore = true;
+      reason = 'DB completely empty after previous use';
+    } else if (watermarkRow) {
+      // Compare against watermark
+      const wm = JSON.parse(watermarkRow.value);
+      if (wm.tasks > 0 && taskCount === 0) {
+        shouldRestore = true;
+        reason = `Tasks dropped from ${wm.tasks} to 0 (watermark: ${wm.at})`;
+      } else if (wm.areas > 0 && areaCount === 0) {
+        shouldRestore = true;
+        reason = `Areas dropped from ${wm.areas} to 0 (watermark: ${wm.at})`;
+      } else if (wm.tasks > 5 && taskCount < wm.tasks * 0.5) {
+        // >50% task loss when we had a meaningful number of tasks
+        logger.warn({ watermark: wm, current: { tasks: taskCount, areas: areaCount } },
+          'Significant data loss detected but not total — check manually');
+      }
+    }
+
+    if (shouldRestore) {
       const backupDir = path.join(dbDir, 'backups');
       if (fs.existsSync(backupDir)) {
         const backups = fs.readdirSync(backupDir)
@@ -556,10 +581,9 @@ function initDatabase(dbDir) {
           try {
             const data = JSON.parse(fs.readFileSync(path.join(backupDir, bfile), 'utf8'));
             if (!data.areas || !data.areas.length || !data.tasks || !data.tasks.length) continue;
-            // Found a good backup — restore it
             const userId = firstUser ? firstUser.id : 1;
-            logger.warn({ backup: bfile, areas: data.areas.length, tasks: data.tasks.length },
-              'DB appears empty after previous use — auto-restoring from backup');
+            logger.warn({ backup: bfile, reason, backupAreas: data.areas.length, backupTasks: data.tasks.length },
+              'Data integrity violation — auto-restoring from backup');
             const areaMap = {};
             for (const a of data.areas) {
               const r = db.prepare('INSERT INTO life_areas (name,icon,color,position,user_id) VALUES (?,?,?,?,?)')
@@ -607,7 +631,7 @@ function initDatabase(dbDir) {
       }
     }
   } catch (e) {
-    logger.error({ err: e }, 'Auto-restore check failed');
+    logger.error({ err: e }, 'Startup integrity check failed');
   }
 
   // ─── API Tokens table ───

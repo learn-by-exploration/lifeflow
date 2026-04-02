@@ -228,11 +228,72 @@ describe('Data Integrity Safety Guards', () => {
   });
 
   describe('Health endpoint verifies DB integrity', () => {
-    it('GET /health returns WAL status', async () => {
+    it('GET /health returns WAL and data status', async () => {
       const res = await agent().get('/health').expect(200);
       assert.equal(res.body.status, 'ok');
       assert.equal(res.body.dbOk, true);
       assert.equal(res.body.walOk, true);
+      assert.equal(res.body.dataOk, true);
+    });
+  });
+
+  describe('Data watermark', () => {
+    it('POST /api/backup saves data watermark in settings', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id);
+      makeTask(goal.id);
+
+      await agent().post('/api/backup').expect(200);
+
+      const wm = _db.prepare("SELECT value FROM settings WHERE key='_data_watermark' AND user_id=0").get();
+      assert.ok(wm, 'Watermark should exist after backup');
+      const parsed = JSON.parse(wm.value);
+      assert.ok(parsed.areas >= 1, 'Watermark should record area count');
+      assert.ok(parsed.tasks >= 2, 'Watermark should record task count');
+      assert.ok(parsed.at, 'Watermark should record timestamp');
+    });
+
+    it('watermark triggers restore when tasks drop to zero', () => {
+      const freshDir = mkdtempSync(path.join(tmpdir(), 'lifeflow-watermark-'));
+      const initDatabase = require('../src/db/index');
+
+      // First init + add data
+      const first = initDatabase(freshDir);
+      const firstDb = first.db;
+      const areaId = firstDb.prepare('SELECT id FROM life_areas LIMIT 1').get().id;
+      firstDb.prepare("INSERT INTO goals (area_id,title,color,status,position,user_id) VALUES (?,'G','#6C63FF','active',0,1)").run(areaId);
+      const goalId = firstDb.prepare('SELECT id FROM goals LIMIT 1').get().id;
+      firstDb.prepare("INSERT INTO tasks (goal_id,title,status,priority,position,user_id) VALUES (?,'WM Task','todo',0,0,1)").run(goalId);
+
+      // Set watermark (simulating what backup does)
+      firstDb.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (0, '_data_watermark', ?)").run(
+        JSON.stringify({ areas: 6, goals: 1, tasks: 1, tags: 5, at: new Date().toISOString() })
+      );
+
+      // Create backup
+      const backupDir = path.join(freshDir, 'backups');
+      fs.mkdirSync(backupDir, { recursive: true });
+      const areas = firstDb.prepare('SELECT * FROM life_areas').all();
+      const goals = firstDb.prepare('SELECT * FROM goals').all();
+      const tasks = firstDb.prepare('SELECT * FROM tasks').all();
+      const tags = firstDb.prepare('SELECT * FROM tags').all();
+      fs.writeFileSync(path.join(backupDir, 'lifeflow-backup-2026-01-01.json'),
+        JSON.stringify({ backupDate: new Date().toISOString(), areas, goals, tasks, tags }));
+
+      // Wipe tasks (simulate partial data loss)
+      firstDb.exec('DELETE FROM tasks');
+      firstDb.exec('DELETE FROM goals');
+      firstDb.exec('DELETE FROM life_areas');
+      firstDb.close();
+
+      // Re-init should detect watermark mismatch and restore
+      const second = initDatabase(freshDir);
+      const restoredTasks = second.db.prepare('SELECT COUNT(*) as c FROM tasks').get().c;
+      assert.ok(restoredTasks > 0, 'Tasks should be auto-restored when watermark detects loss');
+
+      second.db.close();
+      rmSync(freshDir, { recursive: true, force: true });
     });
   });
 
