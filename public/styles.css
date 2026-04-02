@@ -167,6 +167,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);height:
 .sb-arrow{font-size:16px;transition:transform .2s}
 .sb-sec{overflow:hidden;transition:max-height .25s ease}
 .sb-sec.collapsed{max-height:0!important;overflow:hidden}
+/* When sidebar is in icon-rail mode, always show nav items even if section is collapsed */
+.sb.collapsed .sb-sec.collapsed{max-height:none!important;overflow:visible}
 /* Quick Reschedule Dropdown */
 .snooze-dd{position:absolute;right:0;top:100%;z-index:50;background:var(--bg-s);border:1px solid var(--brd);border-radius:var(--rs);box-shadow:var(--shd);padding:4px 0;min-width:140px;font-size:12px;overflow:hidden}
 .snooze-dd .snz-opt{padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:6px}
