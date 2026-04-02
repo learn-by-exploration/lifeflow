@@ -225,8 +225,18 @@ describe('Lists API', () => {
     it('returns list templates', async () => {
       const res = await agent().get('/api/lists/templates').expect(200);
       assert.ok(Array.isArray(res.body));
-      assert.ok(res.body.length >= 4);
+      assert.equal(res.body.length, 15);
       assert.ok(res.body.some(t => t.id === 'weekly-groceries'));
+      assert.ok(res.body.some(t => t.id === 'movies-to-watch'));
+    });
+
+    it('each template has category field', async () => {
+      const res = await agent().get('/api/lists/templates').expect(200);
+      const validCategories = ['Home & Life', 'Entertainment & Media', 'Travel & Events', 'Personal', 'Health & Wellness'];
+      res.body.forEach(t => {
+        assert.ok(typeof t.category === 'string' && t.category.length > 0, `template ${t.id} missing category`);
+        assert.ok(validCategories.includes(t.category), `template ${t.id} has invalid category: ${t.category}`);
+      });
     });
   });
 
@@ -237,12 +247,21 @@ describe('Lists API', () => {
       assert.equal(res.body.type, 'grocery');
       // Verify items were created
       const items = await agent().get('/api/lists/' + res.body.id + '/items').expect(200);
-      assert.ok(items.body.length >= 10);
+      assert.equal(items.body.length, 10);
     });
 
     it('creates list from travel template', async () => {
       const res = await agent().post('/api/lists/from-template').send({ template_id: 'travel-packing' }).expect(201);
       assert.equal(res.body.type, 'checklist');
+    });
+
+    it('creates list from movies-to-watch template', async () => {
+      const res = await agent().post('/api/lists/from-template').send({ template_id: 'movies-to-watch' }).expect(201);
+      assert.equal(res.body.name, 'Movies to Watch');
+      assert.equal(res.body.type, 'checklist');
+      const items = await agent().get('/api/lists/' + res.body.id + '/items').expect(200);
+      assert.equal(items.body.length, 10);
+      assert.ok(items.body.some(i => i.title === 'Inception'));
     });
 
     it('rejects invalid template id', async () => {

@@ -1641,6 +1641,7 @@ paths:
     get:
       tags: [Lists]
       summary: Get list templates
+      description: Returns 15 built-in list templates across 5 categories
       responses:
         '200':
           description: Array of list templates
@@ -1650,6 +1651,15 @@ paths:
                 type: array
                 items:
                   type: object
+                  properties:
+                    id: { type: string }
+                    name: { type: string }
+                    icon: { type: string }
+                    type: { type: string, enum: [checklist, grocery, notes] }
+                    category: { type: string, enum: ['Home & Life', 'Entertainment & Media', 'Travel & Events', 'Personal', 'Health & Wellness'] }
+                    items:
+                      type: array
+                      items: { type: string }
 
   /api/lists/from-template:
     post:
@@ -1661,9 +1671,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [templateId]
+              required: [template_id]
               properties:
-                templateId: { type: string }
+                template_id: { type: string }
                 name: { type: string }
       responses:
         '201':

@@ -8,10 +8,26 @@ module.exports = function(deps) {
   // ─── CUSTOM LISTS API ───
   const GROCERY_CATEGORIES = ['Produce','Bakery','Dairy','Meat & Seafood','Frozen','Pantry','Beverages','Snacks','Household','Personal Care','Other'];
   const LIST_TEMPLATES = [
-    {id:'weekly-groceries',name:'Weekly Groceries',type:'grocery',icon:'🛒',items:['Milk','Eggs','Bread','Bananas','Chicken','Rice','Onions','Tomatoes','Cheese','Yogurt']},
-    {id:'travel-packing',name:'Travel Packing',type:'checklist',icon:'🧳',items:['Passport','Phone charger','Toiletries','Underwear','Socks','Medications','Snacks','Water bottle','Headphones','Travel pillow']},
-    {id:'moving-checklist',name:'Moving Checklist',type:'checklist',icon:'📦',items:['Change address','Forward mail','Transfer utilities','Pack room by room','Label boxes','Hire movers','Clean old place','Get new keys','Update subscriptions','Notify employer']},
-    {id:'party-planning',name:'Party Planning',type:'checklist',icon:'🎉',items:['Set date & time','Create guest list','Send invitations','Plan menu','Buy decorations','Arrange music','Order cake','Set up space','Prepare games','Buy drinks']}
+    // Home & Life
+    {id:'weekly-groceries',name:'Weekly Groceries',type:'grocery',icon:'🛒',category:'Home & Life',items:['Milk','Eggs','Bread','Bananas','Chicken','Rice','Onions','Tomatoes','Cheese','Yogurt']},
+    {id:'home-maintenance',name:'Home Maintenance',type:'checklist',icon:'🏠',category:'Home & Life',items:['Check smoke detectors','Replace air filters','Clean gutters','Test water heater','Inspect roof','Service HVAC','Flush water heater','Check caulking','Clean dryer vent','Test garage door']},
+    {id:'cleaning-routine',name:'Cleaning Routine',type:'checklist',icon:'🧹',category:'Home & Life',items:['Vacuum floors','Mop kitchen','Clean bathrooms','Dust surfaces','Wipe counters','Take out trash','Clean mirrors','Wash bedding','Organize fridge','Wipe appliances']},
+    // Entertainment & Media
+    {id:'movies-to-watch',name:'Movies to Watch',type:'checklist',icon:'🎬',category:'Entertainment & Media',items:['The Shawshank Redemption','Inception','Parasite','The Godfather','Spirited Away','Everything Everywhere All at Once','Interstellar','The Dark Knight','Amélie','Whiplash']},
+    {id:'books-to-read',name:'Books to Read',type:'checklist',icon:'📚',category:'Entertainment & Media',items:['Atomic Habits','Sapiens','The Alchemist','Dune','Project Hail Mary','Educated','The Psychology of Money','Thinking Fast and Slow','The Midnight Library','Klara and the Sun']},
+    {id:'tv-shows',name:'TV Shows to Watch',type:'checklist',icon:'📺',category:'Entertainment & Media',items:['Breaking Bad','The Bear','Severance','Succession','Shogun','The Last of Us','Arcane','Better Call Saul','The White Lotus','Andor']},
+    {id:'podcasts',name:'Podcasts to Try',type:'checklist',icon:'🎙️',category:'Entertainment & Media',items:['The Daily','Huberman Lab','Lex Fridman','How I Built This','Radiolab','99% Invisible','Serial','Freakonomics','The Tim Ferriss Show','Hardcore History']},
+    // Travel & Events
+    {id:'travel-packing',name:'Travel Packing',type:'checklist',icon:'🧳',category:'Travel & Events',items:['Passport','Phone charger','Toiletries','Underwear','Socks','Medications','Snacks','Water bottle','Headphones','Travel pillow']},
+    {id:'moving-checklist',name:'Moving Checklist',type:'checklist',icon:'📦',category:'Travel & Events',items:['Change address','Forward mail','Transfer utilities','Pack room by room','Label boxes','Hire movers','Clean old place','Get new keys','Update subscriptions','Notify employer']},
+    {id:'party-planning',name:'Party Planning',type:'checklist',icon:'🎉',category:'Travel & Events',items:['Set date & time','Create guest list','Send invitations','Plan menu','Buy decorations','Arrange music','Order cake','Set up space','Prepare games','Buy drinks']},
+    {id:'camping-trip',name:'Camping Trip',type:'checklist',icon:'⛺',category:'Travel & Events',items:['Tent','Sleeping bag','Flashlight','First aid kit','Water bottles','Sunscreen','Bug spray','Camp stove','Firewood','Matches']},
+    // Personal
+    {id:'gift-ideas',name:'Gift Ideas',type:'checklist',icon:'🎁',category:'Personal',items:['Birthday gifts','Holiday presents','Thank you gifts','Housewarming ideas','Wedding gift','Anniversary','Teacher appreciation','Host/hostess gift','Graduation','Baby shower']},
+    {id:'bucket-list',name:'Bucket List',type:'checklist',icon:'⭐',category:'Personal',items:['Learn a new language','Run a marathon','Visit Japan','Write a book','Learn an instrument','Go skydiving','See the Northern Lights','Cook a 5-course meal','Volunteer abroad','Start a garden']},
+    {id:'restaurants-to-try',name:'Restaurants to Try',type:'checklist',icon:'🍽️',category:'Personal',items:['Italian place downtown','New Thai spot','Brunch café','Seafood restaurant','Ramen shop','Pizza place','Taco truck','Sushi bar','Farm-to-table bistro','Bakery']},
+    // Health & Wellness
+    {id:'workout-routine',name:'Workout Routine',type:'checklist',icon:'💪',category:'Health & Wellness',items:['Push-ups','Squats','Planks','Lunges','Burpees','Jump rope','Pull-ups','Deadlifts','Bench press','Stretching']}
   ];
 
   // Rate limiter for shared endpoints

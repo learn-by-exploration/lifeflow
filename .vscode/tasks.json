@@ -200,6 +200,21 @@
 			"label": "fu-test-summary",
 			"type": "shell",
 			"command": "source ~/.nvm/nvm.sh 2>/dev/null; cd /home/shyam/personal/lifeflow && node --test --test-force-exit tests/frontend-units.test.js 2>&1 | grep -E '^(ok |# tests|# pass|# fail)'; echo 'FU_SUMMARY_DONE'"
+		},
+		{
+			"label": "git-commit-push",
+			"type": "shell",
+			"command": "cd /home/shyam/personal/lifeflow && git add .github/workflows/ci.yml scripts/backup.sh && git commit -m 'fix: backup script exits gracefully in CI + remove Node 20 from CI matrix' && git push origin main && echo 'PUSH_DONE'"
+		},
+		{
+			"label": "check-ci-runs",
+			"type": "shell",
+			"command": "cd /home/shyam/personal/lifeflow && gh run list --limit 3 && echo '===DONE==='"
+		},
+		{
+			"label": "cleanup-temp",
+			"type": "shell",
+			"command": "cd /home/shyam/personal/lifeflow && rm ci-check.sh && echo 'CLEANED'"
 		}
 	]
 }

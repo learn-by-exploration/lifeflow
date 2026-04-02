@@ -4191,7 +4191,17 @@ function openListModal(editList){
   if(isEdit){tplDiv.style.display='none'}else{
     tplDiv.style.display='';
     api.get('/api/lists/templates').then(tpls=>{
-      $('lm-tpl-list').innerHTML=tpls.map(t=>`<button class="btn-c lm-tpl-btn" data-tid="${escA(t.id)}" style="font-size:11px;padding:4px 10px">${esc(t.icon)} ${esc(t.name)}</button>`).join('');
+      // Group templates by category (order preserved from API response)
+      const groups={};
+      tpls.forEach(t=>{(groups[t.category||'Other']=groups[t.category||'Other']||[]).push(t)});
+      let html='';
+      for(const[cat,items]of Object.entries(groups)){
+        html+=`<div style="font-size:10px;color:var(--txd);margin-top:6px;margin-bottom:2px;text-transform:uppercase;letter-spacing:0.5px">${esc(cat)}</div>`;
+        html+=`<div style="display:flex;gap:6px;flex-wrap:wrap">`;
+        items.forEach(t=>{html+=`<button class="btn-c lm-tpl-btn" data-tid="${escA(t.id)}" style="font-size:11px;padding:4px 10px">${esc(t.icon)} ${esc(t.name)}</button>`});
+        html+=`</div>`;
+      }
+      $('lm-tpl-list').innerHTML=html;
       $('lm-tpl-list').querySelectorAll('.lm-tpl-btn').forEach(b=>b.addEventListener('click',async()=>{
         const r=await api.post('/api/lists/from-template',{template_id:b.dataset.tid});
         $('lm').classList.remove('active');
