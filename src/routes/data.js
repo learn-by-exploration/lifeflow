@@ -86,14 +86,16 @@ module.exports = function(deps) {
 
   function runBackup(userId) {
     const d = queryAllUserData(userId);
-    // Safety: don't overwrite good backups with empty data
-    if (d.areas.length === 0 && d.goals.length === 0 && d.tasks.length === 0) {
-      logger.warn({ userId }, 'Skipping backup — database appears empty, refusing to overwrite valid backups');
+    // Safety: don't create backups when DB has no real user data (empty or seed-only)
+    if (d.tasks.length === 0 && d.goals.length === 0) {
+      // Seed data creates areas but no goals/tasks — don't let it overwrite real backups
+      logger.warn({ userId }, 'Skipping backup — no tasks or goals in database (empty/seed-only)');
       return null;
     }
-    const data = JSON.stringify({ backupDate: new Date().toISOString(), ...d });
     const fname = `lifeflow-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    fs.writeFileSync(path.join(backupDir, fname), data);
+    const fpath = path.join(backupDir, fname);
+    const data = JSON.stringify({ backupDate: new Date().toISOString(), ...d });
+    fs.writeFileSync(fpath, data);
     // Rotate: keep last 14
     const files = fs.readdirSync(backupDir).filter(f => f.startsWith('lifeflow-backup-')).sort();
     while (files.length > 14) { fs.unlinkSync(path.join(backupDir, files.shift())); }

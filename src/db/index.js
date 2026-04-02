@@ -577,14 +577,22 @@ function initDatabase(dbDir) {
     if (shouldRestore) {
       const backupDir = path.join(dbDir, 'backups');
       if (fs.existsSync(backupDir)) {
-        const backups = fs.readdirSync(backupDir)
-          .filter(f => f.startsWith('lifeflow-backup-') && f.endsWith('.json'))
-          .sort()
-          .reverse();
-        for (const bfile of backups) {
+        const backupFiles = fs.readdirSync(backupDir)
+          .filter(f => f.startsWith('lifeflow-backup-') && f.endsWith('.json'));
+        // Score each backup by data richness — pick the one with the most data, not just the newest date
+        let bestFile = null, bestScore = 0, bestData = null;
+        for (const bfile of backupFiles) {
           try {
             const data = JSON.parse(fs.readFileSync(path.join(backupDir, bfile), 'utf8'));
-            if (!data.areas || !data.areas.length || !data.tasks || !data.tasks.length) continue;
+            if (!data.areas || !data.areas.length) continue;
+            const score = (data.areas?.length || 0) + (data.tasks?.length || 0) + (data.habits?.length || 0) + (data.tags?.length || 0);
+            if (score > bestScore) { bestScore = score; bestFile = bfile; bestData = data; }
+          } catch (e) { /* skip corrupt files */ }
+        }
+        if (bestFile && bestData) {
+          try {
+          const data = bestData;
+          const bfile = bestFile;
             const userId = firstUser ? firstUser.id : 1;
             logger.warn({ backup: bfile, reason, backupAreas: data.areas.length, backupTasks: data.tasks.length },
               'Data integrity violation — auto-restoring from backup');
@@ -799,9 +807,8 @@ function initDatabase(dbDir) {
             }
 
             logger.info({ backup: bfile }, 'Auto-restore complete');
-            break;
           } catch (e) {
-            logger.error({ err: e, backup: bfile }, 'Auto-restore from backup failed, trying next');
+            logger.error({ err: e, backup: bestFile }, 'Auto-restore from backup failed');
           }
         }
       }

@@ -22,3 +22,4 @@ lifeflow-backup-*.json
 .idea/
 /run-*.sh
 /git-*.sh
+scripts/restore-data.js

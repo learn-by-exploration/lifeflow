@@ -307,6 +307,10 @@ describe('Database Safety (production init)', () => {
 
     it('backup files contain valid JSON', async () => {
       const { dir } = setup();
+      // Create real user data so backup isn't skipped (seed-only DBs skip backup)
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id);
       await agent().post('/api/backup');
       const backupDir = path.join(dir, 'backups');
       if (fs.existsSync(backupDir)) {
