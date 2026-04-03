@@ -595,6 +595,23 @@ function initDatabase(dbDir) {
           const data = bestData;
           const bfile = bestFile;
             const userId = firstUser ? firstUser.id : 1;
+
+            // ─── Safety: snapshot current DB state before destructive restore ───
+            // This preserves any data (e.g. lists, notes) that exists in the current DB
+            // but not in the backup, so it can be recovered if needed.
+            const preRestoreBackupDir = path.join(dbDir, 'backups');
+            if (!fs.existsSync(preRestoreBackupDir)) fs.mkdirSync(preRestoreBackupDir, { recursive: true });
+            try {
+              const preFile = `lifeflow-pre-restore-${new Date().toISOString().replace(/[:.]/g,'').slice(0,15)}.db`;
+              const srcDbPath = path.join(dbDir, 'lifeflow.db');
+              if (fs.existsSync(srcDbPath)) {
+                fs.copyFileSync(srcDbPath, path.join(preRestoreBackupDir, preFile));
+                logger.info({ file: preFile }, 'Pre-restore DB snapshot saved');
+              }
+            } catch (snapErr) {
+              logger.warn({ err: snapErr }, 'Failed to save pre-restore snapshot (continuing with restore)');
+            }
+
             logger.warn({ backup: bfile, reason, backupAreas: data.areas.length, backupTasks: data.tasks.length },
               'Data integrity violation — auto-restoring from backup');
 
@@ -832,6 +849,55 @@ function initDatabase(dbDir) {
             try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (cpErr) {
               logger.warn({ err: cpErr }, 'WAL checkpoint after restore failed');
             }
+
+            // ─── Post-restore merge: recover data missing from backup ───
+            // If the pre-restore DB had lists, notes, etc. that the backup didn't,
+            // copy them into the restored DB so nothing is silently lost.
+            try {
+              const preRestoreFiles = fs.readdirSync(preRestoreBackupDir)
+                .filter(f => f.startsWith('lifeflow-pre-restore-') && f.endsWith('.db'))
+                .sort().reverse();
+              if (preRestoreFiles.length > 0) {
+                const preDbPath = path.join(preRestoreBackupDir, preRestoreFiles[0]);
+                const preDb = require('better-sqlite3')(preDbPath, { readonly: true });
+                // Merge lists + list_items
+                const preLists = preDb.prepare('SELECT * FROM lists WHERE user_id=?').all(userId);
+                if (preLists.length > 0 && (data.lists || []).length === 0) {
+                  for (const l of preLists) {
+                    const r = db.prepare('INSERT INTO lists (name,type,icon,color,position,user_id) VALUES (?,?,?,?,?,?)')
+                      .run(l.name, l.type || 'checklist', l.icon || '📋', l.color || '#2563EB', l.position || 0, userId);
+                    const preItems = preDb.prepare('SELECT * FROM list_items WHERE list_id=?').all(l.id);
+                    for (const i of preItems) {
+                      db.prepare('INSERT INTO list_items (list_id,title,checked,category,quantity,note,position) VALUES (?,?,?,?,?,?,?)')
+                        .run(r.lastInsertRowid, i.title, i.checked || 0, i.category || null, i.quantity || null, i.note || '', i.position || 0);
+                    }
+                  }
+                  logger.info({ count: preLists.length }, 'Merged lists from pre-restore DB');
+                }
+                // Merge notes
+                const preNotes = preDb.prepare('SELECT * FROM notes WHERE user_id=?').all(userId);
+                if (preNotes.length > 0 && (data.notes || []).length === 0) {
+                  for (const n of preNotes) {
+                    db.prepare('INSERT INTO notes (title,content,user_id,created_at,updated_at) VALUES (?,?,?,?,?)')
+                      .run(n.title, n.content || '', userId, n.created_at, n.updated_at);
+                  }
+                  logger.info({ count: preNotes.length }, 'Merged notes from pre-restore DB');
+                }
+                // Merge inbox
+                const preInbox = preDb.prepare('SELECT * FROM inbox WHERE user_id=?').all(userId);
+                if (preInbox.length > 0 && (data.inbox || []).length === 0) {
+                  for (const i of preInbox) {
+                    db.prepare('INSERT INTO inbox (title,note,priority,user_id) VALUES (?,?,?,?)')
+                      .run(i.title, i.note || '', i.priority || 0, userId);
+                  }
+                  logger.info({ count: preInbox.length }, 'Merged inbox from pre-restore DB');
+                }
+                preDb.close();
+              }
+            } catch (mergeErr) {
+              logger.warn({ err: mergeErr }, 'Post-restore merge failed (restored data is intact)');
+            }
+
             logger.info({ backup: bfile }, 'Auto-restore complete — watermark updated, WAL checkpointed');
           } catch (e) {
             logger.error({ err: e, backup: bestFile }, 'Auto-restore from backup failed');

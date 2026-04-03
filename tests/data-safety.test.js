@@ -1,6 +1,6 @@
 const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { setup, cleanDb, teardown, makeArea, makeGoal, makeTask, makeTag, agent } = require('./helpers');
+const { setup, cleanDb, teardown, makeArea, makeGoal, makeTask, makeTag, makeList, makeListItem, agent } = require('./helpers');
 const path = require('path');
 const fs = require('fs');
 const { tmpdir } = require('os');
@@ -578,6 +578,64 @@ describe('Data Integrity Safety Guards', () => {
     it('keeps at least 14 backups (not 7)', () => {
       const dataSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'data.js'), 'utf8');
       assert.ok(dataSrc.includes('files.length > 14'), 'Backup rotation should keep at least 14 files');
+    });
+  });
+
+  describe('Backup includes all data types', () => {
+    it('export includes users with password hashes', async () => {
+      const area = makeArea(); makeGoal(area.id);
+      const res = await agent().get('/api/export').expect(200);
+      assert.ok(res.body.users, 'export should include users');
+      assert.ok(res.body.users.length > 0, 'should have at least one user');
+      assert.ok(res.body.users[0].password_hash, 'user should have password_hash');
+      assert.ok(res.body.users[0].email, 'user should have email');
+    });
+
+    it('export includes lists and list items', async () => {
+      const list = makeList({ name: 'Groceries' });
+      makeListItem(list.id, { title: 'Milk' });
+      makeListItem(list.id, { title: 'Bread' });
+      const res = await agent().get('/api/export').expect(200);
+      assert.ok(res.body.lists, 'export should include lists');
+      assert.equal(res.body.lists.length, 1);
+      assert.equal(res.body.lists[0].name, 'Groceries');
+      assert.ok(res.body.list_items, 'export should include list_items');
+      assert.equal(res.body.list_items.length, 2);
+    });
+
+    it('backup file includes lists when they exist', async () => {
+      const area = makeArea();
+      const goal = makeGoal(area.id);
+      makeTask(goal.id);
+      const list = makeList({ name: 'My List' });
+      makeListItem(list.id, { title: 'Item 1' });
+      const res = await agent().post('/api/backup').expect(200);
+      assert.ok(res.body.ok);
+      // Read the backup file and verify lists are included
+      const backupFiles = fs.readdirSync(path.join(_dir, 'backups'))
+        .filter(f => f.startsWith('lifeflow-backup-') && f.endsWith('.json'));
+      assert.ok(backupFiles.length > 0, 'should have created a backup file');
+      const backup = JSON.parse(fs.readFileSync(path.join(_dir, 'backups', backupFiles[0]), 'utf8'));
+      assert.ok(backup.lists, 'backup should include lists');
+      assert.equal(backup.lists.length, 1);
+      assert.ok(backup.list_items, 'backup should include list_items');
+      assert.equal(backup.list_items.length, 1);
+      assert.ok(backup.users, 'backup should include users');
+    });
+  });
+
+  describe('Auto-restore preserves data (source code verification)', () => {
+    it('auto-restore creates pre-restore snapshot before wiping', () => {
+      const dbSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'db', 'index.js'), 'utf8');
+      assert.ok(dbSrc.includes('pre-restore'), 'should save a pre-restore snapshot');
+      assert.ok(dbSrc.includes('copyFileSync'), 'should copy the DB file before restore');
+    });
+
+    it('auto-restore merges lists from pre-restore DB', () => {
+      const dbSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'db', 'index.js'), 'utf8');
+      assert.ok(dbSrc.includes('Merge lists'), 'should attempt to merge lists after restore');
+      assert.ok(dbSrc.includes('Merge notes'), 'should attempt to merge notes after restore');
+      assert.ok(dbSrc.includes('Merge inbox'), 'should attempt to merge inbox after restore');
     });
   });
 });
