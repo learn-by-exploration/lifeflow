@@ -72,7 +72,12 @@ module.exports = function(deps) {
     const badges = db.prepare('SELECT * FROM badges WHERE user_id=?').all(userId);
     const settings = db.prepare("SELECT * FROM settings WHERE user_id=? AND key NOT LIKE '\\_%' ESCAPE '\\'").all(userId);
 
+    // Include all user accounts (id, email, password_hash, display_name) for full restore capability
+    // Password hashes are bcrypt — safe to store (same as what's in the SQLite file)
+    const users = db.prepare('SELECT id, email, password_hash, display_name, created_at FROM users').all();
+
     return {
+      users,
       areas, goals, tasks, tags,
       habits, habit_logs,
       focus_sessions, focus_session_meta, focus_steps,

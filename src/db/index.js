@@ -597,6 +597,15 @@ function initDatabase(dbDir) {
             const userId = firstUser ? firstUser.id : 1;
             logger.warn({ backup: bfile, reason, backupAreas: data.areas.length, backupTasks: data.tasks.length },
               'Data integrity violation — auto-restoring from backup');
+
+            // Restore user accounts (password hashes) so users can still log in after restore
+            if (data.users && data.users.length) {
+              for (const u of data.users) {
+                db.prepare('UPDATE users SET password_hash=?, display_name=? WHERE id=?')
+                  .run(u.password_hash, u.display_name || '', u.id);
+              }
+            }
+
             // Clear stale/seed data before restoring (cascading deletes handle children)
             db.prepare('DELETE FROM habit_logs WHERE habit_id IN (SELECT id FROM habits WHERE user_id=?)').run(userId);
             db.prepare('DELETE FROM habits WHERE user_id=?').run(userId);
