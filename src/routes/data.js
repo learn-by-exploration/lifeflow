@@ -97,7 +97,7 @@ module.exports = function(deps) {
       logger.warn({ userId }, 'Skipping backup — no tasks or goals in database (empty/seed-only)');
       return null;
     }
-    const fname = `lifeflow-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    const fname = `lifeflow-backup-${new Date().toISOString().replace(/[:.]/g, '').slice(0, 15)}.json`;
     const fpath = path.join(backupDir, fname);
     const data = JSON.stringify({ backupDate: new Date().toISOString(), ...d });
     fs.writeFileSync(fpath, data);
@@ -127,8 +127,8 @@ module.exports = function(deps) {
 
   // Backup on startup (for default user)
   try { runBackup(1); } catch(e) { logger.error({ err: e }, 'Startup backup failed'); }
-  // Backup every 24h
-  setInterval(() => { try { runBackup(1); } catch(e) { logger.error({ err: e }, 'Scheduled backup failed'); } }, 24 * 60 * 60 * 1000);
+  // Backup every 4h
+  setInterval(() => { try { runBackup(1); } catch(e) { logger.error({ err: e }, 'Scheduled backup failed'); } }, 4 * 60 * 60 * 1000);
 
   router.post('/api/backup', (req, res) => {
     const fname = runBackup(req.userId);
