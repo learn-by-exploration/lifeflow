@@ -2,6 +2,33 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.8.2] - 2026-04-03
+
+### Fixed
+- **Critical: WAL checkpoint after auto-restore** — Restored data was only in WAL and lost on container restart. Now runs `wal_checkpoint(TRUNCATE)` immediately after auto-restore
+- **Critical: Startup integrity** — Compares current DB against richest backup file directly (areas+tasks score), no longer depends on watermark which could itself be lost in WAL
+- **Data watermark ratchet** — Watermark now only moves upward via `Math.max(current, prev)` per field, preventing corrupt data from lowering the alarm threshold
+- **Auto-restore picks richest backup** — Scores all backup files by `areas + tasks + habits + tags`, selects highest instead of newest
+- **Backup skips seed-only DBs** — `runBackup()` skips when `tasks === 0 && goals === 0` to avoid overwriting real backups with empty data
+- **Custom Fields settings tab crash** — `wireSettingsTabs()` was out of scope in `renderCustomFieldsSettings()`; now passed as parameter
+- **Collapsed sidebar section icons** — When sidebar is collapsed and a section is toggled closed, parent section icon (bolt, event_note, etc.) now shows in icon-rail mode
+- **Missing CSS variable aliases** — Added `--bg2`, `--bd`, `--crd`, `--dn`, `--tx-s` (used 31 times in app.js for Gantt, table, tag manager, settings, changelog views)
+- **`area_color` missing from task queries** — Added `a.color as area_color` to 14 SQL queries across tasks.js, stats.js, and features.js
+
+### Added
+- **Comprehensive backup** — `queryAllUserData()` now exports all 25 user data tables (was ~8)
+- **Data watermark system** — `_data_watermark` setting tracks peak data counts per entity type
+- **Startup integrity check** — On boot, compares DB against all backup files; auto-restores if backup has >2× current data
+- **Migration safety tests** — 32 new tests for data watermark and integrity scenarios
+- Settings UI polish: sidebar edge pill button, iOS-style toggles
+
+## [0.8.1] - 2026-04-02
+
+### Fixed
+- **Critical: Data loss prevention** — WAL checkpoint on startup, safe seeding guards, backup integrity checks
+- Auto-restore triggers on >50% data loss, not just total wipeout
+- Include habits + habit_logs in backup and auto-restore
+
 ## [0.8.0] - 2026-04-02
 
 ### Added

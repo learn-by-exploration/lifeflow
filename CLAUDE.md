@@ -1,7 +1,7 @@
 # LifeFlow — Claude Code Configuration
 
-> **Last updated:** 2 April 2026 · **Version:** 0.8.0
-> **Metrics:** 3,453 tests | 142 test files | 190 API routes | 35 DB tables | ~15,000 LOC
+> **Last updated:** 3 April 2026 · **Version:** 0.8.2
+> **Metrics:** 3,500 tests | 144 test files | 191 API routes | 35 DB tables | ~16,000 LOC
 
 ## Project Overview
 
@@ -44,15 +44,15 @@ src/
   helpers.js          — Shared utilities (enrichTask, getNextPosition, etc.)
   scheduler.js        — Background job scheduler (session cleanup, recurring spawn)
   db/
-    index.js          — SQLite schema, 26 tables, inline migrations
+    index.js          — SQLite schema, 35 tables, inline migrations, startup integrity check, auto-restore
     migrate.js        — SQL migration runner (_migrations table)
     migrations/       — Versioned SQL migration files
   routes/
     areas.js          — Life Areas + Goals + Milestones (uses AreasService)
-    auth.js           — Register, login, logout, session (5 routes)
+    auth.js           — Register, login, logout, session, 2FA, tokens (14 routes)
     custom-fields.js  — Custom field definitions + task values CRUD (6 routes)
-    data.js           — Export, import, backup (6 routes)
-    features.js       — Habits, templates, automations, settings (25 routes)
+    data.js           — Export, import, backup, iCal, search (8 routes)
+    features.js       — Habits, templates, automations, settings, planner, webhooks, push (36 routes)
     filters.js        — Saved filters, smart lists (uses FiltersService)
     lists.js          — Custom lists + list items CRUD (22 routes)
     productivity.js   — Inbox, notes, reviews (weekly + daily), rules (20 routes)
@@ -82,18 +82,18 @@ src/
     request-logger.js — HTTP request logging (method, path, status, duration)
 ```
 
-**Frontend (7,860 LOC):**
+**Frontend (8,943 LOC):**
 ```
 public/
-  app.js              — Main SPA: all views, routing, state management (5,369 lines)
-  styles.css          — All styles, responsive breakpoints, themes (1,246 lines)
-  index.html          — SPA shell, overlays, modals (436 lines)
-  sw.js               — Service Worker: network-first caching (192 lines)
-  store.js            — Offline state store (47 lines)
-  login.html          — Auth login page (213 lines)
+  app.js              — Main SPA: all views, routing, state management (5,966 lines)
+  styles.css          — All styles, responsive breakpoints, 8 themes (1,342 lines)
+  index.html          — SPA shell, overlays, modals (454 lines)
+  sw.js               — Service Worker: network-first caching (215 lines)
+  store.js            — Offline state store (96 lines)
+  login.html          — Auth login page (105 lines)
   landing.html        — Marketing landing page (119 lines)
   landing.css         — Landing page styles (68 lines)
-  share.html          — Shared task view (170 lines)
+  share.html          — Shared task view (50 lines)
   manifest.json       — PWA manifest
   js/                 — ES module extractions (progressive migration)
     api.js            — API client with CSRF, auth redirect, error handling
@@ -104,15 +104,15 @@ public/
 
 **No build step.** Edit files, restart server (`node src/server.js`), hard-refresh browser (`Ctrl+Shift+R`).
 
-## Database Schema (26 tables)
+## Database Schema (35 tables)
 
 ### Core hierarchy
 ```
-users          (id, username, password_hash, display_name, created_at)
-sessions       (id, user_id→users, token, created_at, expires_at)
-life_areas     (id, user_id→users, name, icon, color, position, created_at)
-goals          (id, area_id→life_areas, title, description, color, status, due_date, position, created_at)
-tasks          (id, goal_id→goals, title, note, status[todo|doing|done], priority[0-3], due_date, recurring, assigned_to, position, my_day, created_at, completed_at)
+users          (id, email, password_hash, display_name, created_at)
+sessions       (sid PK, user_id→users, remember, expires_at, created_at)
+life_areas     (id, user_id→users, name, icon, color, position, archived, default_view, created_at)
+goals          (id, area_id→life_areas, user_id→users, title, description, color, status, due_date, position, created_at)
+tasks          (id, goal_id→goals, user_id→users, title, note, status[todo|doing|done], priority[0-3], due_date, due_time, recurring, assigned_to, assigned_to_user_id, position, my_day, estimated_minutes, actual_minutes, list_id, created_at, completed_at)
 subtasks       (id, task_id→tasks, title, note, done, position, created_at)
 tags           (id, user_id→users, name UNIQUE, color)
 task_tags      (task_id→tasks, tag_id→tags)  — M:N join
@@ -120,60 +120,63 @@ task_tags      (task_id→tasks, tag_id→tags)  — M:N join
 
 ### Features
 ```
-task_deps      (task_id→tasks, depends_on→tasks) — dependency graph
-task_templates (id, user_id, name, template JSON)
-task_comments  (id, task_id→tasks, user_id, content, created_at)
-goal_milestones(id, goal_id→goals, title, done, position)
-inbox          (id, user_id, text, created_at)
-notes          (id, user_id, title, content, created_at, updated_at)
-weekly_reviews (id, user_id, week, wins, struggles, plan, created_at)
+task_deps      (task_id→tasks, blocked_by_id→tasks) — dependency graph
+task_templates (id, user_id, name, description, icon, tasks JSON, user_created, source_type)
+task_comments  (id, task_id→tasks, text, created_at)
+goal_milestones(id, goal_id→goals, title, done, position, completed_at)
+inbox          (id, user_id, title, note, priority, created_at)
+notes          (id, user_id, title, content, goal_id, created_at, updated_at)
+weekly_reviews (id, user_id, week_start, tasks_completed, tasks_created, top_accomplishments, reflection, next_week_priorities, rating)
 daily_reviews  (id, user_id, date UNIQUE, note, completed_count, created_at)
 ```
 
 ### Productivity
 ```
 focus_sessions     (id, task_id→tasks, user_id, started_at, duration_sec, type)
-focus_session_meta (id, session_id→focus_sessions, key, value)
-focus_steps        (id, session_id→focus_sessions, title, done, position)
-habits             (id, user_id, name, frequency, color, position, created_at)
-habit_logs         (id, habit_id→habits, date, done)
+focus_session_meta (id, session_id→focus_sessions, intention, reflection, focus_rating, steps_planned, steps_completed, strategy)
+focus_steps        (id, session_id→focus_sessions, text, done, position, completed_at)
+habits             (id, user_id, name, icon, color, frequency, target, position, area_id, archived, preferred_time, created_at)
+habit_logs         (id, habit_id→habits, date, count)
 ```
 
 ### System
 ```
-settings       (user_id, key, value) — user preferences
-saved_filters  (id, user_id, name, filter JSON)
-lists          (id, user_id, name, type, icon, position, created_at)
-list_items     (id, list_id→lists, title, done, position, note)
-badges         (id, user_id, badge_type, earned_at)
-automation_rules (id, user_id, trigger, action, config JSON, enabled)
-custom_field_defs (id, user_id, name, field_type, options JSON, position, required, show_in_card)
+settings           (user_id, key, value) — user preferences + system flags
+saved_filters      (id, user_id, name, icon, color, filters JSON, position)
+lists              (id, user_id, name, type, icon, color, position, created_at)
+list_items         (id, list_id→lists, title, checked, category, quantity, note, position)
+badges             (id, user_id, type, earned_at)
+automation_rules   (id, user_id, name, trigger_type, trigger_config, action_type, action_config, enabled)
+custom_field_defs  (id, user_id, name, field_type, options JSON, position, required, show_in_card)
 task_custom_values (id, task_id→tasks, field_id→custom_field_defs, value)
-api_tokens     (id, user_id→users, name, token_hash, last_used_at, created_at, expires_at)
+api_tokens         (id, user_id→users, name, token_hash, last_used_at, created_at, expires_at)
 push_subscriptions (id, user_id→users, endpoint, p256dh, auth, created_at)
-webhooks       (id, user_id→users, name, url, events JSON, secret, active, created_at)
-login_attempts (email PK, attempts, first_attempt_at, locked_until)
+push_notification_log (id, user_id, type, task_id, sent_at) — dedup for push notifications
+webhooks           (id, user_id→users, name, url, events JSON, secret, active, created_at)
+login_attempts     (email PK, attempts, first_attempt_at, locked_until)
+search_index       (FTS5 virtual table — rowid, type, id, user_id, title, note, extra)
+_migrations        (name PK, applied_at) — SQL migration tracking
 ```
 
 All foreign keys use `ON DELETE CASCADE`.
 
-## API Routes (166 routes across 11 modules)
+## API Routes (191 routes across 11 modules)
 
 See `docs/openapi.yaml` for full specification. Key modules:
 
 | Module | Routes | Covers |
 |--------|--------|--------|
+| `features.js` | 36 | Habits, templates, automations, settings, planner, AI, webhooks, push |
 | `tasks.js` | 30 | CRUD, reorder, parse (NLP), board, calendar, table, timeline, my-day, search, overdue, suggested, batch |
-| `features.js` | 34 | Habits, templates, automations, settings, AI, webhooks, push (34 routes) |
 | `lists.js` | 22 | Custom lists + list items CRUD |
 | `stats.js` | 20 | Dashboard, streaks, heatmap, activity, focus stats, analytics |
 | `productivity.js` | 20 | Focus timer, reminders, triage, comments, milestones, daily review |
 | `areas.js` | 17 | Life Areas CRUD + reorder + goals association |
+| `auth.js` | 14 | Register, login, logout, session, tokens, 2FA, users |
 | `tags.js` | 11 | Tags CRUD + usage stats |
+| `data.js` | 8 | Export, import, backup, iCal, search, Todoist/Trello import |
 | `filters.js` | 7 | Saved filters + smart lists |
 | `custom-fields.js` | 6 | Custom field definitions + task values CRUD |
-| `data.js` | 8 | Export, import, backup, iCal, Todoist/Trello import (8 routes) |
-| `auth.js` | 14 | Register, login, logout, session, tokens, 2FA, users (14 routes) |
 
 ## Frontend Views (25+)
 
@@ -254,10 +257,13 @@ See `docs/openapi.yaml` for full specification. Key modules:
 - Relative date badges ("in 3 days", "2d overdue")
 - Custom lists (checklists, grocery, custom)
 - Auto-backup (startup + 24h, rotates last 7)
+- Data watermark — detects >50% data loss on startup, auto-restores from richest backup
+- WAL checkpoint after auto-restore to prevent data loss on container restart
 - Print stylesheet
 - Responsive mobile: hamburger sidebar, bottom nav bar, touch targets ≥44px
 - iOS keyboard detection, safe-area insets
 - Onboarding wizard for new users
+- Collapsible sidebar with section icons in icon-rail mode
 
 ## Key Patterns
 
@@ -275,12 +281,12 @@ See `docs/openapi.yaml` for full specification. Key modules:
 ## Testing
 
 ```bash
-npm test                    # Run all 3,453 tests
+npm test                    # Run all 3,500 tests
 ```
 
 **Runner:** `node --test --test-force-exit` with `node:assert/strict` + `supertest`
 
-**91 test files** across these categories:
+**144 test files** across these categories:
 
 | Category | Files | Description |
 |----------|-------|-------------|
@@ -300,7 +306,7 @@ npm test                    # Run all 3,453 tests
 See `docs/DOCUMENTATION-AUDIT.md` for the full documentation review and proposed restructure.
 
 ### Key docs
-- `docs/openapi.yaml` — Full OpenAPI 3.0.3 spec (2,892 lines)
+- `docs/openapi.yaml` — Full OpenAPI 3.0.3 spec (3,163 lines)
 - `docs/SECURITY-HACKATHON-2026-03-25.md` — Security audit (115 findings)
 - `docs/SECURITY-IMPLEMENTATION-PLAN.md` — Security remediation roadmap
 - `docs/design/` — Design documents (see `docs/design/INDEX.md` for status)
@@ -322,13 +328,12 @@ See `docs/DOCUMENTATION-AUDIT.md` for the full documentation review and proposed
 | Version bump | CLAUDE.md header, `package.json`, `docs/openapi.yaml` |
 
 **Update the CLAUDE.md header line counts** when LOC changes significantly (>5%):
-- Current: 3,453 tests | 142 test files | 190 routes | 35 tables | ~15,000 LOC
+- Current: 3,500 tests | 144 test files | 191 routes | 35 tables | ~16,000 LOC
 
 ## What Needs to Be Done (Roadmap)
 
 ### High Priority
 - **Security remediation** — 115 findings from security audit (16 critical, 32 high)
-- **README.md** — Project front door (currently missing)
 - **Documentation restructure** — See `docs/DOCUMENTATION-AUDIT.md`
 
 ### Medium Priority
@@ -339,7 +344,7 @@ See `docs/DOCUMENTATION-AUDIT.md` for the full documentation review and proposed
 - **Collaboration** — Multi-user task sharing (assigned_to field exists but unused in UI)
 - **Mobile app** — React Native or Capacitor wrapper
 - **Calendar sync** — Google/Apple calendar two-way sync
-- **API tokens** — Token-based access for programmatic use / integrations
+- **API tokens** — Token-based access for programmatic use / integrations (backend done, UI pending)
 
 ## Rules
 

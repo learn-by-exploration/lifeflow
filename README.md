@@ -57,19 +57,22 @@ Data is persisted in `/app/data` inside the container. See [docs/deployment.md](
 ```
 src/
   server.js             — Express app entry point
-  db/index.js           — SQLite schema (26 tables), migrations
-  routes/               — 10 route modules (157 routes)
+  db/index.js           — SQLite schema (35 tables), migrations, startup integrity check
+  routes/               — 11 route modules (191 routes)
   middleware/            — Auth, CSRF, validation, errors
-  services/             — Audit logging
+  schemas/              — Zod validation schemas
+  repositories/         — Data access layer
+  services/             — Business logic + audit logging
 public/
-  app.js                — SPA frontend (5,471 lines)
-  styles.css            — All styles + responsive breakpoints
-  index.html            — SPA shell
+  app.js                — SPA frontend (5,966 lines)
+  styles.css            — All styles + 8 themes (1,342 lines)
+  index.html            — SPA shell (454 lines)
   sw.js                 — Service Worker
+  js/                   — ES module extractions
 tests/
-  *.test.js             — 60 test files, 1,634 tests
+  *.test.js             — 144 test files, 3,500 tests
 docs/
-  openapi.yaml          — Full API spec (2,892 lines)
+  openapi.yaml          — Full API spec (3,163 lines)
   architecture.md       — System design & patterns
   deployment.md         — Docker & self-hosted guide
 ```
@@ -77,14 +80,14 @@ docs/
 ## Testing
 
 ```bash
-npm test                                    # All 1,634 tests
+npm test                                    # All 3,500 tests
 node --test tests/tasks.test.js             # Single file
 node --test --test-name-pattern "overdue"   # By name pattern
 ```
 
 ## API
 
-157 routes across 10 modules. Full OpenAPI 3.0.3 spec at [docs/openapi.yaml](docs/openapi.yaml).
+191 routes across 11 modules. Full OpenAPI 3.0.3 spec at [docs/openapi.yaml](docs/openapi.yaml).
 
 Quick test:
 

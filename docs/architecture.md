@@ -1,15 +1,15 @@
 # Architecture
 
 > LifeFlow system design and technical patterns.
-> Updated: 26 March 2026 | Version: 0.2.6
+> Updated: 3 April 2026 | Version: 0.8.2
 
 ## Overview
 
 LifeFlow is a self-hosted personal productivity application. It consists of:
 
-1. **Express.js REST API** — 157 routes across 10 modules
+1. **Express.js REST API** — 191 routes across 11 modules
 2. **Vanilla JS SPA** — No framework, no build step, direct DOM manipulation
-3. **SQLite database** — better-sqlite3 with WAL mode, 26 tables
+3. **SQLite database** — better-sqlite3 with WAL mode, 35 tables
 4. **Service Worker** — Network-first caching for offline support
 
 ```
@@ -24,7 +24,7 @@ LifeFlow is a self-hosted personal productivity application. It consists of:
 │   middleware → routes  │
 ├────────────────────────┤
 │   better-sqlite3       │
-│   WAL mode, 26 tables  │
+│   WAL mode, 35 tables  │
 └────────────────────────┘
 ```
 
@@ -32,11 +32,11 @@ LifeFlow is a self-hosted personal productivity application. It consists of:
 
 ### Entry Point
 
-`src/server.js` (174 lines) — Sets up Express, loads middleware, mounts route modules, starts the server.
+`src/server.js` (284 lines) — Sets up Express, loads middleware, mounts route modules, starts the server.
 
 ### Database Layer
 
-`src/db/index.js` (511 lines) — Creates database, defines 26 tables via `CREATE TABLE IF NOT EXISTS`, runs additive migrations via `ALTER TABLE`. Exports the `db` instance and helper functions.
+`src/db/index.js` — Creates database, defines 35 tables via `CREATE TABLE IF NOT EXISTS`, runs additive migrations, startup data integrity check with auto-restore from backup. Exports the `db` instance and helper functions.
 
 **Key decisions:**
 - WAL mode for concurrent reads during writes
@@ -50,16 +50,17 @@ Each module exports an Express Router mounted on `/api`:
 
 | Module | Routes | Responsibility |
 |--------|--------|---------------|
-| `routes/tasks.js` | 26 | Core task CRUD, reorder, NLP parse, board/calendar views |
-| `routes/features.js` | 25 | Habits, templates, automations, onboarding, inbox, notes, reviews |
-| `routes/lists.js` | 22 | Custom lists + list items CRUD + sharing |
-| `routes/stats.js` | 20 | Dashboard aggregates, streaks, heatmap, activity log, analytics |
-| `routes/productivity.js` | 18 | Focus timer, reminders, triage, comments, milestones |
-| `routes/areas.js` | 17 | Life Areas CRUD + reorder + goals association |
+| `routes/features.js` | 36 | Habits, templates, automations, settings, planner, AI, webhooks, push |
+| `routes/tasks.js` | 30 | Core task CRUD, reorder, NLP parse, board/calendar/table/timeline views |
+| `routes/lists.js` | 22 | Custom lists + list items CRUD + sharing + templates |
+| `routes/stats.js` | 20 | Dashboard, streaks, heatmap, activity log, focus stats, analytics |
+| `routes/productivity.js` | 20 | Inbox, notes, reviews (weekly + daily), rules |
+| `routes/areas.js` | 17 | Life Areas CRUD + reorder + goals + milestones |
+| `routes/auth.js` | 14 | Register, login, logout, session, 2FA, API tokens, users |
 | `routes/tags.js` | 11 | Tags CRUD + usage stats |
+| `routes/data.js` | 8 | Export, import, backup, iCal, search, Todoist/Trello import |
 | `routes/filters.js` | 7 | Saved filters + smart lists (Stale, Quick Wins, Blocked) |
-| `routes/data.js` | 6 | JSON export, import (with ID remapping), backup/restore |
-| `routes/auth.js` | 5 | Register, login, logout, session check, demo mode |
+| `routes/custom-fields.js` | 6 | Custom field definitions + task values CRUD |
 
 ### Middleware Stack
 
@@ -78,16 +79,18 @@ Applied in order:
 
 Session-based authentication:
 - Passwords hashed with bcryptjs (10 rounds)
-- Session tokens stored in `sessions` table with expiry
-- Cookie-based session transport
+- Session IDs stored in `sessions` table with expiry
+- Cookie-based session transport (`lf_sid`)
 - CSRF tokens required for POST/PUT/DELETE
-- Demo mode creates temporary sandbox
+- TOTP 2FA (RFC 6238) with setup/verify/disable
+- Account lockout after failed login attempts
+- API token authentication (Bearer tokens, SHA-256 hashed)
 
 ## Frontend Architecture
 
 ### Single-Page Application
 
-`public/app.js` (5,369 lines) — All views, routing, state management, and event handling in one file.
+`public/app.js` (5,966 lines) — All views, routing, state management, and event handling in one file.
 
 **State management:** Top-level mutable `let` variables (`areas`, `goals`, `tasks`, `allTags`, `currentView`, `activeAreaId`, `activeGoalId`). No state library.
 
@@ -109,7 +112,7 @@ Session-based authentication:
 
 ### Styles
 
-`public/styles.css` (1,246 lines) — All styles in one file with clear section comments.
+`public/styles.css` (1,342 lines) — All styles in one file with clear section comments.
 
 - 8 theme definitions via CSS custom properties on `[data-theme="..."]`
 - Responsive breakpoints: 375px, 380px, 600px, 768px, 920px, 1200px
@@ -120,7 +123,7 @@ Session-based authentication:
 
 ### Service Worker
 
-`public/sw.js` (192 lines) — Network-first caching strategy.
+`public/sw.js` (215 lines) — Network-first caching strategy.
 
 - Caches static assets (HTML, CSS, JS, fonts, icons)
 - Serves from cache when offline
@@ -129,15 +132,15 @@ Session-based authentication:
 
 ## Database Schema
 
-26 tables organized into 4 groups:
+35 tables organized into 4 groups:
 
 **Core hierarchy:** `users`, `sessions`, `life_areas`, `goals`, `tasks`, `subtasks`, `tags`, `task_tags`
 
-**Features:** `task_deps`, `task_templates`, `task_comments`, `goal_milestones`, `inbox`, `notes`, `weekly_reviews`
+**Features:** `task_deps`, `task_templates`, `task_comments`, `goal_milestones`, `inbox`, `notes`, `weekly_reviews`, `daily_reviews`
 
 **Productivity:** `focus_sessions`, `focus_session_meta`, `focus_steps`, `habits`, `habit_logs`
 
-**System:** `settings`, `saved_filters`, `lists`, `list_items`, `badges`, `automation_rules`
+**System:** `settings`, `saved_filters`, `lists`, `list_items`, `badges`, `automation_rules`, `custom_field_defs`, `task_custom_values`, `api_tokens`, `push_subscriptions`, `push_notification_log`, `webhooks`, `login_attempts`, `search_index`, `_migrations`
 
 See CLAUDE.md for full column-level schema.
 
@@ -158,14 +161,14 @@ All state changes go through the API. The frontend never writes to the database 
 - **Factories:** `makeArea()`, `makeGoal()`, `makeTask()`, `makeSubtask()`, `makeTag()`, `linkTag()`, `makeFocus()`
 - **Cleanup:** `cleanDb()` truncates all tables in `beforeEach`
 - **Frontend tests:** Static file validation (read CSS/HTML/JS, assert content with regex/string matching)
-- **Coverage:** 1,692 tests across 60 files
+- **Coverage:** 3,500 tests across 144 files
 
 ## Known Tradeoffs
 
 | Decision | Tradeoff | Rationale |
 |----------|----------|-----------|
 | Vanilla JS (no framework) | Harder to maintain at scale | Zero build step, instant reload, no toolchain |
-| Single app.js file | Large file (5,369 lines) | Avoids module bundler; simple deployment |
+| Single app.js file | Large file (5,966 lines) | Avoids module bundler; simple deployment |
 | Full DOM re-render | Not incremental | Simpler logic; SQLite is fast enough |
 | N+1 query in `enrichTasks()` | Extra DB calls | Keeps helper simple; SQLite latency is ~0ms |
 | SQLite (not Postgres) | Single-writer limitation | Zero ops; backup = copy file; portability |

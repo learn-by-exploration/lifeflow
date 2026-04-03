@@ -194,9 +194,12 @@ When `ALLOWED_ORIGINS` is **not set** (default):
 ### Automatic
 
 LifeFlow creates automatic JSON backups:
-- On server startup
+- On server startup (for user ID 1)
 - Every 24 hours
 - Rotates last 7 backups
+- Exports all 25 user data tables (areas, goals, tasks, habits, settings, etc.)
+
+**Data Safety:** On startup, LifeFlow compares current DB data counts against the richest backup file. If a backup has >2× the current data (areas + tasks), it auto-restores from that backup with WAL checkpoint to prevent data loss on container restarts.
 
 Backups are stored in `backups/` (relative to project root).
 

@@ -7,16 +7,16 @@ git clone https://github.com/learn-by-exploration/lifeflow.git
 cd lifeflow
 npm install
 npm start          # http://localhost:3456
-npm test           # 1,992+ tests, Node.js native test runner
+npm test           # 3,500+ tests, Node.js native test runner
 ```
 
 ## Project Structure
 
 ```
 src/
-  server.js          — Express app entry point (174 lines)
-  db/index.js        — SQLite schema, 26 tables, migrations (511 lines)
-  routes/            — 11 route modules (190+ routes total)
+  server.js          — Express app entry point (284 lines)
+  db/index.js        — SQLite schema, 35 tables, migrations, integrity check
+  routes/            — 11 route modules (191 routes total)
     areas.js         — Life Areas CRUD + reorder
     auth.js          — Register, login, logout, session
     data.js          — Export, import, backup
@@ -30,13 +30,13 @@ src/
   middleware/        — Auth, CSRF, validation, error handling
   services/          — Audit logging
 public/
-  app.js             — SPA frontend: views, routing, state (5,369 lines)
-  styles.css         — Styles, responsive breakpoints, themes (1,246 lines)
-  index.html         — SPA shell, overlays, modals (436 lines)
-  sw.js              — Service Worker (192 lines)
+  app.js             — SPA frontend: views, routing, state (5,966 lines)
+  styles.css         — Styles, responsive breakpoints, 8 themes (1,342 lines)
+  index.html         — SPA shell, overlays, modals (454 lines)
+  sw.js              — Service Worker (215 lines)
 tests/
   helpers.js         — Shared setup/teardown + data builders
-  *.test.js          — 80+ test files (node:test + supertest)
+  *.test.js          — 144 test files (node:test + supertest)
 docs/
   openapi.yaml       — Full OpenAPI 3.0.3 spec
 ```
