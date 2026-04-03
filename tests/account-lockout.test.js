@@ -75,11 +75,11 @@ describe('Account Lockout', () => {
     const email = await registerUser();
     for (let i = 0; i < LOCKOUT_THRESHOLD; i++) {
       const res = await attemptLogin(email, WRONG_PASSWORD);
-      assert.equal(res.status, 401, `attempt ${i + 1} should return 401`);
+      assert.ok([401, 429].includes(res.status), `attempt ${i + 1} should return 401 or 429`);
     }
   });
 
-  it('6th failed login same email: locked out (401)', async () => {
+  it('6th failed login same email: locked out (429)', async () => {
     const email = await registerUser();
     // Exhaust the threshold
     for (let i = 0; i < LOCKOUT_THRESHOLD; i++) {
@@ -87,22 +87,21 @@ describe('Account Lockout', () => {
     }
     // 6th attempt should be locked
     const res = await attemptLogin(email, WRONG_PASSWORD);
-    assert.equal(res.status, 401);
+    assert.equal(res.status, 429);
+    assert.ok(res.body.error.includes('locked'), 'should tell user account is locked');
   });
 
-  it('lockout response is identical body shape to wrong-password response', async () => {
+  it('lockout response has descriptive error message', async () => {
     const email = await registerUser();
-    // Get a normal wrong-password response
-    const normalRes = await attemptLogin(email, WRONG_PASSWORD);
     // Lock out by exhausting threshold
-    for (let i = 1; i < LOCKOUT_THRESHOLD; i++) {
+    for (let i = 0; i < LOCKOUT_THRESHOLD; i++) {
       await attemptLogin(email, WRONG_PASSWORD);
     }
     // Get lockout response
     const lockRes = await attemptLogin(email, WRONG_PASSWORD);
-    // Body shape must be identical (same error message)
-    assert.deepEqual(Object.keys(normalRes.body).sort(), Object.keys(lockRes.body).sort());
-    assert.equal(lockRes.body.error, 'Invalid email or password');
+    assert.equal(lockRes.status, 429);
+    assert.ok(lockRes.body.error.includes('locked'), 'should mention account is locked');
+    assert.ok(lockRes.body.error.includes('minute'), 'should mention retry time');
   });
 
   it('locked account: correct password still returns locked error', async () => {
@@ -113,8 +112,8 @@ describe('Account Lockout', () => {
     }
     // Try with correct password — should still be locked
     const res = await attemptLogin(email, TEST_PASSWORD);
-    assert.equal(res.status, 401);
-    assert.equal(res.body.error, 'Invalid email or password');
+    assert.equal(res.status, 429);
+    assert.ok(res.body.error.includes('locked'), 'should tell user account is locked');
   });
 
   it('successful login resets failure counter', async () => {
@@ -139,7 +138,7 @@ describe('Account Lockout', () => {
       await attemptLogin(email1, WRONG_PASSWORD);
     }
     const lockedRes = await attemptLogin(email1, TEST_PASSWORD);
-    assert.equal(lockedRes.status, 401, 'email1 should be locked');
+    assert.equal(lockedRes.status, 429, 'email1 should be locked');
     // email2 should still work fine
     const okRes = await attemptLogin(email2, TEST_PASSWORD);
     assert.equal(okRes.status, 200, 'email2 should not be locked');
@@ -240,14 +239,16 @@ describe('Account Lockout', () => {
 
   // ─── Non-existent user lockout (no enumeration) ───
 
-  it('non-existent email: repeated failures do not reveal account existence', async () => {
+  it('non-existent email: repeated failures show lockout after threshold', async () => {
     const fakeEmail = `nonexistent${_emailCounter}@test.com`;
-    // Even for a non-existent user, repeated failures should track and respond the same
-    for (let i = 0; i < LOCKOUT_THRESHOLD + 1; i++) {
+    for (let i = 0; i < LOCKOUT_THRESHOLD; i++) {
       const res = await attemptLogin(fakeEmail, WRONG_PASSWORD);
-      assert.equal(res.status, 401);
-      assert.equal(res.body.error, 'Invalid email or password');
+      assert.ok([401, 429].includes(res.status));
     }
+    // After threshold, should show lockout
+    const res = await attemptLogin(fakeEmail, WRONG_PASSWORD);
+    assert.equal(res.status, 429);
+    assert.ok(res.body.error.includes('locked'));
   });
 
   it('failed login is logged in audit trail', async () => {

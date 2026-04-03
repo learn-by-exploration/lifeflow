@@ -103,7 +103,8 @@ module.exports = function(deps) {
         // Run bcrypt anyway to prevent timing-based lockout detection
         bcrypt.compareSync(String(password), DUMMY_HASH);
         if (audit) audit.log(null, 'login_locked', 'auth', null, req, trimmedEmail);
-        return res.status(401).json({ error: 'Invalid email or password' });
+        const remainMin = Math.ceil((lockedUntil - new Date()) / 60000);
+        return res.status(429).json({ error: `Account locked due to too many failed attempts. Try again in ${remainMin} minute${remainMin === 1 ? '' : 's'}.` });
       }
       // Lockout expired — reset
       db.prepare('DELETE FROM login_attempts WHERE email = ?').run(trimmedEmail);
@@ -143,6 +144,15 @@ module.exports = function(deps) {
         ).run(trimmedEmail);
       }
       if (audit) audit.log(null, 'login_failed', 'auth', null, req, trimmedEmail);
+      // Re-read to get current attempt count for user-friendly message
+      const currentAttempts = db.prepare('SELECT attempts, locked_until FROM login_attempts WHERE email = ?').get(trimmedEmail);
+      if (currentAttempts && currentAttempts.locked_until) {
+        return res.status(429).json({ error: `Account locked due to too many failed attempts. Try again in ${LOCKOUT_DURATION_MINUTES} minutes.` });
+      }
+      const remaining = LOCKOUT_THRESHOLD - (currentAttempts ? currentAttempts.attempts : 0);
+      if (remaining > 0 && remaining <= 2) {
+        return res.status(401).json({ error: `Invalid email or password. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before account is locked.` });
+      }
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 

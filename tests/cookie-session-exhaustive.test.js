@@ -235,10 +235,11 @@ describe('Cookie & Session Security Exhaustive', () => {
 
       // 6th attempt should be locked
       const res = await rawAgent().post('/api/auth/login').send({ email, password: 'TestPass123!' });
-      assert.equal(res.status, 401);
+      assert.equal(res.status, 429);
+      assert.ok(res.body.error.includes('locked'), 'should tell user account is locked');
     });
 
-    it('lockout response does not reveal account existence', async () => {
+    it('lockout response shows descriptive message', async () => {
       const email = `lockr-${Date.now()}@test.com`;
       await rawAgent().post('/api/auth/register').send({ email, password: 'TestPass123!' });
 
@@ -248,8 +249,8 @@ describe('Cookie & Session Security Exhaustive', () => {
 
       const res = await rawAgent().post('/api/auth/login').send({ email, password: 'TestPass123!' });
       assert.ok(res.body.error);
-      // Should not say "account locked" — should say generic invalid
-      assert.ok(!res.body.error.toLowerCase().includes('locked'), 'should not reveal lockout');
+      assert.ok(res.body.error.toLowerCase().includes('locked'), 'should mention lockout');
+      assert.ok(res.body.error.includes('minute'), 'should mention retry time');
     });
   });
 });

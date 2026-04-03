@@ -74,8 +74,7 @@ describe('Security Audit Verification', () => {
     const r = await request(app).post('/api/auth/login').send({
       email: 'lockout@test.com', password: 'ValidPass123!@#'
     });
-    // Returns 401 with generic message (not 429) to avoid revealing lockout state
-    assert.equal(r.status, 401, 'should reject even correct password during lockout');
+    assert.equal(r.status, 429, 'should reject even correct password during lockout');
   });
 
   // ── HIGH: Color validation (#81) ──
