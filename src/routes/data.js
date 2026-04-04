@@ -199,34 +199,56 @@ module.exports = function(deps) {
       }
 
       // Import areas
-      const insArea = db.prepare('INSERT INTO life_areas (name, icon, color, position, user_id) VALUES (?, ?, ?, ?, ?)');
+      const insArea = db.prepare('INSERT INTO life_areas (name, icon, color, position, user_id, archived, default_view, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
       areas.forEach(a => {
-        const r = insArea.run(a.name, a.icon || '📂', a.color || '#2563EB', a.position || 0, req.userId);
+        const r = insArea.run(a.name, a.icon || '📂', a.color || '#2563EB', a.position || 0, req.userId, a.archived || 0, a.default_view || null, a.created_at || new Date().toISOString());
         areaMap[a.id] = r.lastInsertRowid;
       });
 
       // Import goals
-      const insGoal = db.prepare('INSERT INTO goals (area_id, title, description, due_date, color, status, position, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+      const insGoal = db.prepare('INSERT INTO goals (area_id, title, description, due_date, color, status, position, user_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
       goals.forEach(g => {
         const newAreaId = areaMap[g.area_id];
         if (!newAreaId) return; // skip orphan goals
-        const r = insGoal.run(newAreaId, g.title, g.description || '', g.due_date || null, g.color || '#6C63FF', g.status || 'active', g.position || 0, req.userId);
+        const r = insGoal.run(newAreaId, g.title, g.description || '', g.due_date || null, g.color || '#6C63FF', g.status || 'active', g.position || 0, req.userId, g.created_at || new Date().toISOString());
         goalMap[g.id] = r.lastInsertRowid;
       });
 
+      // Lists + list_items (before tasks so list_id can be remapped)
+      if (Array.isArray(req.body.lists)) {
+        const insList = db.prepare('INSERT INTO lists (name, type, icon, color, position, user_id, area_id, parent_id, share_token, view_mode, board_columns, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+        const allLists = req.body.lists;
+        const parentLists = allLists.filter(l => !l.parent_id);
+        const childLists = allLists.filter(l => l.parent_id);
+        [...parentLists, ...childLists].forEach(l => {
+          const newAreaId = l.area_id ? (areaMap[l.area_id] || null) : null;
+          const newParentId = l.parent_id ? (listMap[l.parent_id] || null) : null;
+          const r = insList.run(l.name, l.type || 'checklist', l.icon || '📋', l.color || '#2563EB', l.position || 0, req.userId, newAreaId, newParentId, l.share_token || null, l.view_mode || 'list', l.board_columns || null, l.created_at || new Date().toISOString());
+          listMap[l.id] = r.lastInsertRowid;
+        });
+      }
+      if (Array.isArray(req.body.list_items)) {
+        const insItem = db.prepare('INSERT INTO list_items (list_id, title, checked, category, quantity, note, position, metadata, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)');
+        req.body.list_items.forEach(i => {
+          const newListId = listMap[i.list_id];
+          if (newListId) insItem.run(newListId, i.title, i.checked || 0, i.category || null, i.quantity || null, i.note || '', i.position || 0, i.metadata || null, i.status || null, i.created_at || new Date().toISOString());
+        });
+      }
+
       // Import tasks
-      const insTask = db.prepare('INSERT INTO tasks (goal_id, title, note, status, priority, due_date, my_day, position, recurring, completed_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-      const insSubtask = db.prepare('INSERT INTO subtasks (task_id, title, done, position) VALUES (?, ?, ?, ?)');
+      const insTask = db.prepare('INSERT INTO tasks (goal_id, title, note, status, priority, due_date, due_time, my_day, position, recurring, completed_at, user_id, assigned_to, assigned_to_user_id, estimated_minutes, actual_minutes, list_id, time_block_start, time_block_end, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+      const insSubtask = db.prepare('INSERT INTO subtasks (task_id, title, note, done, position, created_at) VALUES (?, ?, ?, ?, ?, ?)');
       const insTaskTag = db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?, ?)');
       tasks.forEach(t => {
         const newGoalId = goalMap[t.goal_id];
         if (!newGoalId) return; // skip orphan tasks
-        const r = insTask.run(newGoalId, t.title, t.notes || t.note || '', t.status || 'todo', t.priority || 0, t.due_date || null, t.my_day ? 1 : 0, t.position || 0, t.recurring || null, t.completed_at || null, req.userId);
+        const newListId = t.list_id ? (listMap[t.list_id] || null) : null;
+        const r = insTask.run(newGoalId, t.title, t.notes || t.note || '', t.status || 'todo', t.priority || 0, t.due_date || null, t.due_time || null, t.my_day ? 1 : 0, t.position || 0, t.recurring || null, t.completed_at || null, req.userId, t.assigned_to || '', t.assigned_to_user_id || null, t.estimated_minutes || null, t.actual_minutes || 0, newListId, t.time_block_start || null, t.time_block_end || null, t.created_at || new Date().toISOString());
         const newTaskId = r.lastInsertRowid;
         taskMap[t.id] = newTaskId;
         // Subtasks
         if (Array.isArray(t.subtasks)) {
-          t.subtasks.forEach(s => insSubtask.run(newTaskId, s.title, s.done ? 1 : 0, s.position || 0));
+          t.subtasks.forEach(s => insSubtask.run(newTaskId, s.title, s.note || '', s.done ? 1 : 0, s.position || 0, s.created_at || new Date().toISOString()));
         }
         // Tags
         if (Array.isArray(t.tags)) {
@@ -241,9 +263,9 @@ module.exports = function(deps) {
 
       // Habits + habit_logs
       if (Array.isArray(req.body.habits)) {
-        const insHabit = db.prepare('INSERT INTO habits (name, icon, color, frequency, target, position, area_id, user_id) VALUES (?,?,?,?,?,?,?,?)');
+        const insHabit = db.prepare('INSERT INTO habits (name, icon, color, frequency, target, position, area_id, user_id, preferred_time, archived, schedule_days, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
         req.body.habits.forEach(h => {
-          const r = insHabit.run(h.name, h.icon || '✅', h.color || '#22C55E', h.frequency || 'daily', h.target || 1, h.position || 0, h.area_id ? (areaMap[h.area_id] || null) : null, req.userId);
+          const r = insHabit.run(h.name, h.icon || '✅', h.color || '#22C55E', h.frequency || 'daily', h.target || 1, h.position || 0, h.area_id ? (areaMap[h.area_id] || null) : null, req.userId, h.preferred_time || null, h.archived || 0, h.schedule_days || null, h.created_at || new Date().toISOString());
           habitMap[h.id] = r.lastInsertRowid;
         });
       }
@@ -257,10 +279,10 @@ module.exports = function(deps) {
 
       // Focus sessions
       if (Array.isArray(req.body.focus_sessions)) {
-        const insFocus = db.prepare('INSERT INTO focus_sessions (task_id, started_at, duration_sec, type, user_id) VALUES (?,?,?,?,?)');
+        const insFocus = db.prepare('INSERT INTO focus_sessions (task_id, started_at, duration_sec, type, user_id, ended_at, scheduled_at) VALUES (?,?,?,?,?,?,?)');
         req.body.focus_sessions.forEach(f => {
           const newTaskId = taskMap[f.task_id];
-          if (newTaskId) insFocus.run(newTaskId, f.started_at, f.duration_sec || 0, f.type || 'pomodoro', req.userId);
+          if (newTaskId) insFocus.run(newTaskId, f.started_at, f.duration_sec || 0, f.type || 'pomodoro', req.userId, f.ended_at || null, f.scheduled_at || null);
         });
       }
 
@@ -288,22 +310,6 @@ module.exports = function(deps) {
         const insNote = db.prepare('INSERT INTO notes (title, content, goal_id, user_id, created_at, updated_at) VALUES (?,?,?,?,?,?)');
         req.body.notes.forEach(n => {
           insNote.run(n.title, n.content || '', n.goal_id ? (goalMap[n.goal_id] || null) : null, req.userId, n.created_at || new Date().toISOString(), n.updated_at || new Date().toISOString());
-        });
-      }
-
-      // Lists + list_items
-      if (Array.isArray(req.body.lists)) {
-        const insList = db.prepare('INSERT INTO lists (name, type, icon, color, position, user_id) VALUES (?,?,?,?,?,?)');
-        req.body.lists.forEach(l => {
-          const r = insList.run(l.name, l.type || 'checklist', l.icon || '📋', l.color || '#2563EB', l.position || 0, req.userId);
-          listMap[l.id] = r.lastInsertRowid;
-        });
-      }
-      if (Array.isArray(req.body.list_items)) {
-        const insItem = db.prepare('INSERT INTO list_items (list_id, title, checked, category, quantity, note, position) VALUES (?,?,?,?,?,?,?)');
-        req.body.list_items.forEach(i => {
-          const newListId = listMap[i.list_id];
-          if (newListId) insItem.run(newListId, i.title, i.checked || 0, i.category || null, i.quantity || null, i.note || '', i.position || 0);
         });
       }
 

@@ -377,6 +377,8 @@ describe('Text overflow protection', () => {
         /\.ms-bar .ms-cnt/i,                 // programmatic count text
         /\.qa input|\.sta input|\.tgi input/i, // input elements
         />\*/i,                              // wildcard children (.dp-row>*)
+        /li-board\b/i,                       // board container (structural)
+        /shop-progress\b/i,                  // progress bar (structural)
       ];
       while ((m = ruleRe.exec(css)) !== null) {
         const selector = m[1].trim();

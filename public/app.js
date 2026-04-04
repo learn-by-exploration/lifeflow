@@ -480,8 +480,26 @@ async function renderToday(){
   $('myday-badge').textContent=t.filter(x=>x.status!=='done').length;
   const pct=stats.total?Math.round(stats.done/stats.total*100):0;
   const sEmoji=streakEmoji(streakData.streak||0);
+  // Daily quote (show once per day if enabled)
+  let quoteHtml='';
+  const quoteKey='lf-quote-'+_toDateStr(new Date());
+  if(appSettings.dailyQuote==='true'&&!sessionStorage.getItem(quoteKey)){
+    try{
+      const q=await api.get('/api/features/daily-quote');
+      if(q.enabled&&q.text){
+        sessionStorage.setItem(quoteKey,'1');
+        quoteHtml=`<div class="daily-quote-card" id="daily-quote-card">
+          <button class="dq-dismiss" title="Dismiss"><span class="material-icons-round" style="font-size:16px">close</span></button>
+          <div class="dq-icon">🌿</div>
+          <blockquote class="dq-text">${esc(q.text)}</blockquote>
+          <cite class="dq-author">— ${esc(q.author)}</cite>
+        </div>`;
+      }
+    }catch(_){}
+  }
   // Greeting
-  let h=`<div style="font-size:15px;font-weight:600;margin-bottom:4px">${getGreeting()}</div>`;
+  let h=quoteHtml;
+  h+=`<div style="font-size:15px;font-weight:600;margin-bottom:4px">${getGreeting()}</div>`;
   h+=`<div style="font-size:13px;color:var(--tx2);margin-bottom:10px">${ds} · ${t.filter(x=>x.status!=='done').length} tasks today</div>`;
   // Stats bar with progress ring
   if(todayTab!=='focus'){
@@ -702,6 +720,8 @@ function wireTodayHabits(c){
 }
 function wireBalanceDismiss(c){
   c.querySelectorAll('.balance-dismiss').forEach(el=>el.addEventListener('click',()=>{el.closest('.balance-alert').remove()}));
+  const dqCard=c.querySelector('.dq-dismiss');
+  if(dqCard) dqCard.addEventListener('click',()=>{dqCard.closest('.daily-quote-card').remove()});
 }
 
 // ─── TASKS HUB (List / Board / Calendar tab strip) ───
@@ -3951,6 +3971,7 @@ async function renderSettings(){
     <div class="set-row"><label>Auto-add to Today</label>${tog('autoMyDay',appSettings.autoMyDay)}</div>
     <div class="set-row"><label>Show Completed Tasks</label>${tog('showCompleted',appSettings.showCompleted)}</div>
     <div class="set-row"><label>Confirm Before Delete</label>${tog('confirmDelete',appSettings.confirmDelete)}</div>
+    <div class="set-row"><label>Daily Motivation Quote</label>${tog('dailyQuote',appSettings.dailyQuote)}</div>
   </section>
 </div>`;
   } else if(window._settingsTab==='taskdefaults'){
@@ -4266,7 +4287,7 @@ document.querySelectorAll('.lm-type').forEach(t=>t.addEventListener('click',()=>
   document.querySelectorAll('.lm-type').forEach(x=>{x.classList.remove('sel');x.style.borderColor='var(--brd)'});
   t.classList.add('sel');t.style.borderColor='var(--brand)';
   // Set default icon based on type
-  const icons={checklist:'📋',grocery:'🛒',notes:'📝'};
+  const icons={checklist:'📋',grocery:'🛒',notes:'📝',tracker:'📊'};
   $('lm-icon').value=icons[t.dataset.type]||'📋';
 }));
 $('lm-cancel').addEventListener('click',()=>$('lm').classList.remove('active'));
@@ -4344,6 +4365,18 @@ async function renderLists(){
   }));
 }
 
+// Track list UI state (hide checked, collapsed sections)
+let _listHideChecked=false, _listCollapsed={};
+
+function _renderItemMeta(i){
+  const m=i.metadata?JSON.parse(i.metadata):{};
+  let out='';
+  if(m.price)out+=`<span class="li-meta-price">$${esc(String(m.price))}</span>`;
+  if(m.rating)out+=`<span class="li-meta-rating">${'★'.repeat(m.rating)+'☆'.repeat(5-m.rating)}</span>`;
+  if(m.url)out+=`<a class="li-meta-url" href="${escA(m.url)}" target="_blank" rel="noopener"><span class="material-icons-round" style="font-size:12px">link</span></a>`;
+  return out;
+}
+
 async function renderListDetail(){
   const c=$('ct');
   if(!activeListId){currentView='lists';render();return}
@@ -4354,11 +4387,23 @@ async function renderListDetail(){
   ])}catch(e){c.innerHTML='<p>Error loading list</p>';return}
   if(!list){currentView='lists';render();return}
   activeListName=list.name;
-  const isGrocery=list.type==='grocery',isNotes=list.type==='notes';
+  const isGrocery=list.type==='grocery',isNotes=list.type==='notes',isTracker=list.type==='tracker';
+  const isBoard=(list.view_mode==='board')||isTracker;
+  const checkedCnt=items.filter(i=>i.checked).length;
+  const totalCnt=items.length;
+  const pct=totalCnt?Math.round(checkedCnt/totalCnt*100):0;
+
+  // Filter items if hide-checked is on
+  const visibleItems=_listHideChecked?items.filter(i=>!i.checked):items;
+
   let h=`<div class="list-detail-head">
     <span style="font-size:28px">${esc(list.icon||'📋')}</span>
-    <div style="flex:1;min-width:0;overflow:hidden"><h2 style="margin:0">${esc(list.name)}</h2><span style="font-size:11px;color:var(--txd)">${list.type==='grocery'?'Grocery List':list.type==='notes'?'Notes':'Checklist'} · ${items.length} item${items.length!==1?'s':''}</span></div>
+    <div style="flex:1;min-width:0;overflow:hidden"><h2 style="margin:0">${esc(list.name)}</h2><span style="font-size:11px;color:var(--txd)">${isGrocery?'Grocery List':isNotes?'Notes':isTracker?'Tracker':'Checklist'} · ${totalCnt} item${totalCnt!==1?'s':''}</span></div>
     <div class="list-detail-actions">
+      ${isTracker?`<button class="btn-c${isBoard?' active':''}" id="ld-view-toggle" title="Toggle board/list view"><span class="material-icons-round" style="font-size:16px">${isBoard?'view_kanban':'view_list'}</span></button>`:''}
+      ${isGrocery?`<button class="btn-c" id="ld-shop" title="Shop mode" style="font-weight:600;font-size:12px"><span class="material-icons-round" style="font-size:16px">shopping_cart</span> Shop</button>`:''}
+      ${!isNotes?`<button class="btn-c${_listHideChecked?' active':''}" id="ld-hide-checked" title="${_listHideChecked?'Show checked':'Hide checked'}"><span class="material-icons-round" style="font-size:16px">${_listHideChecked?'visibility_off':'visibility'}</span></button>`:''} 
+      <button class="btn-c" id="ld-print" title="Print list"><span class="material-icons-round" style="font-size:16px">print</span></button>
       <button class="btn-c" id="ld-edit" title="Edit list"><span class="material-icons-round" style="font-size:16px">edit</span></button>
       <button class="btn-c" id="ld-dup" title="Duplicate list"><span class="material-icons-round" style="font-size:16px">content_copy</span></button>
       <button class="btn-c" id="ld-uncheck" title="Uncheck all items"><span class="material-icons-round" style="font-size:16px">restart_alt</span></button>
@@ -4366,40 +4411,59 @@ async function renderListDetail(){
       <button class="btn-c" id="ld-del" title="Delete list" style="color:var(--dn)"><span class="material-icons-round" style="font-size:16px">delete</span></button>
     </div>
   </div>`;
+
+  // Progress bar
+  if(!isNotes && totalCnt > 0){
+    h+=`<div class="li-progress-bar" style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <div style="flex:1;height:6px;background:var(--brd);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${pct===100?'var(--ok)':escA(list.color||'#2563EB')};border-radius:3px;transition:width .3s"></div></div>
+      <span style="font-size:12px;color:var(--tx2);white-space:nowrap">${checkedCnt}/${totalCnt} (${pct}%)</span>
+    </div>`;
+  }
+
   // Share pill
   if(list.share_token){
     const shareUrl=location.origin+'/share/'+list.share_token;
     h+=`<div class="share-pill shared"><span class="material-icons-round" style="font-size:14px">link</span> Shared · <span class="share-url-box" title="Click to copy">${escA(shareUrl)}</span> <button class="btn-c" id="ld-copy-link" style="font-size:10px;padding:2px 8px">Copy</button> <button class="btn-c" id="ld-unshare" style="font-size:10px;padding:2px 8px;color:var(--dn)">Stop sharing</button></div>`;
   }
-  // Clear checked button for checklist/grocery
-  if(!isNotes){
-    const checkedCnt=items.filter(i=>i.checked).length;
-    if(checkedCnt>0){
-      h+=`<div style="margin:8px 0"><button class="btn-c" id="ld-clear-checked" style="font-size:11px"><span class="material-icons-round" style="font-size:14px;vertical-align:middle">cleaning_services</span> Clear ${checkedCnt} checked</button></div>`;
-    }
+
+  // Clear checked button
+  if(!isNotes && checkedCnt>0 && !_listHideChecked){
+    h+=`<div style="margin:8px 0"><button class="btn-c" id="ld-clear-checked" style="font-size:11px"><span class="material-icons-round" style="font-size:14px;vertical-align:middle">cleaning_services</span> Clear ${checkedCnt} checked</button></div>`;
   }
-  // Items
-  if(!items.length){
-    h+=`<div class="li-empty"><span class="material-icons-round" style="font-size:36px;opacity:.3">${isGrocery?'shopping_cart':isNotes?'note':'checklist'}</span><p>No items yet. Add your first one below.</p></div>`;
-  } else if(isGrocery){
-    // Group by category
-    const cats={};
-    items.forEach(i=>{const cat=i.category||'Other';if(!cats[cat])cats[cat]=[];cats[cat].push(i)});
-    const catOrder=['Produce','Bakery','Dairy','Meat & Seafood','Frozen','Pantry','Beverages','Snacks','Household','Personal Care','Other'];
-    catOrder.forEach(cat=>{
-      if(!cats[cat])return;
-      h+=`<div class="li-cat-header">${esc(cat)}<span style="font-size:10px;color:var(--txd);margin-left:6px">${cats[cat].length}</span></div>`;
-      cats[cat].forEach(i=>{
-        h+=`<div class="li-item${i.checked?' checked':''}" data-iid="${i.id}">
-          <button class="li-check${i.checked?' done':''}" data-iid="${i.id}"><span class="material-icons-round">${i.checked?'check_box':'check_box_outline_blank'}</span></button>
-          <span class="li-title">${esc(i.title)}</span>
-          ${i.quantity?`<span class="li-qty">${esc(i.quantity)}</span>`:''}
+
+  // Hidden count indicator
+  if(_listHideChecked && checkedCnt>0){
+    h+=`<div style="margin:4px 0 8px;font-size:11px;color:var(--txd);font-style:italic">${checkedCnt} checked item${checkedCnt>1?'s':''} hidden</div>`;
+  }
+
+  // ─── Render items by section ───
+  if(isBoard && !isGrocery){
+    // ─── Board / Kanban view ───
+    const cols=list.board_columns?JSON.parse(list.board_columns):['Want','In Progress','Done'];
+    h+=`<div class="li-board">`;
+    cols.forEach(col=>{
+      const colItems=items.filter(i=>(i.status||cols[0])===col);
+      h+=`<div class="li-board-col" data-col="${escA(col)}">
+        <div class="li-board-col-head"><span>${esc(col)}</span><span class="li-board-col-count">${colItems.length}</span></div>`;
+      colItems.forEach(i=>{
+        const meta=i.metadata?JSON.parse(i.metadata):{};
+        h+=`<div class="li-board-card" data-iid="${i.id}" draggable="true">
+          <span class="li-board-card-title">${esc(i.title)}</span>
+          ${meta.price?`<span class="li-meta-price">$${esc(String(meta.price))}</span>`:''}
+          ${meta.rating?`<span class="li-meta-rating">${'★'.repeat(meta.rating)+'☆'.repeat(5-meta.rating)}</span>`:''}
+          ${meta.url?`<a class="li-meta-url" href="${escA(meta.url)}" target="_blank" rel="noopener"><span class="material-icons-round" style="font-size:12px">link</span></a>`:''}
+          ${i.note?`<span class="li-board-card-note">${esc(i.note).substring(0,60)}${i.note.length>60?'...':''}</span>`:''}
           <button class="li-del" data-iid="${i.id}"><span class="material-icons-round">close</span></button>
         </div>`;
       });
+      h+=`<button class="li-board-add" data-col="${escA(col)}" style="font-size:11px"><span class="material-icons-round" style="font-size:14px">add</span> Add</button>`;
+      h+=`</div>`;
     });
+    h+=`</div>`;
+  } else if(!visibleItems.length){
+    h+=`<div class="li-empty"><span class="material-icons-round" style="font-size:36px;opacity:.3">${isGrocery?'shopping_cart':isNotes?'note':'checklist'}</span><p>${_listHideChecked?'All items are checked! Toggle visibility to see them.':'No items yet. Add your first one below.'}</p></div>`;
   } else if(isNotes){
-    items.forEach(i=>{
+    visibleItems.forEach(i=>{
       h+=`<div class="li-item" data-iid="${i.id}" style="flex-direction:column;align-items:stretch">
         <div style="display:flex;align-items:center;gap:8px">
           <span class="li-title" style="font-weight:600">${esc(i.title)}</span>
@@ -4409,20 +4473,88 @@ async function renderListDetail(){
       </div>`;
     });
   } else {
-    items.forEach(i=>{
-      h+=`<div class="li-item${i.checked?' checked':''}" data-iid="${i.id}">
-        <button class="li-check${i.checked?' done':''}" data-iid="${i.id}"><span class="material-icons-round">${i.checked?'check_box':'check_box_outline_blank'}</span></button>
-        <span class="li-title">${esc(i.title)}</span>
-        <button class="li-del" data-iid="${i.id}"><span class="material-icons-round">close</span></button>
-      </div>`;
-    });
+    // Group items by category/section
+    const sections={};
+    visibleItems.forEach(i=>{const s=i.category||'';if(!sections[s])sections[s]=[];sections[s].push(i)});
+    const sectionNames=Object.keys(sections);
+    const hasSections=sectionNames.length>1||(sectionNames.length===1&&sectionNames[0]!=='');
+
+    if(isGrocery){
+      // Grocery: ordered by GROCERY_CATEGORIES
+      const catOrder=['Produce','Bakery','Dairy','Meat & Seafood','Frozen','Pantry','Beverages','Snacks','Household','Personal Care','Other'];
+      // Ensure all sections are listed even if not in standard order
+      const allSections=[...new Set([...catOrder,...sectionNames])];
+      allSections.forEach(cat=>{
+        if(!sections[cat])return;
+        const sItems=sections[cat];
+        const sDone=sItems.filter(x=>x.checked).length;
+        const collapsed=_listCollapsed[activeListId+'_'+cat];
+        h+=`<div class="li-section-header" data-sec="${escA(cat)}">
+          <span class="material-icons-round li-section-arrow">${collapsed?'chevron_right':'expand_more'}</span>
+          <span class="li-section-name">${esc(cat||'Uncategorized')}</span>
+          <span class="li-section-count">${sDone}/${sItems.length}</span>
+          <div class="li-section-progress"><div class="li-section-progress-fill" style="width:${sItems.length?Math.round(sDone/sItems.length*100):0}%;background:${escA(list.color||'#2563EB')}"></div></div>
+        </div>`;
+        if(!collapsed){
+          sItems.forEach(i=>{
+            h+=`<div class="li-item${i.checked?' checked':''}" data-iid="${i.id}">
+              <button class="li-check${i.checked?' done':''}" data-iid="${i.id}"><span class="material-icons-round">${i.checked?'check_box':'check_box_outline_blank'}</span></button>
+              <span class="li-title">${esc(i.title)}</span>
+              ${i.quantity?`<span class="li-qty">${esc(i.quantity)}</span>`:''}
+              <button class="li-del" data-iid="${i.id}"><span class="material-icons-round">close</span></button>
+            </div>`;
+          });
+        }
+      });
+    } else if(hasSections){
+      // Non-grocery with sections (user-created categories)
+      sectionNames.forEach(sec=>{
+        const sItems=sections[sec];
+        const sDone=sItems.filter(x=>x.checked).length;
+        const secKey=activeListId+'_'+(sec||'_none');
+        const collapsed=_listCollapsed[secKey];
+        h+=`<div class="li-section-header" data-sec="${escA(sec)}">
+          <span class="material-icons-round li-section-arrow">${collapsed?'chevron_right':'expand_more'}</span>
+          <span class="li-section-name">${esc(sec||'Uncategorized')}</span>
+          <span class="li-section-count">${sDone}/${sItems.length}</span>
+          <div class="li-section-progress"><div class="li-section-progress-fill" style="width:${sItems.length?Math.round(sDone/sItems.length*100):0}%;background:${escA(list.color||'#2563EB')}"></div></div>
+        </div>`;
+        if(!collapsed){
+          sItems.forEach(i=>{
+            h+=`<div class="li-item${i.checked?' checked':''}" data-iid="${i.id}">
+              <button class="li-check${i.checked?' done':''}" data-iid="${i.id}"><span class="material-icons-round">${i.checked?'check_box':'check_box_outline_blank'}</span></button>
+              <span class="li-title">${esc(i.title)}</span>
+              <button class="li-del" data-iid="${i.id}"><span class="material-icons-round">close</span></button>
+            </div>`;
+          });
+        }
+      });
+    } else {
+      // Flat list (no sections)
+      visibleItems.forEach(i=>{
+        h+=`<div class="li-item${i.checked?' checked':''}" data-iid="${i.id}">
+          <button class="li-check${i.checked?' done':''}" data-iid="${i.id}"><span class="material-icons-round">${i.checked?'check_box':'check_box_outline_blank'}</span></button>
+          <span class="li-title">${esc(i.title)}</span>
+          ${_renderItemMeta(i)}
+          <button class="li-del" data-iid="${i.id}"><span class="material-icons-round">close</span></button>
+        </div>`;
+      });
+    }
   }
-  // Add bar
+
+  // Add bar with section selector
+  const availSections=isGrocery?['Produce','Bakery','Dairy','Meat & Seafood','Frozen','Pantry','Beverages','Snacks','Household','Personal Care','Other']:
+    [...new Set(items.map(i=>i.category).filter(Boolean))];
   h+=`<div class="li-add-bar">
     <input type="text" id="ld-add-input" placeholder="${isGrocery?'Add item... (e.g. Milk x2)':isNotes?'Add note title...':'Add item...'}" style="flex:1">
-    ${isGrocery?`<select id="ld-add-cat" style="width:120px;font-size:11px"><option value="Other">Category</option>${['Produce','Bakery','Dairy','Meat & Seafood','Frozen','Pantry','Beverages','Snacks','Household','Personal Care'].map(c=>'<option value="'+escA(c)+'">'+esc(c)+'</option>').join('')}</select>`:''}
+    ${!isNotes&&availSections.length?`<select id="ld-add-cat" style="width:120px;font-size:11px"><option value="">No section</option>${availSections.map(c=>'<option value="'+escA(c)+'">'+esc(c)+'</option>').join('')}</select>`:''}
     <button class="btn-s" id="ld-add-btn" style="white-space:nowrap">+ Add</button>
   </div>`;
+
+  // Add section button (non-grocery, non-notes)
+  if(!isGrocery && !isNotes){
+    h+=`<div style="padding:8px 16px"><button class="btn-c" id="ld-add-section" style="font-size:11px"><span class="material-icons-round" style="font-size:14px;vertical-align:middle">add</span> Add Section</button></div>`;
+  }
   // Sub-lists section (only for top-level lists)
   if(!list.parent_id){
     const subs=userLists.filter(s=>s.parent_id===list.id);
@@ -4443,7 +4575,55 @@ async function renderListDetail(){
     }
   }
   c.innerHTML=h;
-  // Event handlers
+  // Event handlers — new Phase 1 buttons
+  $('ld-hide-checked')?.addEventListener('click',()=>{_listHideChecked=!_listHideChecked;render()});
+  $('ld-print')?.addEventListener('click',()=>{document.body.classList.add('print-list');window.print();document.body.classList.remove('print-list')});
+  c.querySelectorAll('.li-section-header').forEach(el=>el.addEventListener('click',()=>{
+    const sec=el.dataset.sec;
+    const key=activeListId+'_'+(sec||'_none');
+    _listCollapsed[key]=!_listCollapsed[key];render();
+  }));
+  $('ld-add-section')?.addEventListener('click',()=>{
+    const name=prompt('Section name:');
+    if(!name||!name.trim())return;
+    // Check if section already exists
+    const existing=[...new Set(items.map(i=>i.category).filter(Boolean))];
+    if(existing.includes(name.trim())){showToast('Section already exists');return}
+    // Add a placeholder item in that section
+    api.post('/api/lists/'+list.id+'/items',{title:'New item',category:name.trim()}).then(()=>{loadUserLists();render()});
+  });
+  $('ld-shop')?.addEventListener('click',()=>openShopMode(list.id));
+  // Phase 3: View toggle + board handlers
+  $('ld-view-toggle')?.addEventListener('click',async()=>{
+    const newMode=isBoard?'list':'board';
+    await api.put('/api/lists/'+list.id,{view_mode:newMode});
+    await loadUserLists();render();
+  });
+  // Board: add item to column
+  c.querySelectorAll('.li-board-add').forEach(btn=>btn.addEventListener('click',async()=>{
+    const col=btn.dataset.col;
+    const title=prompt('Item title:');
+    if(!title||!title.trim())return;
+    await api.post('/api/lists/'+list.id+'/items',{title:title.trim(),status:col});
+    await loadUserLists();render();
+  }));
+  // Board: drag-and-drop between columns
+  c.querySelectorAll('.li-board-card[draggable]').forEach(card=>{
+    card.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',card.dataset.iid);e.dataTransfer.effectAllowed='move'});
+  });
+  c.querySelectorAll('.li-board-col').forEach(col=>{
+    col.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';col.classList.add('drag-over')});
+    col.addEventListener('dragleave',()=>col.classList.remove('drag-over'));
+    col.addEventListener('drop',async e=>{
+      e.preventDefault();col.classList.remove('drag-over');
+      const iid=Number(e.dataTransfer.getData('text/plain'));
+      const newStatus=col.dataset.col;
+      if(!iid||!newStatus)return;
+      await api.put('/api/lists/'+list.id+'/items/'+iid,{status:newStatus});
+      await loadUserLists();render();
+    });
+  });
+  // Event handlers — original
   $('ld-edit')?.addEventListener('click',()=>openListModal(list));
   $('ld-dup')?.addEventListener('click',async()=>{
     try{const r=await api.post('/api/lists/'+list.id+'/duplicate');if(r.error){showToast(r.error);return}
@@ -4509,7 +4689,10 @@ async function renderListDetail(){
         payload.quantity=qm[2]&&/^\d+$/.test(qm[1])?qm[1]:qm[2];
       }
       const catSel=$('ld-add-cat');
-      if(catSel&&catSel.value!=='Other')payload.category=catSel.value;
+      if(catSel&&catSel.value)payload.category=catSel.value;
+    } else if(!isNotes){
+      const catSel=$('ld-add-cat');
+      if(catSel&&catSel.value)payload.category=catSel.value;
     }
     if(isNotes)payload.note='';
     await api.post('/api/lists/'+list.id+'/items',payload);
@@ -4544,6 +4727,134 @@ async function renderListDetail(){
   }));
   // Update breadcrumb
   updateBC();
+}
+
+// ─── SHOP MODE (Grocery full-screen) ───
+let _shopCatIdx=0;
+async function openShopMode(listId){
+  let list,items=[];
+  try{[list,items]=await Promise.all([
+    api.get('/api/lists').then(ls=>ls.find(x=>x.id===listId)),
+    api.get('/api/lists/'+listId+'/items')
+  ])}catch(e){showToast('Failed to load list');return}
+  if(!list)return;
+
+  const catOrder=['Produce','Bakery','Dairy','Meat & Seafood','Frozen','Pantry','Beverages','Snacks','Household','Personal Care','Other'];
+  const cats={};
+  items.forEach(i=>{const c=i.category||'Other';if(!cats[c])cats[c]=[];cats[c].push(i)});
+  const activeCats=catOrder.filter(c=>cats[c]&&cats[c].length);
+  if(!activeCats.length){showToast('No items to shop');return}
+  if(_shopCatIdx>=activeCats.length)_shopCatIdx=0;
+
+  const allChecked=items.filter(i=>i.checked).length;
+  const allTotal=items.length;
+  const allPct=allTotal?Math.round(allChecked/allTotal*100):0;
+
+  // Create overlay
+  let ov=document.querySelector('.shop-ov');
+  if(!ov){ov=document.createElement('div');ov.className='shop-ov';document.body.appendChild(ov)}
+
+  function renderShop(){
+    const cat=activeCats[_shopCatIdx];
+    const cItems=cats[cat]||[];
+    const unchecked=cItems.filter(x=>!x.checked);
+    const checked=cItems.filter(x=>x.checked);
+    const cDone=checked.length;
+    const cTotal=cItems.length;
+
+    let h=`<div class="shop-head">
+      <button class="shop-close" id="shop-close"><span class="material-icons-round">close</span></button>
+      <div class="shop-title">${esc(list.icon||'🛒')} ${esc(list.name)}</div>
+    </div>`;
+
+    // Category pills
+    h+=`<div class="shop-cats">`;
+    activeCats.forEach((c,i)=>{
+      const done=cats[c].filter(x=>x.checked).length;
+      const total=cats[c].length;
+      const allDone=done===total;
+      h+=`<button class="shop-cat-pill${i===_shopCatIdx?' active':''}${allDone?' all-done':''}" data-ci="${i}">
+        ${esc(c)} <span class="shop-cat-count">${done}/${total}</span>
+      </button>`;
+    });
+    h+=`</div>`;
+
+    // Category header
+    h+=`<div class="shop-cat-name">${esc(cat)} <span>${cDone}/${cTotal}</span></div>`;
+
+    // Items (unchecked first, then checked)
+    h+=`<div class="shop-items">`;
+    if(!unchecked.length&&!checked.length){
+      h+=`<div class="shop-empty">All done in this category!</div>`;
+    }
+    unchecked.forEach(i=>{
+      h+=`<div class="shop-item" data-iid="${i.id}">
+        <span class="material-icons-round shop-item-icon">check_box_outline_blank</span>
+        <span class="shop-item-title">${esc(i.title)}</span>
+        ${i.quantity?`<span class="shop-item-qty">${esc(i.quantity)}</span>`:''}
+      </div>`;
+    });
+    if(checked.length){
+      h+=`<div class="shop-checked-divider">Checked (${checked.length})</div>`;
+      checked.forEach(i=>{
+        h+=`<div class="shop-item checked" data-iid="${i.id}">
+          <span class="material-icons-round shop-item-icon">check_box</span>
+          <span class="shop-item-title">${esc(i.title)}</span>
+          ${i.quantity?`<span class="shop-item-qty">${esc(i.quantity)}</span>`:''}
+        </div>`;
+      });
+    }
+    h+=`</div>`;
+
+    // Nav + progress
+    h+=`<div class="shop-footer">
+      <button class="shop-nav-btn" id="shop-prev" ${_shopCatIdx===0?'disabled':''}><span class="material-icons-round">chevron_left</span> ${_shopCatIdx>0?esc(activeCats[_shopCatIdx-1]):''}</button>
+      <div class="shop-progress"><div class="shop-progress-fill" style="width:${allPct}%"></div></div>
+      <span class="shop-progress-text">${allChecked}/${allTotal}</span>
+      <button class="shop-nav-btn" id="shop-next" ${_shopCatIdx>=activeCats.length-1?'disabled':''}>${_shopCatIdx<activeCats.length-1?esc(activeCats[_shopCatIdx+1]):''} <span class="material-icons-round">chevron_right</span></button>
+    </div>`;
+
+    ov.innerHTML=h;
+
+    // Event handlers
+    ov.querySelector('#shop-close').addEventListener('click',()=>{ov.remove();render()});
+    ov.querySelectorAll('.shop-cat-pill').forEach(p=>p.addEventListener('click',()=>{
+      _shopCatIdx=Number(p.dataset.ci);renderShop();
+    }));
+    ov.querySelector('#shop-prev')?.addEventListener('click',()=>{if(_shopCatIdx>0){_shopCatIdx--;renderShop()}});
+    ov.querySelector('#shop-next')?.addEventListener('click',()=>{if(_shopCatIdx<activeCats.length-1){_shopCatIdx++;renderShop()}});
+
+    // Check/uncheck items
+    ov.querySelectorAll('.shop-item').forEach(el=>el.addEventListener('click',async()=>{
+      const iid=Number(el.dataset.iid);
+      const item=items.find(x=>x.id===iid);
+      if(!item)return;
+      const newChecked=item.checked?0:1;
+      await api.put('/api/lists/'+listId+'/items/'+iid,{checked:newChecked});
+      // Update local state
+      item.checked=newChecked;
+      // Recalculate cats
+      Object.keys(cats).forEach(k=>cats[k]=[]);
+      items.forEach(i=>{const c=i.category||'Other';if(!cats[c])cats[c]=[];cats[c].push(i)});
+      renderShop();
+    }));
+
+    // Swipe support
+    let touchStartX=0;
+    ov.querySelector('.shop-items')?.addEventListener('touchstart',e=>{touchStartX=e.touches[0].clientX},{passive:true});
+    ov.querySelector('.shop-items')?.addEventListener('touchend',e=>{
+      const dx=e.changedTouches[0].clientX-touchStartX;
+      if(Math.abs(dx)>60){
+        if(dx<0&&_shopCatIdx<activeCats.length-1){_shopCatIdx++;renderShop()}
+        else if(dx>0&&_shopCatIdx>0){_shopCatIdx--;renderShop()}
+      }
+    },{passive:true});
+
+    // Escape to close
+    const escHandler=e=>{if(e.key==='Escape'){ov.remove();render();document.removeEventListener('keydown',escHandler)}};
+    document.addEventListener('keydown',escHandler);
+  }
+  renderShop();
 }
 
 // ─── HABITS VIEW ───

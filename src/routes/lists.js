@@ -97,11 +97,14 @@ module.exports = function(deps) {
   });
 
   router.post('/api/lists', (req, res) => {
-    const { name, type, icon, color, area_id, parent_id } = req.body;
+    const { name, type, icon, color, area_id, parent_id, view_mode, board_columns } = req.body;
     if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'name is required' });
     if (name.length > 100) return res.status(400).json({ error: 'name must be 100 chars or less' });
-    const validTypes = ['checklist', 'grocery', 'notes'];
-    if (type && !validTypes.includes(type)) return res.status(400).json({ error: 'type must be checklist, grocery, or notes' });
+    const validTypes = ['checklist', 'grocery', 'notes', 'tracker'];
+    if (type && !validTypes.includes(type)) return res.status(400).json({ error: 'type must be checklist, grocery, notes, or tracker' });
+    const validViewModes = ['list', 'board'];
+    if (view_mode && !validViewModes.includes(view_mode)) return res.status(400).json({ error: 'view_mode must be list or board' });
+    if (board_columns && !Array.isArray(board_columns)) return res.status(400).json({ error: 'board_columns must be an array' });
     if (color && !isValidColor(color)) return res.status(400).json({ error: 'Invalid hex color' });
     const listCount = db.prepare('SELECT COUNT(*) as c FROM lists WHERE user_id=?').get(req.userId).c;
     if (listCount >= 100) return res.status(400).json({ error: 'Maximum 100 lists reached' });
@@ -114,8 +117,10 @@ module.exports = function(deps) {
       if (parent.parent_id) return res.status(400).json({ error: 'Cannot nest more than one level deep' });
     }
     const pos = getNextPosition('lists');
-    const r = db.prepare('INSERT INTO lists (name,type,icon,color,area_id,parent_id,position,user_id) VALUES (?,?,?,?,?,?,?,?)').run(
-      name.trim(), type || 'checklist', icon || '📋', color || '#2563EB', area_id ? Number(area_id) : null, parent_id ? Number(parent_id) : null, pos, req.userId
+    const vm = (type === 'tracker') ? (view_mode || 'board') : (view_mode || 'list');
+    const bc = board_columns ? JSON.stringify(board_columns) : (type === 'tracker' ? '["Want","In Progress","Done"]' : null);
+    const r = db.prepare('INSERT INTO lists (name,type,icon,color,area_id,parent_id,view_mode,board_columns,position,user_id) VALUES (?,?,?,?,?,?,?,?,?,?)').run(
+      name.trim(), type || 'checklist', icon || '📋', color || '#2563EB', area_id ? Number(area_id) : null, parent_id ? Number(parent_id) : null, vm, bc, pos, req.userId
     );
     res.status(201).json(db.prepare('SELECT * FROM lists WHERE id=?').get(r.lastInsertRowid));
   });
@@ -138,6 +143,12 @@ module.exports = function(deps) {
     const { name, icon, color, area_id, position } = req.body;
     if (name !== undefined && (!name || name.length > 100)) return res.status(400).json({ error: 'Invalid name' });
     if (color && !isValidColor(color)) return res.status(400).json({ error: 'Invalid hex color' });
+    const { view_mode, board_columns } = req.body;
+    if (view_mode !== undefined) {
+      const validViewModes = ['list', 'board'];
+      if (!validViewModes.includes(view_mode)) return res.status(400).json({ error: 'view_mode must be list or board' });
+    }
+    if (board_columns !== undefined && board_columns !== null && !Array.isArray(board_columns)) return res.status(400).json({ error: 'board_columns must be an array' });
     const { parent_id: newParentId } = req.body;
     if (newParentId !== undefined && newParentId !== null) {
       const pid = Number(newParentId);
@@ -147,10 +158,12 @@ module.exports = function(deps) {
       if (!parent) return res.status(400).json({ error: 'Parent list not found' });
       if (parent.parent_id) return res.status(400).json({ error: 'Cannot nest more than one level deep' });
     }
-    db.prepare('UPDATE lists SET name=?,icon=?,color=?,area_id=?,parent_id=?,position=? WHERE id=? AND user_id=?').run(
+    db.prepare('UPDATE lists SET name=?,icon=?,color=?,area_id=?,parent_id=?,view_mode=?,board_columns=?,position=? WHERE id=? AND user_id=?').run(
       name || ex.name, icon !== undefined ? icon : ex.icon, color || ex.color,
       area_id !== undefined ? (area_id ? Number(area_id) : null) : ex.area_id,
       newParentId !== undefined ? (newParentId ? Number(newParentId) : null) : ex.parent_id,
+      view_mode !== undefined ? view_mode : (ex.view_mode || 'list'),
+      board_columns !== undefined ? (board_columns ? JSON.stringify(board_columns) : null) : ex.board_columns,
       position !== undefined ? position : ex.position, id, req.userId
     );
     res.json(db.prepare('SELECT * FROM lists WHERE id=?').get(id));
@@ -192,10 +205,11 @@ module.exports = function(deps) {
     }
     const batchTx = db.transaction(() => {
       let pos = getNextPosition('list_items', 'list_id', id);
-      const ins = db.prepare('INSERT INTO list_items (list_id,title,checked,category,quantity,note,position) VALUES (?,?,?,?,?,?,?)');
+      const ins = db.prepare('INSERT INTO list_items (list_id,title,checked,category,quantity,note,metadata,status,position) VALUES (?,?,?,?,?,?,?,?,?)');
       const created = [];
       for (const item of items) {
-        const r = ins.run(id, item.title.trim(), item.checked ? 1 : 0, item.category || null, item.quantity || null, item.note || '', pos++);
+        const meta = item.metadata ? (typeof item.metadata === 'string' ? item.metadata : JSON.stringify(item.metadata)) : null;
+        const r = ins.run(id, item.title.trim(), item.checked ? 1 : 0, item.category || null, item.quantity || null, item.note || '', meta, item.status || null, pos++);
         created.push(db.prepare('SELECT * FROM list_items WHERE id=?').get(r.lastInsertRowid));
       }
       return created;
@@ -212,12 +226,14 @@ module.exports = function(deps) {
     if (!db.prepare('SELECT id FROM lists WHERE id=? AND user_id=?').get(id, req.userId)) return res.status(404).json({ error: 'List not found' });
     const ex = db.prepare('SELECT * FROM list_items WHERE id=? AND list_id=?').get(itemId, id);
     if (!ex) return res.status(404).json({ error: 'Item not found' });
-    const { title, checked, category, quantity, note, position } = req.body;
+    const { title, checked, category, quantity, note, position, metadata, status } = req.body;
     if (title !== undefined && (!title || title.length > 200)) return res.status(400).json({ error: 'Invalid title' });
-    db.prepare('UPDATE list_items SET title=?,checked=?,category=?,quantity=?,note=?,position=? WHERE id=? AND list_id=?').run(
+    const meta = metadata !== undefined ? (metadata ? (typeof metadata === 'string' ? metadata : JSON.stringify(metadata)) : null) : ex.metadata;
+    db.prepare('UPDATE list_items SET title=?,checked=?,category=?,quantity=?,note=?,metadata=?,status=?,position=? WHERE id=? AND list_id=?').run(
       title || ex.title, checked !== undefined ? (checked ? 1 : 0) : ex.checked,
       category !== undefined ? category : ex.category, quantity !== undefined ? quantity : ex.quantity,
-      note !== undefined ? note : ex.note, position !== undefined ? position : ex.position, itemId, id
+      note !== undefined ? note : ex.note, meta, status !== undefined ? status : ex.status,
+      position !== undefined ? position : ex.position, itemId, id
     );
     rebuildSearchIndex();
     res.json(db.prepare('SELECT * FROM list_items WHERE id=?').get(itemId));

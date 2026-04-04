@@ -76,7 +76,10 @@ export function renderMd(text) {
   s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
   s = s.replace(/`(.+?)`/g, '<code>$1</code>');
-  s = s.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/\[(.+?)\]\((.+?)\)/g, (_, text, url) => {
+    if (/^\s*javascript\s*:/i.test(url) || /^\s*data\s*:/i.test(url) || /^\s*vbscript\s*:/i.test(url)) return text;
+    return `<a href="${url}" target="_blank" rel="noopener">${text}</a>`;
+  });
   s = s.replace(/^- (.+)$/gm, '<li>$1</li>');
   s = s.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
   s = s.replace(/\n/g, '<br>');

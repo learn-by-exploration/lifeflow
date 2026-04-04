@@ -1,7 +1,7 @@
 # LifeFlow — Claude Code Configuration
 
 > **Last updated:** 3 April 2026 · **Version:** 0.8.2
-> **Metrics:** 3,500 tests | 144 test files | 191 API routes | 35 DB tables | ~16,000 LOC
+> **Metrics:** 6,234 tests | 158 test files | 191 API routes | 35 DB tables | ~16,000 LOC
 
 ## Project Overview
 
@@ -14,7 +14,7 @@ Includes authentication, habits, lists, focus timer, templates, automations, cus
 ```bash
 npm install
 node src/server.js          # http://localhost:3456
-npm test                    # 2,189 tests via node:test
+npm test                    # 6,234 tests via node:test
 # or with Docker:
 docker compose up -d
 ```
@@ -255,7 +255,12 @@ See `docs/openapi.yaml` for full specification. Key modules:
 - Markdown rendering in notes
 - Confetti on goal 100% completion (prefers-reduced-motion respected)
 - Relative date badges ("in 3 days", "2d overdue")
-- Custom lists (checklists, grocery, custom)
+- Custom lists (checklists, grocery, notes, trackers with board view)
+- Sectioned lists with collapsible headers and per-section progress
+- Shop mode for grocery lists (full-screen, swipe between categories)
+- Enhanced list items (metadata: price, URL, rating)
+- Board/kanban view for tracker lists (drag between columns)
+- Hide checked toggle and print view for lists
 - Auto-backup (startup + 24h, rotates last 7)
 - Data watermark — detects >50% data loss on startup, auto-restores from richest backup
 - WAL checkpoint after auto-restore to prevent data loss on container restart
@@ -281,12 +286,12 @@ See `docs/openapi.yaml` for full specification. Key modules:
 ## Testing
 
 ```bash
-npm test                    # Run all 3,500 tests
+npm test                    # Run all 6,234 tests
 ```
 
 **Runner:** `node --test --test-force-exit` with `node:assert/strict` + `supertest`
 
-**144 test files** across these categories:
+**158 test files** across these categories:
 
 | Category | Files | Description |
 |----------|-------|-------------|
@@ -328,7 +333,7 @@ See `docs/DOCUMENTATION-AUDIT.md` for the full documentation review and proposed
 | Version bump | CLAUDE.md header, `package.json`, `docs/openapi.yaml` |
 
 **Update the CLAUDE.md header line counts** when LOC changes significantly (>5%):
-- Current: 3,500 tests | 144 test files | 191 routes | 35 tables | ~16,000 LOC
+- Current: 6,234 tests | 158 test files | 191 routes | 35 tables | ~16,000 LOC
 
 ## What Needs to Be Done (Roadmap)
 

@@ -117,6 +117,7 @@ describe('ESLint Configuration', () => {
       cwd: ROOT,
       encoding: 'utf8',
       timeout: 60000,
+      maxBuffer: 10 * 1024 * 1024,
     });
     const report = JSON.parse(result);
     const errorCount = report.reduce((sum, f) => sum + f.errorCount, 0);

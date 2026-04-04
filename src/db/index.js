@@ -12,7 +12,25 @@ const logger = (() => { try { return require('../logger'); } catch { return cons
  */
 function initDatabase(dbDir) {
   if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
-  const db = new Database(path.join(dbDir, 'lifeflow.db'));
+  const dbPath = path.join(dbDir, 'lifeflow.db');
+  const shmPath = dbPath + '-shm';
+  const walPath = dbPath + '-wal';
+
+  // ─── Stale SHM recovery ───
+  // When Docker restarts, the .db-shm file from the previous container process
+  // can prevent proper WAL recovery, causing SQLite to see an incomplete DB.
+  // Fix: remove stale SHM file before opening. SQLite will recreate it and
+  // properly recover any pending WAL transactions.
+  if (fs.existsSync(shmPath) && fs.existsSync(walPath)) {
+    try {
+      fs.unlinkSync(shmPath);
+      logger.info('Removed stale .db-shm file for clean WAL recovery');
+    } catch (e) {
+      logger.warn({ err: e }, 'Could not remove stale .db-shm file');
+    }
+  }
+
+  const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   // Force WAL checkpoint on open to ensure main DB file is up-to-date
@@ -266,6 +284,12 @@ function initDatabase(dbDir) {
   try { db.exec('CREATE INDEX idx_list_items_list ON list_items(list_id, position)'); } catch(e) {}
   try { db.exec('CREATE UNIQUE INDEX idx_lists_share ON lists(share_token) WHERE share_token IS NOT NULL'); } catch(e) {}
   try { db.exec('CREATE INDEX idx_lists_parent ON lists(parent_id)'); } catch(e) {}
+
+  // ─── Phase 3 list views: enhanced items + board view ───
+  try { db.exec('ALTER TABLE list_items ADD COLUMN metadata TEXT DEFAULT NULL'); } catch(e) {}
+  try { db.exec('ALTER TABLE list_items ADD COLUMN status TEXT DEFAULT NULL'); } catch(e) {}
+  try { db.exec('ALTER TABLE lists ADD COLUMN view_mode TEXT DEFAULT \'list\''); } catch(e) {}
+  try { db.exec('ALTER TABLE lists ADD COLUMN board_columns TEXT DEFAULT NULL'); } catch(e) {}
 
   // ─── Add list_id to tasks ───
   try { db.exec('ALTER TABLE tasks ADD COLUMN list_id INTEGER REFERENCES lists(id) ON DELETE SET NULL'); } catch(e) {}
@@ -543,12 +567,40 @@ function initDatabase(dbDir) {
   // If a backup has significantly more data, auto-restore from it.
   // This catches data loss even when WAL files are lost (watermark may be in WAL too).
   try {
+    // STEP 0: Checkpoint WAL BEFORE reading counts — ensures we see all committed data
+    try { db.pragma('wal_checkpoint(PASSIVE)'); } catch (cpErr) {
+      logger.warn({ err: cpErr }, 'Pre-integrity-check WAL checkpoint failed');
+    }
+
     const taskCount = db.prepare('SELECT COUNT(*) as c FROM tasks').get().c;
     const areaCount = db.prepare('SELECT COUNT(*) as c FROM life_areas').get().c;
+    const listCount = db.prepare('SELECT COUNT(*) as c FROM lists').get().c;
+    const noteCount = db.prepare('SELECT COUNT(*) as c FROM notes').get().c;
 
-    // Find the richest backup
-    const backupDir = path.join(dbDir, 'backups');
+    logger.info({ areas: areaCount, tasks: taskCount, lists: listCount, notes: noteCount }, 'Startup data inventory');
+
+    // STEP 1: Restore cooldown — don't restore if we restored recently
+    let skipIntegrity = false;
+    const lastRestoreRow = db.prepare("SELECT value FROM settings WHERE key='_last_restore' AND user_id=0").get();
+    if (lastRestoreRow) {
+      const lastRestore = JSON.parse(lastRestoreRow.value);
+      const hoursSince = (Date.now() - new Date(lastRestore.at).getTime()) / (1000 * 60 * 60);
+      if (hoursSince < 1) {
+        logger.info({ hoursSince: hoursSince.toFixed(2), lastBackup: lastRestore.backup }, 'Skipping integrity check — restored recently');
+        // Update watermark with current counts
+        const wm = JSON.stringify({ areas: areaCount, tasks: taskCount, lists: listCount, notes: noteCount, at: new Date().toISOString() });
+        db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (0, '_data_watermark', ?)").run(wm);
+        skipIntegrity = true;
+      }
+    }
+
+    let shouldRestore = false;
+    let reason = '';
     let bestFile = null, bestScore = 0, bestData = null;
+
+    if (!skipIntegrity) {
+    // STEP 2: Find the richest backup
+    const backupDir = path.join(dbDir, 'backups');
     if (fs.existsSync(backupDir)) {
       const backupFiles = fs.readdirSync(backupDir)
         .filter(f => f.startsWith('lifeflow-backup-') && f.endsWith('.json'));
@@ -556,20 +608,17 @@ function initDatabase(dbDir) {
         try {
           const data = JSON.parse(fs.readFileSync(path.join(backupDir, bfile), 'utf8'));
           if (!data.areas || !data.areas.length) continue;
-          const score = (data.areas?.length || 0) + (data.tasks?.length || 0) + (data.habits?.length || 0) + (data.tags?.length || 0);
+          const score = (data.areas?.length || 0) + (data.tasks?.length || 0) + (data.habits?.length || 0) + (data.tags?.length || 0) + (data.lists?.length || 0) + (data.list_items?.length || 0);
           if (score > bestScore) { bestScore = score; bestFile = bfile; bestData = data; }
         } catch (e) { logger.warn({ file: bfile, err: e.message }, 'Skipped corrupt/unreadable backup'); }
       }
     }
 
-    // Score uses areas + tasks only (tags/habits are secondary — seeded tags could inflate score)
+    // Score uses areas + tasks only for the restore TRIGGER (not for backup selection)
     const bestAreas = bestData ? (bestData.areas?.length || 0) : 0;
     const bestTasks = bestData ? (bestData.tasks?.length || 0) : 0;
     const bestPrimary = bestAreas + bestTasks;
     const currentPrimary = areaCount + taskCount;
-
-    let shouldRestore = false;
-    let reason = '';
 
     // Primary check: backup has significantly more core data (areas+tasks) than current DB
     if (bestFile && bestPrimary > 3 && currentPrimary < bestPrimary * 0.5) {
@@ -589,6 +638,13 @@ function initDatabase(dbDir) {
         reason = `Areas dropped from ${wm.areas} to ${areaCount} (watermark: ${wm.at})`;
       }
     }
+
+    // STEP 3: If current DB looks healthy, update watermark and skip restore
+    if (!shouldRestore) {
+      const wm = JSON.stringify({ areas: areaCount, tasks: taskCount, lists: listCount, notes: noteCount, at: new Date().toISOString() });
+      db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (0, '_data_watermark', ?)").run(wm);
+    }
+    } // end if (!skipIntegrity)
 
     if (shouldRestore && bestFile && bestData) {
           try {
@@ -614,6 +670,33 @@ function initDatabase(dbDir) {
 
             logger.warn({ backup: bfile, reason, backupAreas: data.areas.length, backupTasks: data.tasks.length },
               'Data integrity violation — auto-restoring from backup');
+
+            // ─── Safety: JSON backup of current DB state before destructive restore ───
+            try {
+              const preRestoreBackupDir = path.join(dbDir, 'backups');
+              if (!fs.existsSync(preRestoreBackupDir)) fs.mkdirSync(preRestoreBackupDir, { recursive: true });
+              const currentData = {};
+              try {
+                currentData.areas = db.prepare('SELECT * FROM life_areas WHERE user_id=?').all(userId);
+                currentData.tasks = db.prepare('SELECT * FROM tasks WHERE user_id=?').all(userId);
+                currentData.lists = db.prepare('SELECT * FROM lists WHERE user_id=?').all(userId);
+                currentData.list_items = [];
+                for (const l of currentData.lists) {
+                  currentData.list_items.push(...db.prepare('SELECT * FROM list_items WHERE list_id=?').all(l.id));
+                }
+                currentData.notes = db.prepare('SELECT * FROM notes WHERE user_id=?').all(userId);
+                currentData.inbox = db.prepare('SELECT * FROM inbox WHERE user_id=?').all(userId);
+                currentData.habits = db.prepare('SELECT * FROM habits WHERE user_id=?').all(userId);
+                currentData.tags = db.prepare('SELECT * FROM tags WHERE user_id=?').all(userId);
+                const ts = new Date().toISOString().replace(/[:.]/g, '').slice(0, 15);
+                const preJsonFile = `lifeflow-pre-restore-${ts}.json`;
+                fs.writeFileSync(path.join(preRestoreBackupDir, preJsonFile), JSON.stringify(currentData, null, 2));
+                logger.info({ file: preJsonFile, areas: currentData.areas.length, tasks: currentData.tasks.length, lists: currentData.lists.length },
+                  'Pre-restore JSON backup saved');
+              } catch (jsonErr) {
+                logger.warn({ err: jsonErr }, 'Failed to save pre-restore JSON backup');
+              }
+            } catch (e2) { /* non-fatal */ }
 
             // Restore user accounts (password hashes) so users can still log in after restore
             if (data.users && data.users.length) {
@@ -654,16 +737,16 @@ function initDatabase(dbDir) {
 
             const areaMap = {};
             for (const a of data.areas) {
-              const r = db.prepare('INSERT INTO life_areas (name,icon,color,position,user_id) VALUES (?,?,?,?,?)')
-                .run(a.name, a.icon || '📁', a.color || '#6C63FF', a.position || 0, userId);
+              const r = db.prepare('INSERT INTO life_areas (name,icon,color,position,user_id,archived,default_view,created_at) VALUES (?,?,?,?,?,?,?,?)')
+                .run(a.name, a.icon || '📁', a.color || '#6C63FF', a.position || 0, userId, a.archived || 0, a.default_view || null, a.created_at || new Date().toISOString());
               areaMap[a.id] = r.lastInsertRowid;
             }
             const goalMap = {};
             for (const g of (data.goals || [])) {
               const newAreaId = areaMap[g.area_id];
               if (!newAreaId) continue;
-              const r = db.prepare('INSERT INTO goals (area_id,title,description,color,status,due_date,position,user_id) VALUES (?,?,?,?,?,?,?,?)')
-                .run(newAreaId, g.title, g.description || '', g.color || '#6C63FF', g.status || 'active', g.due_date || null, g.position || 0, userId);
+              const r = db.prepare('INSERT INTO goals (area_id,title,description,color,status,due_date,position,user_id,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
+                .run(newAreaId, g.title, g.description || '', g.color || '#6C63FF', g.status || 'active', g.due_date || null, g.position || 0, userId, g.created_at || new Date().toISOString());
               goalMap[g.id] = r.lastInsertRowid;
             }
             const tagMap = {};
@@ -672,13 +755,35 @@ function initDatabase(dbDir) {
                 .run(t.name, t.color || '#64748B', userId);
               tagMap[t.id] = r.lastInsertRowid;
             }
+            // Restore lists + list items (before tasks, so list_id can be remapped)
+            // Parents first, then children for parent_id remap
+            const listMap = {};
+            const allLists = data.lists || [];
+            const parentLists = allLists.filter(l => !l.parent_id);
+            const childLists = allLists.filter(l => l.parent_id);
+            for (const l of [...parentLists, ...childLists]) {
+              const newAreaId = l.area_id ? (areaMap[l.area_id] || null) : null;
+              const newParentId = l.parent_id ? (listMap[l.parent_id] || null) : null;
+              const r = db.prepare('INSERT INTO lists (name,type,icon,color,position,user_id,area_id,parent_id,share_token,view_mode,board_columns,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+                .run(l.name, l.type || 'checklist', l.icon || '📋', l.color || '#2563EB', l.position || 0, userId, newAreaId, newParentId, l.share_token || null, l.view_mode || 'list', l.board_columns || null, l.created_at || new Date().toISOString());
+              listMap[l.id] = r.lastInsertRowid;
+            }
+            for (const i of (data.list_items || [])) {
+              const newListId = listMap[i.list_id];
+              if (newListId) {
+                db.prepare('INSERT INTO list_items (list_id,title,checked,category,quantity,note,position,metadata,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
+                  .run(newListId, i.title, i.checked || 0, i.category || null, i.quantity || null, i.note || '', i.position || 0, i.metadata || null, i.status || null, i.created_at || new Date().toISOString());
+              }
+            }
             const taskMap = {};
             for (const t of data.tasks) {
               const newGoalId = goalMap[t.goal_id];
               if (!newGoalId) continue;
-              const r = db.prepare('INSERT INTO tasks (goal_id,title,note,status,priority,due_date,recurring,assigned_to,my_day,position,user_id,completed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-                .run(newGoalId, t.title, t.note || '', t.status || 'todo', t.priority || 0, t.due_date || null,
-                  t.recurring || null, t.assigned_to || '', t.my_day || 0, t.position || 0, userId, t.completed_at || null);
+              const newListId = t.list_id ? (listMap[t.list_id] || null) : null;
+              const r = db.prepare('INSERT INTO tasks (goal_id,title,note,status,priority,due_date,due_time,recurring,assigned_to,assigned_to_user_id,my_day,position,user_id,completed_at,estimated_minutes,actual_minutes,list_id,time_block_start,time_block_end,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+                .run(newGoalId, t.title, t.note || '', t.status || 'todo', t.priority || 0, t.due_date || null, t.due_time || null,
+                  t.recurring || null, t.assigned_to || '', t.assigned_to_user_id || null, t.my_day || 0, t.position || 0, userId, t.completed_at || null,
+                  t.estimated_minutes || null, t.actual_minutes || 0, newListId, t.time_block_start || null, t.time_block_end || null, t.created_at || new Date().toISOString());
               taskMap[t.id] = r.lastInsertRowid;
               if (t.tags && t.tags.length) {
                 for (const tag of t.tags) {
@@ -688,7 +793,7 @@ function initDatabase(dbDir) {
               }
               if (t.subtasks && t.subtasks.length) {
                 for (const s of t.subtasks) {
-                  db.prepare('INSERT INTO subtasks (task_id,title,done,position) VALUES (?,?,?,?)').run(r.lastInsertRowid, s.title, s.done || 0, s.position || 0);
+                  db.prepare('INSERT INTO subtasks (task_id,title,note,done,position,created_at) VALUES (?,?,?,?,?,?)').run(r.lastInsertRowid, s.title, s.note || '', s.done || 0, s.position || 0, s.created_at || new Date().toISOString());
                 }
               }
             }
@@ -696,8 +801,8 @@ function initDatabase(dbDir) {
             const habitMap = {};
             for (const h of (data.habits || [])) {
               const newAreaId = h.area_id ? areaMap[h.area_id] || null : null;
-              const r = db.prepare('INSERT INTO habits (name,icon,color,frequency,target,position,area_id,user_id,preferred_time) VALUES (?,?,?,?,?,?,?,?,?)')
-                .run(h.name, h.icon || '💪', h.color || '#6c63ff', h.frequency || 'daily', h.target || 1, h.position || 0, newAreaId, userId, h.preferred_time || null);
+              const r = db.prepare('INSERT INTO habits (name,icon,color,frequency,target,position,area_id,user_id,preferred_time,archived,schedule_days,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+                .run(h.name, h.icon || '💪', h.color || '#6c63ff', h.frequency || 'daily', h.target || 1, h.position || 0, newAreaId, userId, h.preferred_time || null, h.archived || 0, h.schedule_days || null, h.created_at || new Date().toISOString());
               habitMap[h.id] = r.lastInsertRowid;
             }
             for (const l of (data.habit_logs || [])) {
@@ -709,8 +814,8 @@ function initDatabase(dbDir) {
             const fsMap = {};
             for (const f of (data.focus_sessions || [])) {
               const newTaskId = f.task_id ? (taskMap[f.task_id] || null) : null;
-              const r = db.prepare('INSERT INTO focus_sessions (task_id,started_at,duration_sec,type,user_id) VALUES (?,?,?,?,?)')
-                .run(newTaskId, f.started_at, f.duration_sec || 0, f.type || 'pomodoro', userId);
+              const r = db.prepare('INSERT INTO focus_sessions (task_id,started_at,duration_sec,type,user_id,ended_at,scheduled_at) VALUES (?,?,?,?,?,?,?)')
+                .run(newTaskId, f.started_at, f.duration_sec || 0, f.type || 'pomodoro', userId, f.ended_at || null, f.scheduled_at || null);
               fsMap[f.id] = r.lastInsertRowid;
             }
             for (const m of (data.focus_session_meta || [])) {
@@ -756,21 +861,6 @@ function initDatabase(dbDir) {
             for (const n of (data.notes || [])) {
               db.prepare('INSERT INTO notes (title,content,goal_id,user_id,created_at,updated_at) VALUES (?,?,?,?,?,?)')
                 .run(n.title, n.content || '', n.goal_id ? (goalMap[n.goal_id] || null) : null, userId, n.created_at || new Date().toISOString(), n.updated_at || new Date().toISOString());
-            }
-
-            // Restore lists + list items
-            const listMap = {};
-            for (const l of (data.lists || [])) {
-              const r = db.prepare('INSERT INTO lists (name,type,icon,color,position,user_id) VALUES (?,?,?,?,?,?)')
-                .run(l.name, l.type || 'checklist', l.icon || '📋', l.color || '#2563EB', l.position || 0, userId);
-              listMap[l.id] = r.lastInsertRowid;
-            }
-            for (const i of (data.list_items || [])) {
-              const newListId = listMap[i.list_id];
-              if (newListId) {
-                db.prepare('INSERT INTO list_items (list_id,title,checked,category,quantity,note,position) VALUES (?,?,?,?,?,?,?)')
-                  .run(newListId, i.title, i.checked || 0, i.category || null, i.quantity || null, i.note || '', i.position || 0);
-              }
             }
 
             // Restore custom field defs + values
@@ -860,37 +950,60 @@ function initDatabase(dbDir) {
               if (preRestoreFiles.length > 0) {
                 const preDbPath = path.join(preRestoreBackupDir, preRestoreFiles[0]);
                 const preDb = require('better-sqlite3')(preDbPath, { readonly: true });
-                // Merge lists + list_items
+                // Merge lists + list_items (if pre-restore had more lists than the backup)
                 const preLists = preDb.prepare('SELECT * FROM lists WHERE user_id=?').all(userId);
-                if (preLists.length > 0 && (data.lists || []).length === 0) {
-                  for (const l of preLists) {
-                    const r = db.prepare('INSERT INTO lists (name,type,icon,color,position,user_id) VALUES (?,?,?,?,?,?)')
-                      .run(l.name, l.type || 'checklist', l.icon || '📋', l.color || '#2563EB', l.position || 0, userId);
+                const currentListCount = db.prepare('SELECT COUNT(*) as c FROM lists WHERE user_id=?').get(userId).c;
+                if (preLists.length > currentListCount) {
+                  // Pre-restore DB had more lists — merge the extras
+                  // Sort: parents first, then children (so parent_id can be remapped)
+                  const existingNames = new Set(db.prepare('SELECT name FROM lists WHERE user_id=?').all(userId).map(l => l.name));
+                  const parentFirst = preLists.filter(l => !l.parent_id);
+                  const childSecond = preLists.filter(l => l.parent_id);
+                  const mergeListMap = {};
+                  for (const l of [...parentFirst, ...childSecond]) {
+                    if (existingNames.has(l.name)) {
+                      // Track existing list ID for child remapping
+                      const existing = db.prepare('SELECT id FROM lists WHERE name=? AND user_id=?').get(l.name, userId);
+                      if (existing) mergeListMap[l.id] = existing.id;
+                      continue;
+                    }
+                    const newAreaId = l.area_id ? (areaMap[l.area_id] || null) : null;
+                    const newParentId = l.parent_id ? (mergeListMap[l.parent_id] || null) : null;
+                    const r = db.prepare('INSERT INTO lists (name,type,icon,color,position,user_id,area_id,parent_id,share_token,view_mode,board_columns,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+                      .run(l.name, l.type || 'checklist', l.icon || '📋', l.color || '#2563EB', l.position || 0, userId, newAreaId, newParentId, l.share_token || null, l.view_mode || 'list', l.board_columns || null, l.created_at || new Date().toISOString());
+                    mergeListMap[l.id] = r.lastInsertRowid;
                     const preItems = preDb.prepare('SELECT * FROM list_items WHERE list_id=?').all(l.id);
                     for (const i of preItems) {
-                      db.prepare('INSERT INTO list_items (list_id,title,checked,category,quantity,note,position) VALUES (?,?,?,?,?,?,?)')
-                        .run(r.lastInsertRowid, i.title, i.checked || 0, i.category || null, i.quantity || null, i.note || '', i.position || 0);
+                      db.prepare('INSERT INTO list_items (list_id,title,checked,category,quantity,note,position,metadata,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
+                        .run(r.lastInsertRowid, i.title, i.checked || 0, i.category || null, i.quantity || null, i.note || '', i.position || 0, i.metadata || null, i.status || null, i.created_at || new Date().toISOString());
                     }
                   }
-                  logger.info({ count: preLists.length }, 'Merged lists from pre-restore DB');
+                  logger.info({ preCount: preLists.length, restoredCount: currentListCount }, 'Merged extra lists from pre-restore DB');
                 }
-                // Merge notes
+                // Merge notes (if pre-restore had more)
                 const preNotes = preDb.prepare('SELECT * FROM notes WHERE user_id=?').all(userId);
-                if (preNotes.length > 0 && (data.notes || []).length === 0) {
+                const currentNoteCount = db.prepare('SELECT COUNT(*) as c FROM notes WHERE user_id=?').get(userId).c;
+                if (preNotes.length > currentNoteCount) {
+                  const existingTitles = new Set(db.prepare('SELECT title FROM notes WHERE user_id=?').all(userId).map(n => n.title));
                   for (const n of preNotes) {
-                    db.prepare('INSERT INTO notes (title,content,user_id,created_at,updated_at) VALUES (?,?,?,?,?)')
-                      .run(n.title, n.content || '', userId, n.created_at, n.updated_at);
+                    if (existingTitles.has(n.title)) continue;
+                    const newGoalId = n.goal_id ? (goalMap[n.goal_id] || null) : null;
+                    db.prepare('INSERT INTO notes (title,content,goal_id,user_id,created_at,updated_at) VALUES (?,?,?,?,?,?)')
+                      .run(n.title, n.content || '', newGoalId, userId, n.created_at, n.updated_at);
                   }
-                  logger.info({ count: preNotes.length }, 'Merged notes from pre-restore DB');
+                  logger.info({ preCount: preNotes.length, restoredCount: currentNoteCount }, 'Merged notes from pre-restore DB');
                 }
-                // Merge inbox
+                // Merge inbox (if pre-restore had more)
                 const preInbox = preDb.prepare('SELECT * FROM inbox WHERE user_id=?').all(userId);
-                if (preInbox.length > 0 && (data.inbox || []).length === 0) {
+                const currentInboxCount = db.prepare('SELECT COUNT(*) as c FROM inbox WHERE user_id=?').get(userId).c;
+                if (preInbox.length > currentInboxCount) {
+                  const existingInbox = new Set(db.prepare('SELECT title FROM inbox WHERE user_id=?').all(userId).map(i => i.title));
                   for (const i of preInbox) {
+                    if (existingInbox.has(i.title)) continue;
                     db.prepare('INSERT INTO inbox (title,note,priority,user_id) VALUES (?,?,?,?)')
                       .run(i.title, i.note || '', i.priority || 0, userId);
                   }
-                  logger.info({ count: preInbox.length }, 'Merged inbox from pre-restore DB');
+                  logger.info({ preCount: preInbox.length, restoredCount: currentInboxCount }, 'Merged inbox from pre-restore DB');
                 }
                 preDb.close();
               }
@@ -899,6 +1012,13 @@ function initDatabase(dbDir) {
             }
 
             logger.info({ backup: bfile }, 'Auto-restore complete — watermark updated, WAL checkpointed');
+
+            // Record restore timestamp for cooldown
+            const restoreMeta = JSON.stringify({ at: new Date().toISOString(), backup: bfile, reason });
+            db.prepare("INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (0, '_last_restore', ?)").run(restoreMeta);
+
+            // Final WAL checkpoint to persist the restore metadata
+            try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (cpErr2) { /* ok */ }
           } catch (e) {
             logger.error({ err: e, backup: bestFile }, 'Auto-restore from backup failed');
           }

@@ -26,6 +26,7 @@ const SETTINGS_DEFAULTS = {
   onboardingComplete: 'false',
   userPersona: '',
   keyboardShortcuts: '',    // JSON map of custom key bindings
+  dailyQuote: 'false',      // show daily motivation quote on app open
 };
 
 const SETTINGS_KEYS = new Set(Object.keys(SETTINGS_DEFAULTS));
@@ -306,6 +307,120 @@ router.put('/api/settings', (req, res) => {
 router.post('/api/settings/reset', (req, res) => {
   db.prepare('DELETE FROM settings WHERE user_id=?').run(req.userId);
   res.json(SETTINGS_DEFAULTS);
+});
+
+// ─── Daily Quote API ───
+const MINDFUL_QUOTES = [
+  { text: 'The present moment is filled with joy and happiness. If you are attentive, you will see it.', author: 'Thich Nhat Hanh' },
+  { text: 'Drink your tea slowly and reverently, as if it is the axis on which the world earth revolves.', author: 'Thich Nhat Hanh' },
+  { text: 'The miracle is not to walk on water. The miracle is to walk on the green earth, dwelling deeply in the present moment and feeling truly alive.', author: 'Thich Nhat Hanh' },
+  { text: 'Smile, breathe, and go slowly.', author: 'Thich Nhat Hanh' },
+  { text: 'Life is available only in the present moment.', author: 'Thich Nhat Hanh' },
+  { text: 'Feelings come and go like clouds in a windy sky. Conscious breathing is my anchor.', author: 'Thich Nhat Hanh' },
+  { text: 'Almost everything will work again if you unplug it for a few minutes, including you.', author: 'Anne Lamott' },
+  { text: 'You are the sky. Everything else is just the weather.', author: 'Pema Chödrön' },
+  { text: 'The things that matter most in our lives are not fantastic or grand. They are moments when we touch one another.', author: 'Jack Kornfield' },
+  { text: 'In today\'s rush, we all think too much, seek too much, want too much, and forget about the joy of just being.', author: 'Eckhart Tolle' },
+  { text: 'Realize deeply that the present moment is all you ever have.', author: 'Eckhart Tolle' },
+  { text: 'Life isn\'t as serious as the mind makes it out to be.', author: 'Eckhart Tolle' },
+  { text: 'What a liberation to realize that the voice in my head is not who I am.', author: 'Eckhart Tolle' },
+  { text: 'The primary cause of unhappiness is never the situation but your thoughts about it.', author: 'Eckhart Tolle' },
+  { text: 'Acknowledging the good that you already have in your life is the foundation for all abundance.', author: 'Eckhart Tolle' },
+  { text: 'Be where you are, not where you think you should be.', author: 'Unknown' },
+  { text: 'You don\'t have to be perfect to be worthy of love — especially your own.', author: 'Unknown' },
+  { text: 'Rest is not idleness, and to lie sometimes on the grass under trees on a summer\'s day is by no means a waste of time.', author: 'John Lubbock' },
+  { text: 'Nothing ever goes away until it has taught us what we need to know.', author: 'Pema Chödrön' },
+  { text: 'You are enough just as you are.', author: 'Meghan Markle' },
+  { text: 'The little things? The little moments? They aren\'t little.', author: 'Jon Kabat-Zinn' },
+  { text: 'Wherever you are, be there totally.', author: 'Eckhart Tolle' },
+  { text: 'Do not dwell in the past, do not dream of the future, concentrate the mind on the present moment.', author: 'Buddha' },
+  { text: 'Happiness is not something ready-made. It comes from your own actions.', author: 'Dalai Lama' },
+  { text: 'If you want others to be happy, practice compassion. If you want to be happy, practice compassion.', author: 'Dalai Lama' },
+  { text: 'Every morning we are born again. What we do today is what matters most.', author: 'Buddha' },
+  { text: 'The mind is everything. What you think you become.', author: 'Buddha' },
+  { text: 'Let go of the thoughts that don\'t make you strong.', author: 'Karen Salmansohn' },
+  { text: 'Your calm mind is the ultimate weapon against your challenges.', author: 'Bryant McGill' },
+  { text: 'Gratitude turns what we have into enough.', author: 'Melody Beattie' },
+  { text: 'Not what we have, but what we enjoy, constitutes our abundance.', author: 'Epicurus' },
+  { text: 'He who is not contented with what he has would not be contented with what he would like to have.', author: 'Socrates' },
+  { text: 'Simplicity is the ultimate sophistication.', author: 'Leonardo da Vinci' },
+  { text: 'In the middle of difficulty lies opportunity.', author: 'Albert Einstein' },
+  { text: 'The greatest wealth is to live content with little.', author: 'Plato' },
+  { text: 'When you realize nothing is lacking, the whole world belongs to you.', author: 'Lao Tzu' },
+  { text: 'Nature does not hurry, yet everything is accomplished.', author: 'Lao Tzu' },
+  { text: 'Be content with what you have; rejoice in the way things are. When you realize there is nothing lacking, the whole world belongs to you.', author: 'Lao Tzu' },
+  { text: 'Knowing others is intelligence; knowing yourself is true wisdom.', author: 'Lao Tzu' },
+  { text: 'The journey of a thousand miles begins with one step.', author: 'Lao Tzu' },
+  { text: 'Stop leaving and you will arrive. Stop searching and you will see.', author: 'Lao Tzu' },
+  { text: 'To a mind that is still, the whole universe surrenders.', author: 'Lao Tzu' },
+  { text: 'We suffer more often in imagination than in reality.', author: 'Seneca' },
+  { text: 'It is not that we have a short time to live, but that we waste a good deal of it.', author: 'Seneca' },
+  { text: 'Begin at once to live, and count each separate day as a separate life.', author: 'Seneca' },
+  { text: 'True happiness is to enjoy the present, without anxious dependence upon the future.', author: 'Seneca' },
+  { text: 'It\'s not what happens to you, but how you react to it that matters.', author: 'Epictetus' },
+  { text: 'Very little is needed to make a happy life; it is all within yourself, in your way of thinking.', author: 'Marcus Aurelius' },
+  { text: 'The happiness of your life depends upon the quality of your thoughts.', author: 'Marcus Aurelius' },
+  { text: 'When you arise in the morning, think of what a precious privilege it is to be alive.', author: 'Marcus Aurelius' },
+  { text: 'Dwell on the beauty of life. Watch the stars, and see yourself running with them.', author: 'Marcus Aurelius' },
+  { text: 'The soul becomes dyed with the colour of its thoughts.', author: 'Marcus Aurelius' },
+  { text: 'How we spend our days is, of course, how we spend our lives.', author: 'Annie Dillard' },
+  { text: 'The real voyage of discovery consists not in seeking new landscapes, but in having new eyes.', author: 'Marcel Proust' },
+  { text: 'To pay attention, this is our endless and proper work.', author: 'Mary Oliver' },
+  { text: 'Tell me, what is it you plan to do with your one wild and precious life?', author: 'Mary Oliver' },
+  { text: 'Instructions for living a life: Pay attention. Be astonished. Tell about it.', author: 'Mary Oliver' },
+  { text: 'If you suddenly and unexpectedly feel joy, don\'t hesitate. Give in to it.', author: 'Mary Oliver' },
+  { text: 'You do not have to be good. You do not have to walk on your knees for a hundred miles through the desert, repenting.', author: 'Mary Oliver' },
+  { text: 'The question is not what you look at, but what you see.', author: 'Henry David Thoreau' },
+  { text: 'Our life is frittered away by detail. Simplify, simplify.', author: 'Henry David Thoreau' },
+  { text: 'I went to the woods because I wished to live deliberately, to front only the essential facts of life.', author: 'Henry David Thoreau' },
+  { text: 'You must live in the present, launch yourself on every wave, find your eternity in each moment.', author: 'Henry David Thoreau' },
+  { text: 'Adopt the pace of nature: her secret is patience.', author: 'Ralph Waldo Emerson' },
+  { text: 'What lies behind us and what lies before us are tiny matters compared to what lies within us.', author: 'Ralph Waldo Emerson' },
+  { text: 'To be yourself in a world that is constantly trying to make you something else is the greatest accomplishment.', author: 'Ralph Waldo Emerson' },
+  { text: 'The earth has music for those who listen.', author: 'William Shakespeare' },
+  { text: 'Breathe. Let go. And remind yourself that this very moment is the only one you know you have for sure.', author: 'Oprah Winfrey' },
+  { text: 'Be thankful for what you have; you\'ll end up having more.', author: 'Oprah Winfrey' },
+  { text: 'I have decided to stick with love. Hate is too great a burden to bear.', author: 'Martin Luther King Jr.' },
+  { text: 'The most wasted of all days is one without laughter.', author: 'E.E. Cummings' },
+  { text: 'In the end, just three things matter: How well we have lived. How well we have loved. How well we have learned to let go.', author: 'Jack Kornfield' },
+  { text: 'Let everything happen to you. Beauty and terror. Just keep going. No feeling is final.', author: 'Rainer Maria Rilke' },
+  { text: 'Perhaps all the dragons in our lives are princesses who are only waiting to see us act, just once, with beauty and courage.', author: 'Rainer Maria Rilke' },
+  { text: 'The only way to make sense out of change is to plunge into it, move with it, and join the dance.', author: 'Alan Watts' },
+  { text: 'This is the real secret of life — to be completely engaged with what you are doing in the here and now.', author: 'Alan Watts' },
+  { text: 'Muddy water is best cleared by leaving it alone.', author: 'Alan Watts' },
+  { text: 'You are an aperture through which the universe is looking at and exploring itself.', author: 'Alan Watts' },
+  { text: 'The meaning of life is just to be alive. It is so plain and so obvious and so simple. And yet, everybody rushes around in a great panic as if it were necessary to achieve something beyond themselves.', author: 'Alan Watts' },
+];
+
+router.get('/api/features/daily-quote', async (req, res) => {
+  // Check if user has daily quotes enabled
+  const row = db.prepare("SELECT value FROM settings WHERE user_id=? AND key='dailyQuote'").get(req.userId);
+  if (!row || row.value !== 'true') {
+    return res.json({ enabled: false });
+  }
+
+  // Determine today's quote index (day of year for consistent daily rotation)
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((now - start) / (1000 * 60 * 60 * 24));
+
+  // Try external API first for variety (ZenQuotes — free, no key)
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+    const resp = await fetch('https://zenquotes.io/api/today', { signal: controller.signal });
+    clearTimeout(timeout);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (Array.isArray(data) && data[0] && data[0].q && data[0].a && !data[0].q.includes('Too many requests')) {
+        return res.json({ enabled: true, text: data[0].q, author: data[0].a, source: 'zenquotes' });
+      }
+    }
+  } catch (_) { /* external API failed — use local quotes */ }
+
+  // Fallback: curated local quote
+  const quote = MINDFUL_QUOTES[dayOfYear % MINDFUL_QUOTES.length];
+  res.json({ enabled: true, text: quote.text, author: quote.author, source: 'local' });
 });
 
 // ─── Habits API ───

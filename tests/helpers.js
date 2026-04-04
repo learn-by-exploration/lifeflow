@@ -108,8 +108,8 @@ function makeTask(goalId, overrides = {}) {
 
 function makeSubtask(taskId, overrides = {}) {
   const { db } = setup();
-  const o = { title: 'Test Subtask', done: 0, position: 0, ...overrides };
-  const r = db.prepare('INSERT INTO subtasks (task_id,title,done,position) VALUES (?,?,?,?)').run(taskId, o.title, o.done, o.position);
+  const o = { title: 'Test Subtask', done: 0, position: 0, note: '', ...overrides };
+  const r = db.prepare('INSERT INTO subtasks (task_id,title,done,position,note) VALUES (?,?,?,?,?)').run(taskId, o.title, o.done, o.position, o.note);
   return db.prepare('SELECT * FROM subtasks WHERE id=?').get(r.lastInsertRowid);
 }
 
