@@ -5,7 +5,7 @@ const { validateRecurring } = require('../schemas/tasks.schema');
 const pushService = require('../services/push.service');
 const logger = require('../logger');
 module.exports = function(deps) {
-  const { db, rebuildSearchIndex, enrichTask, enrichTasks, getNextPosition, nextDueDate, executeRules, verifyGoalOwnership } = deps;
+  const { db, rebuildSearchIndex, enrichTask, enrichTasks, getNextPosition, nextDueDate, executeRules, verifyGoalOwnership, automationEngine, audit } = deps;
   const router = Router();
   const recurringSvc = new RecurringService(db, deps);
 
@@ -95,12 +95,13 @@ router.post('/api/goals/:goalId/tasks', (req, res) => {
   const goalId = Number(req.params.goalId);
   if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'Invalid ID' });
   if (!db.prepare('SELECT id FROM goals WHERE id=? AND user_id=?').get(goalId, req.userId)) return res.status(404).json({ error: 'Goal not found' });
-  const { title, note, priority, due_date, due_time, recurring, assigned_to, my_day, tagIds, time_block_start, time_block_end, estimated_minutes, list_id } = req.body;
+  const { title, note, priority, due_date, due_time, recurring, assigned_to, my_day, tagIds, time_block_start, time_block_end, estimated_minutes, list_id, starred, start_date } = req.body;
   if (!title || typeof title !== 'string' || !title.trim()) return res.status(400).json({ error: 'Title required' });
   if (title.trim().length > 500) return res.status(400).json({ error: 'Title too long (max 500 characters)' });
   if (note !== undefined && note !== null && typeof note !== 'string') return res.status(400).json({ error: 'Note must be a string' });
   if (note && note.length > 5000) return res.status(400).json({ error: 'Note too long (max 5000 characters)' });
   if (due_date !== undefined && due_date !== null && !isValidDate(due_date)) return res.status(400).json({ error: 'Invalid due_date format (YYYY-MM-DD)' });
+  if (start_date !== undefined && start_date !== null && !isValidDate(start_date)) return res.status(400).json({ error: 'Invalid start_date format (YYYY-MM-DD)' });
   if (!isValidHHMM(due_time)) return res.status(400).json({ error: 'Invalid due_time format (HH:MM)' });
   if (priority !== undefined && priority !== null && (typeof priority === 'boolean' || ![0,1,2,3].includes(Number(priority)))) return res.status(400).json({ error: 'Priority must be 0-3' });
   if (estimated_minutes !== undefined && estimated_minutes !== null && (typeof estimated_minutes !== 'number' || estimated_minutes < 0)) return res.status(400).json({ error: 'estimated_minutes must be a non-negative number' });
@@ -115,8 +116,8 @@ router.post('/api/goals/:goalId/tasks', (req, res) => {
   }
   const createTaskTx = db.transaction(() => {
     const pos = getNextPosition('tasks', 'goal_id', goalId);
-    const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,time_block_start,time_block_end,estimated_minutes,list_id,user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
-      goalId,title.trim(),note||'',priority||0,due_date||null,due_time||null,validatedRecurring,assigned_to||'',my_day?1:0,pos,time_block_start||null,time_block_end||null,estimated_minutes||null,list_id?Number(list_id):null,req.userId
+    const r = db.prepare('INSERT INTO tasks (goal_id,title,note,priority,due_date,due_time,recurring,assigned_to,my_day,position,time_block_start,time_block_end,estimated_minutes,list_id,user_id,starred,start_date) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
+      goalId,title.trim(),note||'',priority||0,due_date||null,due_time||null,validatedRecurring,assigned_to||'',my_day?1:0,pos,time_block_start||null,time_block_end||null,estimated_minutes||null,list_id?Number(list_id):null,req.userId,starred?1:0,start_date||null
     );
     const taskId = r.lastInsertRowid;
     if (Array.isArray(tagIds)) {
@@ -126,7 +127,15 @@ router.post('/api/goals/:goalId/tasks', (req, res) => {
     return taskId;
   });
   const taskId = createTaskTx();
-  res.status(201).json(enrichTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(taskId)));
+  const createdTask = enrichTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(taskId));
+  // Audit log
+  if (audit) audit.log(req.userId, 'task_created', 'task', taskId, req, title.trim());
+  // Emit task_created automation event
+  if (automationEngine) {
+    const full = db.prepare('SELECT t.*, g.area_id FROM tasks t JOIN goals g ON t.goal_id=g.id WHERE t.id=?').get(taskId);
+    if (full) automationEngine.emit('task_created', { userId: req.userId, task: full });
+  }
+  res.status(201).json(createdTask);
 });
 // ─── Task Reorder (must be before :id routes) ───
 router.put('/api/tasks/reorder', (req, res) => {
@@ -273,6 +282,60 @@ router.get('/api/tasks/table', (req, res) => {
   res.json({ tasks, total, groups });
 });
 
+// ─── My Day Suggestions (must be before :id) ───
+router.get('/api/tasks/suggestions', (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const candidates = db.prepare(`
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.status != 'done' AND t.my_day = 0 AND t.user_id=?
+    ORDER BY t.priority DESC, t.due_date
+  `).all(req.userId);
+  const scored = candidates.map(t => {
+    let score = 0;
+    const reasons = [];
+    if (t.due_date && t.due_date < today) { score += 60; reasons.push('overdue'); }
+    else if (t.due_date === today) { score += 50; reasons.push('due today'); }
+    else if (t.due_date) {
+      const daysLeft = Math.ceil((new Date(t.due_date) - new Date(today)) / 86400000);
+      if (daysLeft <= 1) { score += 35; reasons.push('due tomorrow'); }
+      else if (daysLeft <= 3) { score += 20; reasons.push('due soon'); }
+    }
+    if (t.priority === 3) { score += 25; reasons.push('critical'); }
+    else if (t.priority === 2) { score += 15; reasons.push('high priority'); }
+    if (t.starred) { score += 20; reasons.push('starred'); }
+    if ((t.estimated_minutes || 30) <= 15) { score += 10; reasons.push('quick win'); }
+    return { ...t, score, reasons };
+  }).filter(t => t.score > 0).sort((a, b) => b.score - a.score).slice(0, 15);
+  res.json(enrichTasks(scored).map(t => ({ ...t, score: scored.find(s => s.id === t.id)?.score, reasons: scored.find(s => s.id === t.id)?.reasons })));
+});
+
+// ─── Upcoming View (must be before :id) ───
+router.get('/api/tasks/upcoming', (req, res) => {
+  const days = Math.min(Number(req.query.days) || 30, 90);
+  const today = new Date().toISOString().slice(0, 10);
+  const end = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+  const overdue = enrichTasks(db.prepare(`
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.status!='done' AND t.due_date < ? AND t.due_date IS NOT NULL AND t.user_id=?
+    ORDER BY t.due_date, t.priority DESC
+  `).all(today, req.userId));
+  const upcoming = enrichTasks(db.prepare(`
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.status!='done' AND t.due_date >= ? AND t.due_date <= ? AND t.user_id=?
+    ORDER BY t.due_date, t.priority DESC
+  `).all(today, end, req.userId));
+  const undated = enrichTasks(db.prepare(`
+    SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
+    FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
+    WHERE t.status!='done' AND t.due_date IS NULL AND t.user_id=?
+    ORDER BY t.priority DESC, t.position LIMIT 50
+  `).all(req.userId));
+  res.json({ overdue, upcoming, undated });
+});
+
 router.get('/api/tasks/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!isPositiveInt(id)) return res.status(400).json({ error: 'Invalid ID' });
@@ -392,11 +455,12 @@ router.put('/api/tasks/:id', (req, res) => {
   if (!isPositiveInt(id)) return res.status(400).json({ error: 'Invalid ID' });
   const ex = db.prepare('SELECT * FROM tasks WHERE id=? AND user_id=?').get(id, req.userId);
   if (!ex) return res.status(404).json({ error: 'Not found' });
-  const { title, note, status, priority, due_date, due_time, recurring, assigned_to, assigned_to_user_id, my_day, position, goal_id, time_block_start, time_block_end, estimated_minutes, actual_minutes, list_id } = req.body;
+  const { title, note, status, priority, due_date, due_time, recurring, assigned_to, assigned_to_user_id, my_day, position, goal_id, time_block_start, time_block_end, estimated_minutes, actual_minutes, list_id, starred, start_date } = req.body;
   if (status !== undefined && status !== null && !['todo','doing','done'].includes(status)) return res.status(400).json({ error: 'Invalid status (must be todo, doing, or done)' });
   if (priority !== undefined && priority !== null && (typeof priority === 'boolean' || ![0,1,2,3].includes(Number(priority)))) return res.status(400).json({ error: 'Priority must be 0-3' });
   if (title !== undefined && title !== null && (typeof title !== 'string' || !title.trim())) return res.status(400).json({ error: 'Title must be a non-empty string' });
   if (due_date !== undefined && due_date !== null && !isValidDate(due_date)) return res.status(400).json({ error: 'Invalid due_date format (YYYY-MM-DD)' });
+  if (start_date !== undefined && start_date !== null && !isValidDate(start_date)) return res.status(400).json({ error: 'Invalid start_date format (YYYY-MM-DD)' });
   if (due_time !== undefined && !isValidHHMM(due_time)) return res.status(400).json({ error: 'Invalid due_time format (HH:MM)' });
   if (estimated_minutes !== undefined && estimated_minutes !== null && (typeof estimated_minutes !== 'number' || estimated_minutes < 0)) return res.status(400).json({ error: 'estimated_minutes must be a non-negative number' });
   if (list_id !== undefined && list_id !== null) { const lid = Number(list_id); if (!Number.isInteger(lid) || !db.prepare('SELECT id FROM lists WHERE id=? AND user_id=?').get(lid, req.userId)) return res.status(400).json({ error: 'Invalid list_id' }); }
@@ -416,7 +480,7 @@ router.put('/api/tasks/:id', (req, res) => {
     priority=COALESCE(?,priority),due_date=?,due_time=?,recurring=?,assigned_to=COALESCE(?,assigned_to),
     my_day=COALESCE(?,my_day),position=COALESCE(?,position),goal_id=COALESCE(?,goal_id),completed_at=?,
     time_block_start=?,time_block_end=?,estimated_minutes=?,actual_minutes=?,list_id=?,
-    assigned_to_user_id=? WHERE id=?`).run(
+    assigned_to_user_id=?,starred=COALESCE(?,starred),start_date=? WHERE id=?`).run(
     title||null, note!==undefined?note:null, status||null, priority!==undefined?priority:null,
     due_date!==undefined?due_date:ex.due_date, due_time!==undefined?due_time:ex.due_time,
     validatedRecurring!==undefined?validatedRecurring:ex.recurring,
@@ -425,8 +489,22 @@ router.put('/api/tasks/:id', (req, res) => {
     time_block_start!==undefined?time_block_start:ex.time_block_start, time_block_end!==undefined?time_block_end:ex.time_block_end,
     estimated_minutes!==undefined?estimated_minutes:ex.estimated_minutes, actual_minutes!==undefined?actual_minutes:ex.actual_minutes,
     list_id!==undefined?(list_id?Number(list_id):null):ex.list_id,
-    assigned_to_user_id!==undefined?assigned_to_user_id:ex.assigned_to_user_id, id
+    assigned_to_user_id!==undefined?assigned_to_user_id:ex.assigned_to_user_id,
+    starred!==undefined?(starred?1:0):null, start_date!==undefined?start_date:ex.start_date, id
   );
+  // Audit log for task changes
+  if (audit) {
+    const changes = [];
+    if (status && status !== ex.status) changes.push(`status: ${ex.status}→${status}`);
+    if (priority !== undefined && priority !== null && Number(priority) !== ex.priority) changes.push(`priority: ${ex.priority}→${priority}`);
+    if (starred !== undefined && (starred?1:0) !== ex.starred) changes.push(starred ? 'starred' : 'unstarred');
+    if (due_date !== undefined && due_date !== ex.due_date) changes.push(`due: ${ex.due_date||'none'}→${due_date||'none'}`);
+    if (start_date !== undefined && start_date !== ex.start_date) changes.push(`start: ${ex.start_date||'none'}→${start_date||'none'}`);
+    if (title && title !== ex.title) changes.push('title changed');
+    if (note !== undefined && note !== ex.note) changes.push('note changed');
+    if (assigned_to_user_id !== undefined && assigned_to_user_id !== ex.assigned_to_user_id) changes.push(`assigned: ${ex.assigned_to_user_id||'none'}→${assigned_to_user_id||'none'}`);
+    if (changes.length) audit.log(req.userId, 'task_updated', 'task', id, req, changes.join(', '));
+  }
   // Push notification for assignment change
   if (assigned_to_user_id !== undefined && assigned_to_user_id !== null && assigned_to_user_id !== ex.assigned_to_user_id) {
     // Dedup: check if we already sent an assignment notification for this task to this user within 24h
@@ -455,23 +533,50 @@ router.put('/api/tasks/:id', (req, res) => {
   // Execute automation rules on completion
   if (status === 'done' && ex.status !== 'done') {
     const updated = db.prepare('SELECT t.*, g.area_id FROM tasks t JOIN goals g ON t.goal_id=g.id WHERE t.id=?').get(id);
-    if (updated) executeRules('task_completed', updated);
+    if (updated) {
+      if (automationEngine) automationEngine.emit('task_completed', { userId: req.userId, task: updated });
+      // Check goal progress for automation triggers
+      const goalTasks = db.prepare('SELECT COUNT(*) as total, SUM(CASE WHEN status=\'done\' THEN 1 ELSE 0 END) as done FROM tasks WHERE goal_id=? AND user_id=?').get(updated.goal_id, req.userId);
+      if (goalTasks && automationEngine) {
+        const pct = goalTasks.total > 0 ? Math.round((goalTasks.done / goalTasks.total) * 100) : 0;
+        if (pct === 100) {
+          automationEngine.emit('goal_all_tasks_done', { userId: req.userId, goal_id: updated.goal_id, task: updated });
+        }
+        automationEngine.emit('goal_progress', { userId: req.userId, goal_id: updated.goal_id, percentage: pct, task: updated });
+      }
+    }
   }
-  // Execute rules on task creation (for overdue auto-add etc.)
+  // Execute rules on task update (status changes)
   if (status && status !== ex.status && status !== 'done') {
     const updated = db.prepare('SELECT t.*, g.area_id FROM tasks t JOIN goals g ON t.goal_id=g.id WHERE t.id=?').get(id);
-    if (updated) executeRules('task_updated', updated);
+    if (updated && automationEngine) automationEngine.emit('task_updated', { userId: req.userId, task: updated });
   }
   res.json(enrichTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(id)));
 });
 router.delete('/api/tasks/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!isPositiveInt(id)) return res.status(400).json({ error: 'Invalid ID' });
-  const result = db.prepare('DELETE FROM tasks WHERE id=? AND user_id=?').run(id, req.userId);
-  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
+  const ex = db.prepare('SELECT title FROM tasks WHERE id=? AND user_id=?').get(id, req.userId);
+  if (!ex) return res.status(404).json({ error: 'Not found' });
+  db.prepare('DELETE FROM tasks WHERE id=?').run(id);
+  if (audit) audit.log(req.userId, 'task_deleted', 'task', id, req, ex.title);
   res.json({ ok: true });
 });
 
+// ─── Task Activity Feed ───
+router.get('/api/tasks/:id/activity', (req, res) => {
+  const id = Number(req.params.id);
+  if (!isPositiveInt(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const task = db.prepare('SELECT id FROM tasks WHERE id=? AND user_id=?').get(id, req.userId);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  const activities = db.prepare(
+    `SELECT action, detail, created_at FROM audit_log WHERE resource='task' AND resource_id=? ORDER BY created_at DESC LIMIT ?`
+  ).all(String(id), limit);
+  res.json(activities);
+});
+
+// ─── My Day Suggestions ───
 // ─── NLP Quick Capture Parser ───
 router.post('/api/tasks/parse', (req, res) => {
   const { text } = req.body;
@@ -598,8 +703,12 @@ router.post('/api/tasks/:id/comments', (req, res) => {
   const { text } = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: 'Text required' });
   if (text.trim().length > 2000) return res.status(400).json({ error: 'Comment too long (max 2000 characters)' });
-  const r = db.prepare('INSERT INTO task_comments (task_id, text) VALUES (?,?)').run(id, text.trim());
-  res.status(201).json(db.prepare('SELECT * FROM task_comments WHERE id=?').get(r.lastInsertRowid));
+  const trimmed = text.trim();
+  const mentions = [...trimmed.matchAll(/@([a-zA-Z0-9_.]+)/g)].map(m => m[1]);
+  const r = db.prepare('INSERT INTO task_comments (task_id, text) VALUES (?,?)').run(id, trimmed);
+  const comment = db.prepare('SELECT * FROM task_comments WHERE id=?').get(r.lastInsertRowid);
+  comment.mentions = mentions;
+  res.status(201).json(comment);
 });
 router.delete('/api/tasks/:id/comments/:commentId', (req, res) => {
   const id = Number(req.params.id);
@@ -619,8 +728,12 @@ router.put('/api/tasks/:id/comments/:commentId', (req, res) => {
   const { text } = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: 'Text required' });
   if (text.trim().length > 2000) return res.status(400).json({ error: 'Comment too long (max 2000 characters)' });
-  db.prepare('UPDATE task_comments SET text=? WHERE id=? AND task_id=?').run(text.trim(), commentId, id);
-  res.json(db.prepare('SELECT * FROM task_comments WHERE id=?').get(commentId));
+  const trimmed2 = text.trim();
+  const mentions2 = [...trimmed2.matchAll(/@([a-zA-Z0-9_.]+)/g)].map(m => m[1]);
+  db.prepare('UPDATE task_comments SET text=? WHERE id=? AND task_id=?').run(trimmed2, commentId, id);
+  const updated = db.prepare('SELECT * FROM task_comments WHERE id=?').get(commentId);
+  updated.mentions = mentions2;
+  res.json(updated);
 });
 
 // ─── TIME TRACKING API ───

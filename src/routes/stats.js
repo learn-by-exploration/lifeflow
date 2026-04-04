@@ -1,6 +1,6 @@
 const { Router } = require('express');
 module.exports = function(deps) {
-  const { db, enrichTasks } = deps;
+  const { db, enrichTasks, automationEngine } = deps;
   const router = Router();
 
 // ─── Stats / Dashboard ───
@@ -46,7 +46,24 @@ router.post('/api/focus', (req, res) => {
   const r = db.prepare('INSERT INTO focus_sessions (task_id, duration_sec, type, scheduled_at, user_id) VALUES (?,?,?,?,?)').run(
     Number(task_id), durSec, type || 'pomodoro', scheduled_at || null, req.userId
   );
-  res.status(201).json(db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(r.lastInsertRowid));
+  const focusRow = db.prepare('SELECT * FROM focus_sessions WHERE id=?').get(r.lastInsertRowid);
+  // Emit focus_completed automation event
+  if (automationEngine && focusRow) {
+    const task = db.prepare('SELECT t.*, g.area_id FROM tasks t JOIN goals g ON t.goal_id=g.id WHERE t.id=?').get(Number(task_id));
+    // Count today's sessions for focus_streak
+    const todaySessions = db.prepare("SELECT COUNT(*) as c FROM focus_sessions WHERE date(started_at)=date('now') AND user_id=?").get(req.userId).c;
+    automationEngine.emit('focus_completed', {
+      userId: req.userId,
+      task,
+      duration_sec: focusRow.duration_sec,
+      type: focusRow.type,
+      today_sessions: todaySessions
+    });
+    if (todaySessions >= 3 || todaySessions >= 5 || todaySessions >= 10) {
+      automationEngine.emit('focus_streak', { userId: req.userId, count: todaySessions });
+    }
+  }
+  res.status(201).json(focusRow);
 });
 
 // CRITICAL: /api/focus/stats and /api/focus/history BEFORE /api/focus/:id routes

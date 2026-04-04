@@ -2,6 +2,45 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.8.3] - 2026-04-04
+
+### Added
+- **Advanced Automation Engine** — Complete event-driven rule execution system with:
+  - 19 trigger types: task (completed, created, updated, overdue, due_today, due_soon, stale), goal (progress, all_tasks_done), habit (logged, streak, missed), focus (completed, streak), schedule (daily, weekly, monthly), review (daily_review_saved, weekly_review_saved)
+  - 19 action types: task (add_to_myday, remove_from_myday, set_priority, set_status, set_due_date, add_tag, move_to_goal, create_followup, add_subtasks, apply_template), habit (log_habit, create_habit_task), notification (send_notification, send_toast), organization (move_to_inbox, archive_goal, create_review_prompt)
+  - AND/OR condition system with 10 operators (eq, neq, gt, lt, gte, lte, contains, not_contains, in, not_in)
+  - Multi-action chains (up to 10 actions per rule)
+  - Template variable interpolation (`{{task.title}}`, `{{percentage}}`, etc.)
+  - Rate limiting (50 actions/min per user) and chain depth limiting (max 3)
+- **14 built-in automation templates** — Pre-built rules: Auto-triage Overdue, Follow-up on Completion, Quick Win Radar, Morning Focus Setup, Evening Wind-Down, Monday Weekly Review, Streak Celebration, Missed Habit Recovery, Post-Focus Follow-up, Habit-Task Bridge, Celebrate Milestone, Stale Task Alert, Goal Sprint Finisher, Focus Session Streak
+- **Automation execution log** — Paginated history of all rule executions with status, trigger context, and error details
+- **Rule builder UI** — Full frontend rule editor with:
+  - Grouped trigger selector (Task/Goal/Habit/Focus/Schedule/Review)
+  - Trigger config with area/goal/priority/tag/habit filters
+  - AND/OR condition builder with inline editing
+  - Multi-action builder with per-action configuration
+  - Natural language preview showing complete rule summary
+- **Template gallery** — Browse and one-click install automation templates organized by category
+- **Rule testing** — Dry-run endpoint to preview which tasks would match a rule's conditions
+- **Rule editing** — Click any rule card to edit its full configuration
+- **Automation toasts** — Toast notification queue for automation feedback
+- **Automation suggestions** — System for smart rule recommendations (backend)
+- **Scheduler jobs** for automations:
+  - Overdue task detection (hourly)
+  - Due today/soon checks (hourly)
+  - Schedule-based trigger execution (every 15 min)
+  - Stale task detection (every 6 hours)
+  - Missed habit detection (daily)
+  - Automation log cleanup (daily, prunes >30 days)
+- **New API endpoints**: `GET /api/rules/constants`, `GET /api/rules/log`, `GET /api/rules/templates`, `POST /api/rules/templates/:id/install`, `POST /api/rules/:id/test`, `GET /api/rules/suggestions`, `POST /api/rules/suggestions/:id/dismiss`, `GET /api/rules/toasts`
+- **New DB tables**: `automation_log`, `automation_templates`, `automation_suggestions`
+- **Migration 004**: Advanced automations schema changes
+
+### Fixed
+- **create_followup automation** — Missing user_id on created follow-up tasks (now properly set)
+- **task_created trigger** — Was never dispatched; now emits on task creation
+- **goal_progress / goal_all_tasks_done triggers** — Now emitted when tasks are completed
+
 ## [0.8.2] - 2026-04-03
 
 ### Fixed

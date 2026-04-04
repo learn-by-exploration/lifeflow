@@ -76,6 +76,9 @@ function cleanDb() {
   try { db.exec('DELETE FROM daily_reviews'); } catch(e) {}
   try { db.exec('DELETE FROM login_attempts'); } catch(e) {}
   try { db.exec('DELETE FROM search_index'); } catch(e) {}
+  try { db.exec('DELETE FROM user_xp'); } catch(e) {}
+  try { db.exec('DELETE FROM task_attachments'); } catch(e) {}
+  try { db.exec('DELETE FROM custom_statuses'); } catch(e) {}
 }
 
 function teardown() {

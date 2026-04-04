@@ -104,8 +104,11 @@ ${scriptContent}
       'note-back', 'note-del', 'note-title', 'note-content', 'note-goal',
       // Weekly review (created by renderReview)
       'rv-save', 'rv-acc', 'rv-refl', 'rv-next',
-      // Automation rules (created by renderRules)
+      // Automation rules (created by renderRules/showRuleModal)
       'rule-action', 'rule-cancel', 'rule-save', 'rule-name', 'rule-trigger',
+      'rule-desc', 'rule-preview', 'add-condition-btn', 'add-action-btn', 'cond-logic',
+      'auto-templates-btn', 'auto-log-btn', 'new-rule-btn', 'empty-templates-btn',
+      'tmpl-close', 'log-close', 'log-prev', 'log-next',
       // Briefing (created by showBriefing)
       'briefing-go',
       // Lists view (created by renderLists/renderListDetail)

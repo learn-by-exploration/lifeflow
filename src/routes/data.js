@@ -71,6 +71,13 @@ module.exports = function(deps) {
     const inbox = db.prepare('SELECT * FROM inbox WHERE user_id=? ORDER BY created_at').all(userId);
     const badges = db.prepare('SELECT * FROM badges WHERE user_id=?').all(userId);
     const settings = db.prepare("SELECT * FROM settings WHERE user_id=? AND key NOT LIKE '\\_%' ESCAPE '\\'").all(userId);
+    const user_xp = db.prepare('SELECT * FROM user_xp WHERE user_id=? ORDER BY created_at DESC').all(userId);
+    const task_attachments = taskIds.length
+      ? db.prepare(`SELECT id, task_id, user_id, original_name, mime_type, size_bytes, created_at FROM task_attachments WHERE task_id IN (${taskIds.map(() => '?').join(',')})`).all(...taskIds)
+      : [];
+    const custom_statuses = goalIds.length
+      ? db.prepare(`SELECT * FROM custom_statuses WHERE goal_id IN (${goalIds.map(() => '?').join(',')}) ORDER BY position`).all(...goalIds)
+      : [];
 
     // Include all user accounts (id, email, password_hash, display_name) for full restore capability
     // Password hashes are bcrypt — safe to store (same as what's in the SQLite file)
@@ -86,6 +93,7 @@ module.exports = function(deps) {
       notes, lists, list_items,
       custom_field_defs, automation_rules, saved_filters, task_templates,
       weekly_reviews, daily_reviews, inbox, badges, settings,
+      user_xp, task_attachments, custom_statuses,
     };
   }
 
@@ -236,14 +244,14 @@ module.exports = function(deps) {
       }
 
       // Import tasks
-      const insTask = db.prepare('INSERT INTO tasks (goal_id, title, note, status, priority, due_date, due_time, my_day, position, recurring, completed_at, user_id, assigned_to, assigned_to_user_id, estimated_minutes, actual_minutes, list_id, time_block_start, time_block_end, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+      const insTask = db.prepare('INSERT INTO tasks (goal_id, title, note, status, priority, due_date, due_time, my_day, position, recurring, completed_at, user_id, assigned_to, assigned_to_user_id, estimated_minutes, actual_minutes, list_id, time_block_start, time_block_end, created_at, starred, start_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
       const insSubtask = db.prepare('INSERT INTO subtasks (task_id, title, note, done, position, created_at) VALUES (?, ?, ?, ?, ?, ?)');
       const insTaskTag = db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?, ?)');
       tasks.forEach(t => {
         const newGoalId = goalMap[t.goal_id];
         if (!newGoalId) return; // skip orphan tasks
         const newListId = t.list_id ? (listMap[t.list_id] || null) : null;
-        const r = insTask.run(newGoalId, t.title, t.notes || t.note || '', t.status || 'todo', t.priority || 0, t.due_date || null, t.due_time || null, t.my_day ? 1 : 0, t.position || 0, t.recurring || null, t.completed_at || null, req.userId, t.assigned_to || '', t.assigned_to_user_id || null, t.estimated_minutes || null, t.actual_minutes || 0, newListId, t.time_block_start || null, t.time_block_end || null, t.created_at || new Date().toISOString());
+        const r = insTask.run(newGoalId, t.title, t.notes || t.note || '', t.status || 'todo', t.priority || 0, t.due_date || null, t.due_time || null, t.my_day ? 1 : 0, t.position || 0, t.recurring || null, t.completed_at || null, req.userId, t.assigned_to || '', t.assigned_to_user_id || null, t.estimated_minutes || null, t.actual_minutes || 0, newListId, t.time_block_start || null, t.time_block_end || null, t.created_at || new Date().toISOString(), t.starred ? 1 : 0, t.start_date || null);
         const newTaskId = r.lastInsertRowid;
         taskMap[t.id] = newTaskId;
         // Subtasks

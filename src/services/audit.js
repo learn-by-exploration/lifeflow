@@ -6,7 +6,7 @@ module.exports = function createAuditLogger(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS audit_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       action TEXT NOT NULL,
       resource TEXT,
       resource_id TEXT,

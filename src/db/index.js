@@ -63,7 +63,10 @@ function initDatabase(dbDir) {
       icon TEXT DEFAULT '📋',
       color TEXT DEFAULT '#2563EB',
       position INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      archived INTEGER DEFAULT 0,
+      default_view TEXT DEFAULT NULL,
+      user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id) ON DELETE CASCADE
     );
     CREATE TABLE IF NOT EXISTS goals (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,6 +78,7 @@ function initDatabase(dbDir) {
       due_date TEXT,
       position INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (area_id) REFERENCES life_areas(id) ON DELETE CASCADE
     );
     CREATE TABLE IF NOT EXISTS tasks (
@@ -91,6 +95,14 @@ function initDatabase(dbDir) {
       my_day INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       completed_at DATETIME,
+      due_time TEXT DEFAULT NULL,
+      time_block_start TEXT DEFAULT NULL,
+      time_block_end TEXT DEFAULT NULL,
+      estimated_minutes INTEGER DEFAULT NULL,
+      actual_minutes INTEGER DEFAULT 0,
+      list_id INTEGER REFERENCES lists(id) ON DELETE SET NULL,
+      user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id) ON DELETE CASCADE,
+      assigned_to_user_id INTEGER REFERENCES users(id),
       FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
     );
     CREATE TABLE IF NOT EXISTS subtasks (
@@ -105,8 +117,10 @@ function initDatabase(dbDir) {
     );
     CREATE TABLE IF NOT EXISTS tags (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE,
-      color TEXT DEFAULT '#64748B'
+      name TEXT NOT NULL,
+      color TEXT DEFAULT '#64748B',
+      user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(user_id, name)
     );
     CREATE TABLE IF NOT EXISTS task_tags (
       task_id INTEGER NOT NULL,
@@ -136,13 +150,18 @@ function initDatabase(dbDir) {
     description TEXT DEFAULT '',
     icon TEXT DEFAULT '📋',
     tasks TEXT NOT NULL DEFAULT '[]',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    user_created INTEGER DEFAULT 0,
+    source_type TEXT DEFAULT 'task',
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id) ON DELETE CASCADE
   )`);
 
-  // ─── Settings table (key-value) ───
+  // ─── Settings table (key-value, composite PK for multi-user) ───
   db.exec(`CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY NOT NULL,
-    value TEXT NOT NULL
+    user_id INTEGER NOT NULL DEFAULT 1,
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    PRIMARY KEY (user_id, key)
   )`);
 
   // ─── Saved Filters table ───
@@ -153,7 +172,8 @@ function initDatabase(dbDir) {
     color TEXT DEFAULT '#2563EB',
     filters TEXT NOT NULL DEFAULT '{}',
     position INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id) ON DELETE CASCADE
   )`);
 
   // ─── Due time column (nullable HH:MM) ───
@@ -169,7 +189,11 @@ function initDatabase(dbDir) {
     target INTEGER DEFAULT 1,
     position INTEGER DEFAULT 0,
     archived INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    area_id INTEGER DEFAULT NULL,
+    schedule_days TEXT DEFAULT NULL,
+    preferred_time TEXT DEFAULT NULL,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id) ON DELETE CASCADE
   )`);
   db.exec(`CREATE TABLE IF NOT EXISTS habit_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -217,7 +241,8 @@ function initDatabase(dbDir) {
     title TEXT NOT NULL,
     note TEXT DEFAULT '',
     priority INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id) ON DELETE CASCADE
   )`);
 
   // ─── Time tracking columns on tasks ───
@@ -232,6 +257,7 @@ function initDatabase(dbDir) {
     content TEXT DEFAULT '',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
   )`);
 
@@ -244,7 +270,9 @@ function initDatabase(dbDir) {
     top_accomplishments TEXT DEFAULT '[]',
     reflection TEXT DEFAULT '',
     next_week_priorities TEXT DEFAULT '[]',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    rating INTEGER DEFAULT NULL,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id) ON DELETE CASCADE
   )`);
 
   // ─── Life Areas migration: archived column ───
@@ -267,7 +295,10 @@ function initDatabase(dbDir) {
     parent_id INTEGER REFERENCES lists(id) ON DELETE CASCADE,
     share_token TEXT UNIQUE,
     position INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    view_mode TEXT DEFAULT 'list',
+    board_columns TEXT DEFAULT NULL,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id) ON DELETE CASCADE
   )`);
   try { db.exec('ALTER TABLE lists ADD COLUMN parent_id INTEGER REFERENCES lists(id) ON DELETE CASCADE'); } catch(e) {}
   db.exec(`CREATE TABLE IF NOT EXISTS list_items (
@@ -334,6 +365,9 @@ function initDatabase(dbDir) {
     started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     duration_sec INTEGER DEFAULT 0,
     type TEXT DEFAULT 'pomodoro',
+    ended_at DATETIME,
+    scheduled_at DATETIME,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
   )`);
 
@@ -377,8 +411,10 @@ function initDatabase(dbDir) {
   // ─── Badges table (Phase 5) ───
   db.exec(`CREATE TABLE IF NOT EXISTS badges (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    type TEXT NOT NULL UNIQUE,
-    earned_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    type TEXT NOT NULL,
+    earned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, type)
   )`);
 
   // ─── Automation Rules table ───
@@ -390,12 +426,127 @@ function initDatabase(dbDir) {
     action_type TEXT NOT NULL,
     action_config TEXT DEFAULT '{}',
     enabled INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id) ON DELETE CASCADE,
+    conditions TEXT DEFAULT NULL,
+    actions TEXT DEFAULT NULL,
+    description TEXT DEFAULT '',
+    template_id TEXT DEFAULT NULL,
+    last_fired_at DATETIME DEFAULT NULL,
+    fire_count INTEGER DEFAULT 0,
+    last_schedule_fire TEXT DEFAULT NULL
+  )`);
+  // NOTE: ALTER TABLE for automation_rules columns moved to after runMigrations()
+  // so migration 003 (which recreates the table) runs first.
+
+  // ─── Automation Execution Log ───
+  db.exec(`CREATE TABLE IF NOT EXISTS automation_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rule_id INTEGER REFERENCES automation_rules(id) ON DELETE SET NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    trigger_type TEXT NOT NULL,
+    action_type TEXT DEFAULT '',
+    trigger_context TEXT DEFAULT '{}',
+    actions_executed TEXT DEFAULT '[]',
+    status TEXT DEFAULT 'success',
+    error TEXT DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  try { db.exec('ALTER TABLE automation_log ADD COLUMN status TEXT DEFAULT \'success\''); } catch {}
+  try { db.exec('ALTER TABLE automation_log ADD COLUMN action_type TEXT DEFAULT \'\''); } catch {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_automation_log_user_date ON automation_log(user_id, created_at DESC)'); } catch {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_automation_log_rule ON automation_log(rule_id)'); } catch {}
+
+  // ─── Automation Templates ───
+  db.exec(`CREATE TABLE IF NOT EXISTS automation_templates (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    category TEXT NOT NULL,
+    icon TEXT DEFAULT '⚡',
+    trigger_type TEXT NOT NULL,
+    trigger_config TEXT DEFAULT '{}',
+    conditions TEXT DEFAULT NULL,
+    actions TEXT NOT NULL,
+    customizable_fields TEXT DEFAULT '[]',
+    sort_order INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
-  // ─── User-scoping: add user_id to all data tables ───
+  // ─── Automation Suggestions ───
+  db.exec(`CREATE TABLE IF NOT EXISTS automation_suggestions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    suggestion_type TEXT NOT NULL,
+    template_id TEXT DEFAULT NULL,
+    reason TEXT DEFAULT '',
+    context TEXT DEFAULT '{}',
+    dismissed INTEGER DEFAULT 0,
+    dismissed_permanently INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_automation_suggestions_user ON automation_suggestions(user_id, dismissed)'); } catch {}
+
+  // ─── Seed automation templates ───
+  const tmplCount = db.prepare('SELECT COUNT(*) as c FROM automation_templates').get();
+  if (tmplCount.c === 0) {
+    const t = db.prepare('INSERT OR IGNORE INTO automation_templates (id,name,description,category,icon,trigger_type,trigger_config,conditions,actions,customizable_fields,sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
+    t.run('auto-triage-overdue','Auto-Triage Overdue Tasks','Escalate tasks overdue for 3+ days to Critical and add to My Day','tasks','✅','task_overdue','{}',
+      JSON.stringify({match:'all',rules:[{field:'task.days_overdue',operator:'gte',value:3}]}),
+      JSON.stringify([{type:'set_priority',config:{priority:3}},{type:'add_to_myday',config:{}}]),
+      '[]', 1);
+    t.run('followup-completed','Follow-Up on Completed Work','Create a review task when high-priority tasks are completed','tasks','✅','task_completed','{}',
+      JSON.stringify({match:'all',rules:[{field:'task.priority',operator:'gte',value:2}]}),
+      JSON.stringify([{type:'create_followup',config:{title:'Review outcome: {{task.title}}',due:'+2d'}}]),
+      '["conditions.rules[0].value"]', 2);
+    t.run('quick-win-radar','Quick Win Radar','Tag short tasks as quick-wins and add to My Day','tasks','⚡','task_created','{}',
+      JSON.stringify({match:'all',rules:[{field:'task.estimated_minutes',operator:'lte',value:15},{field:'task.estimated_minutes',operator:'gt',value:0}]}),
+      JSON.stringify([{type:'add_tag',config:{tag_name:'quick-win'}},{type:'add_to_myday',config:{}}]),
+      '[]', 3);
+    t.run('morning-focus-setup','Morning Focus Setup','Start each weekday with a planning task','routines','🌅','schedule_daily',
+      JSON.stringify({time:'08:00',days:[1,2,3,4,5]}), null,
+      JSON.stringify([{type:'create_followup',config:{title:'Morning planning',priority:2,due:'today'}},{type:'send_toast',config:{message:'Good morning! Time to plan your day. ☀️',type:'info'}}]),
+      '["trigger_config.time","trigger_config.days"]', 4);
+    t.run('evening-wind-down','Evening Wind-Down','Review your day and plan tomorrow','routines','🌙','schedule_daily',
+      JSON.stringify({time:'21:00',days:[0,1,2,3,4,5,6]}), null,
+      JSON.stringify([{type:'create_followup',config:{title:'Review today + plan tomorrow',priority:1,due:'today'}}]),
+      '["trigger_config.time"]', 5);
+    t.run('monday-weekly-review','Monday Weekly Review','Weekly review to stay on track','routines','📅','schedule_weekly',
+      JSON.stringify({day:1,time:'09:00'}), null,
+      JSON.stringify([{type:'create_followup',config:{title:'Weekly review',priority:2,due:'today'}},{type:'send_toast',config:{message:'Time for your weekly review! 📋',type:'info'}}]),
+      '["trigger_config.day","trigger_config.time"]', 6);
+    t.run('streak-celebration','Streak Celebration','Get a toast when you hit a 7-day habit streak','habits','🔥','habit_streak',
+      JSON.stringify({streak:7}), null,
+      JSON.stringify([{type:'send_toast',config:{message:'{{streak}}-day streak on {{habit.name}}! 🔥 Keep it up!',type:'success'}}]),
+      '["trigger_config.streak"]', 7);
+    t.run('missed-habit-recovery','Missed Habit Recovery','Create a recovery task when you miss a habit','habits','💪','habit_missed','{}', null,
+      JSON.stringify([{type:'create_followup',config:{title:'Get back on track: {{habit.name}}',priority:2,due:'today'}},{type:'send_toast',config:{message:'Don\'t break the chain! Get back to {{habit.name}} today.',type:'warning'}}]),
+      '[]', 8);
+    t.run('post-focus-followup','Post-Focus Follow-Up','Remind yourself to take a break after deep work','focus','🎯','focus_completed','{}',
+      JSON.stringify({match:'all',rules:[{field:'focus.duration_sec',operator:'gte',value:1500}]}),
+      JSON.stringify([{type:'send_toast',config:{message:'Great focus session! Take a 5-minute break. 🧘',type:'success'}}]),
+      '[]', 9);
+    t.run('habit-task-bridge','Habit-Task Bridge','Auto-log a habit when you complete related tasks','habits','🔗','task_completed','{}', null,
+      JSON.stringify([{type:'log_habit',config:{habit_id:null}}]),
+      '["actions[0].config.habit_id","conditions"]', 10);
+    t.run('celebrate-milestone','Celebrate Goal Milestones','Get notified when a goal reaches 50% or more','goals','🏆','goal_progress',
+      JSON.stringify({threshold:50}), null,
+      JSON.stringify([{type:'send_toast',config:{message:'{{percentage}}% done on {{goal.title}}! 🎉',type:'success'}}]),
+      '["trigger_config.threshold"]', 11);
+    t.run('stale-task-alert','Stale Task Alert','Escalate tasks that haven\'t been touched in 7 days','tasks','⏰','task_stale',
+      JSON.stringify({days:7}), null,
+      JSON.stringify([{type:'set_priority',config:{priority:2}},{type:'send_toast',config:{message:'Task hasn\'t moved in a week: {{task.title}}',type:'warning'}}]),
+      '["trigger_config.days"]', 12);
+    t.run('goal-sprint-finisher','Goal Sprint Finisher','Push to finish when a goal is 90% done','goals','🚀','goal_progress',
+      JSON.stringify({threshold:90}), null,
+      JSON.stringify([{type:'send_toast',config:{message:'Almost there! {{goal.title}} is {{percentage}}% done! 🚀',type:'success'}}]),
+      '["trigger_config.threshold"]', 13);
+    t.run('focus-session-streak','Focus Session Streak','Celebrate multiple focus sessions in one day','focus','🧠','focus_streak',
+      JSON.stringify({count:3}), null,
+      JSON.stringify([{type:'send_toast',config:{message:'3 focus sessions today! You\'re in the zone. 🧠',type:'success'}}]),
+      '[]', 14);
+  }
   const userIdTables = [
-    'life_areas', 'goals', 'tasks', 'tags', 'habits', 'saved_filters',
     'inbox', 'notes', 'weekly_reviews', 'lists', 'task_templates',
     'badges', 'automation_rules', 'focus_sessions', 'settings'
   ];
@@ -412,7 +563,7 @@ function initDatabase(dbDir) {
   // ─── Daily Reviews table ───
   db.exec(`CREATE TABLE IF NOT EXISTS daily_reviews (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL DEFAULT 1,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id) ON DELETE CASCADE,
     date TEXT NOT NULL,
     note TEXT DEFAULT '',
     completed_count INTEGER DEFAULT 0,
@@ -1108,9 +1259,37 @@ function initDatabase(dbDir) {
     logger.error({ err: e }, 'Startup integrity check failed');
   }
 
+  // ─── Audit Log table (also created by audit service, but needed here for migration 003) ───
+  db.exec(`CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,
+    resource TEXT,
+    resource_id TEXT,
+    ip TEXT,
+    ua TEXT,
+    detail TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id)'); } catch(e) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at)'); } catch(e) {}
+
   // ─── Run SQL migrations ───
   const runMigrations = require('./migrate');
   runMigrations(db);
+
+  // ─── Post-migration column additions (idempotent) ───
+  // Must run AFTER migrations since migration 003 recreates automation_rules without these columns
+  try { db.exec('ALTER TABLE automation_rules ADD COLUMN conditions TEXT DEFAULT NULL'); } catch {}
+  try { db.exec('ALTER TABLE automation_rules ADD COLUMN actions TEXT DEFAULT NULL'); } catch {}
+  try { db.exec("ALTER TABLE automation_rules ADD COLUMN description TEXT DEFAULT ''"); } catch {}
+  try { db.exec('ALTER TABLE automation_rules ADD COLUMN template_id TEXT DEFAULT NULL'); } catch {}
+  try { db.exec('ALTER TABLE automation_rules ADD COLUMN last_fired_at DATETIME DEFAULT NULL'); } catch {}
+  try { db.exec('ALTER TABLE automation_rules ADD COLUMN fire_count INTEGER DEFAULT 0'); } catch {}
+  try { db.exec('ALTER TABLE automation_rules ADD COLUMN last_schedule_fire TEXT DEFAULT NULL'); } catch {}
+  try { db.exec("ALTER TABLE automation_log ADD COLUMN status TEXT DEFAULT 'success'"); } catch {}
+  try { db.exec("ALTER TABLE automation_log ADD COLUMN action_type TEXT DEFAULT ''"); } catch {}
+  try { db.exec("ALTER TABLE automation_suggestions ADD COLUMN reason TEXT DEFAULT ''"); } catch {}
 
   return { db, rebuildSearchIndex };
 }

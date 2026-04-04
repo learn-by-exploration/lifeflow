@@ -56,10 +56,22 @@ router.post('/api/tasks/:taskId/subtasks', (req, res) => {
   if (!Number.isInteger(taskId)) return res.status(400).json({ error: 'Invalid ID' });
   const tOwner2 = db.prepare('SELECT id FROM tasks WHERE id=? AND user_id=?').get(taskId, req.userId);
   if (!tOwner2) return res.status(404).json({ error: 'Not found' });
-  const { title, note, done } = req.body;
+  const { title, note, done, parent_id } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'Title required' });
+  // Validate parent_id for nesting (max 3 levels)
+  if (parent_id !== undefined && parent_id !== null) {
+    const pid = Number(parent_id);
+    if (!Number.isInteger(pid)) return res.status(400).json({ error: 'Invalid parent_id' });
+    const parent = db.prepare('SELECT id, parent_id FROM subtasks WHERE id=? AND task_id=?').get(pid, taskId);
+    if (!parent) return res.status(400).json({ error: 'Parent subtask not found' });
+    // Check depth: parent's parent must not have a parent (max 3 levels)
+    if (parent.parent_id) {
+      const grandparent = db.prepare('SELECT parent_id FROM subtasks WHERE id=?').get(parent.parent_id);
+      if (grandparent && grandparent.parent_id) return res.status(400).json({ error: 'Max 3 levels of nesting' });
+    }
+  }
   const pos = getNextPosition('subtasks', 'task_id', taskId);
-  const r = db.prepare('INSERT INTO subtasks (task_id,title,note,done,position) VALUES (?,?,?,?,?)').run(taskId, title.trim(), note || '', done ? 1 : 0, pos);
+  const r = db.prepare('INSERT INTO subtasks (task_id,title,note,done,position,parent_id) VALUES (?,?,?,?,?,?)').run(taskId, title.trim(), note || '', done ? 1 : 0, pos, parent_id || null);
   res.status(201).json(db.prepare('SELECT * FROM subtasks WHERE id=?').get(r.lastInsertRowid));
 });
 // Subtask reorder (must be before :id route)
@@ -78,8 +90,14 @@ router.put('/api/subtasks/reorder', (req, res) => {
 router.put('/api/subtasks/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
-  const { title, done, note } = req.body;
-  db.prepare('UPDATE subtasks SET title=COALESCE(?,title),done=COALESCE(?,done),note=COALESCE(?,note) WHERE id=? AND EXISTS (SELECT 1 FROM tasks WHERE tasks.id=subtasks.task_id AND tasks.user_id=?)').run(title||null, done!==undefined?(done?1:0):null, note!==undefined?note:null, id, req.userId);
+  const { title, done, note, parent_id } = req.body;
+  if (parent_id !== undefined) {
+    if (parent_id !== null) {
+      const pid = Number(parent_id);
+      if (pid === id) return res.status(400).json({ error: 'Cannot be own parent' });
+    }
+  }
+  db.prepare('UPDATE subtasks SET title=COALESCE(?,title),done=COALESCE(?,done),note=COALESCE(?,note),parent_id=COALESCE(?,parent_id) WHERE id=? AND EXISTS (SELECT 1 FROM tasks WHERE tasks.id=subtasks.task_id AND tasks.user_id=?)').run(title||null, done!==undefined?(done?1:0):null, note!==undefined?note:null, parent_id!==undefined?parent_id:null, id, req.userId);
   const s = db.prepare('SELECT s.* FROM subtasks s JOIN tasks t ON s.task_id=t.id WHERE s.id=? AND t.user_id=?').get(id, req.userId);
   if (!s) return res.status(404).json({ error: 'Not found' });
   res.json(s);

@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { isValidColor } = require('../middleware/validate');
 module.exports = function(deps) {
-  const { db, enrichTask, enrichTasks, getNextPosition } = deps;
+  const { db, enrichTask, enrichTasks, getNextPosition, automationEngine } = deps;
   const router = Router();
 
 // ─── Settings Constants (local to this module) ───
@@ -193,6 +193,184 @@ router.post('/api/badges/check', (req, res) => {
     }
   }
   res.json({ earned });
+});
+
+// ─── Gamification: XP System ───
+const XP_AMOUNTS = { task_complete: 10, subtask_complete: 3, focus_session: 5, habit_log: 5, streak_bonus: 2, review_complete: 15 };
+
+router.get('/api/gamification/stats', (req, res) => {
+  const user = db.prepare('SELECT xp_total, xp_level, daily_goal, weekly_goal FROM users WHERE id=?').get(req.userId) || {};
+  const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const todayDone = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='done' AND date(completed_at)=? AND user_id=?").get(today, req.userId)?.c || 0;
+  const weekDone = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='done' AND date(completed_at)>=? AND user_id=?").get(weekAgo, req.userId)?.c || 0;
+  const recentXp = db.prepare("SELECT amount, reason, created_at FROM user_xp WHERE user_id=? ORDER BY created_at DESC LIMIT 20").all(req.userId);
+  const level = user.xp_level || 1;
+  const xpForNext = level * 100; // 100 XP per level
+  res.json({
+    xp_total: user.xp_total || 0, level, xp_for_next_level: xpForNext,
+    daily_goal: user.daily_goal || 5, daily_done: todayDone,
+    weekly_goal: user.weekly_goal || 25, weekly_done: weekDone,
+    recent_xp: recentXp
+  });
+});
+
+router.post('/api/gamification/award', (req, res) => {
+  const { reason } = req.body;
+  if (!reason || !XP_AMOUNTS[reason]) return res.status(400).json({ error: 'Invalid reason' });
+  const amount = XP_AMOUNTS[reason];
+  db.prepare('INSERT INTO user_xp (user_id, amount, reason) VALUES (?,?,?)').run(req.userId, amount, reason);
+  const newTotal = (db.prepare('SELECT xp_total FROM users WHERE id=?').get(req.userId)?.xp_total || 0) + amount;
+  const newLevel = Math.floor(newTotal / 100) + 1;
+  db.prepare('UPDATE users SET xp_total=?, xp_level=? WHERE id=?').run(newTotal, newLevel, req.userId);
+  const leveledUp = newLevel > Math.floor((newTotal - amount) / 100) + 1;
+  res.json({ xp_gained: amount, xp_total: newTotal, level: newLevel, leveled_up: leveledUp });
+});
+
+router.put('/api/gamification/goals', (req, res) => {
+  const { daily_goal, weekly_goal } = req.body;
+  if (daily_goal !== undefined) {
+    const v = Number(daily_goal);
+    if (!Number.isInteger(v) || v < 1 || v > 100) return res.status(400).json({ error: 'daily_goal must be 1-100' });
+    db.prepare('UPDATE users SET daily_goal=? WHERE id=?').run(v, req.userId);
+  }
+  if (weekly_goal !== undefined) {
+    const v = Number(weekly_goal);
+    if (!Number.isInteger(v) || v < 1 || v > 500) return res.status(400).json({ error: 'weekly_goal must be 1-500' });
+    db.prepare('UPDATE users SET weekly_goal=? WHERE id=?').run(v, req.userId);
+  }
+  res.json({ ok: true });
+});
+
+// ─── File Attachments ───
+const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
+const UPLOAD_DIR = path.join(process.env.DB_DIR || process.cwd(), 'uploads');
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const ALLOWED_TYPES = ['image/jpeg','image/png','image/gif','image/webp','application/pdf','text/plain','application/json','text/csv','text/markdown'];
+
+router.get('/api/tasks/:id/attachments', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const task = db.prepare('SELECT id FROM tasks WHERE id=? AND user_id=?').get(id, req.userId);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+  res.json(db.prepare('SELECT id, original_name, mime_type, size_bytes, created_at FROM task_attachments WHERE task_id=? ORDER BY created_at DESC').all(id));
+});
+
+router.post('/api/tasks/:id/attachments', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const task = db.prepare('SELECT id FROM tasks WHERE id=? AND user_id=?').get(id, req.userId);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+  // Check attachment count limit per task
+  const count = db.prepare('SELECT COUNT(*) as c FROM task_attachments WHERE task_id=?').get(id).c;
+  if (count >= 20) return res.status(400).json({ error: 'Max 20 attachments per task' });
+
+  const contentType = req.headers['content-type'] || '';
+  if (!contentType.includes('multipart/form-data') && !contentType.includes('application/octet-stream')) {
+    return res.status(400).json({ error: 'File upload required (multipart/form-data)' });
+  }
+
+  // Simple raw body upload handler (no multer dependency)
+  const chunks = [];
+  let size = 0;
+  req.on('data', chunk => {
+    size += chunk.length;
+    if (size > MAX_FILE_SIZE) { req.destroy(); return; }
+    chunks.push(chunk);
+  });
+  req.on('end', () => {
+    if (size > MAX_FILE_SIZE) return res.status(400).json({ error: 'File too large (max 10 MB)' });
+    if (size === 0) return res.status(400).json({ error: 'Empty file' });
+
+    const originalName = req.headers['x-filename'] || 'upload';
+    const mimeType = req.headers['x-mime-type'] || 'application/octet-stream';
+    if (!ALLOWED_TYPES.includes(mimeType)) return res.status(400).json({ error: 'File type not allowed' });
+
+    // Sanitize filename
+    const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 200);
+    const ext = path.extname(safeName) || '';
+    const filename = crypto.randomUUID() + ext;
+
+    if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    fs.writeFileSync(path.join(UPLOAD_DIR, filename), Buffer.concat(chunks));
+
+    const r = db.prepare('INSERT INTO task_attachments (task_id, user_id, filename, original_name, mime_type, size_bytes) VALUES (?,?,?,?,?,?)')
+      .run(id, req.userId, filename, safeName, mimeType, size);
+    res.status(201).json({ id: r.lastInsertRowid, filename, original_name: safeName, mime_type: mimeType, size_bytes: size });
+  });
+});
+
+router.delete('/api/tasks/:id/attachments/:attachId', (req, res) => {
+  const id = Number(req.params.id);
+  const attachId = Number(req.params.attachId);
+  if (!Number.isInteger(id) || !Number.isInteger(attachId)) return res.status(400).json({ error: 'Invalid ID' });
+  const att = db.prepare('SELECT filename FROM task_attachments WHERE id=? AND task_id=? AND user_id=?').get(attachId, id, req.userId);
+  if (!att) return res.status(404).json({ error: 'Not found' });
+  db.prepare('DELETE FROM task_attachments WHERE id=?').run(attachId);
+  // Clean up file
+  try { fs.unlinkSync(path.join(UPLOAD_DIR, att.filename)); } catch(e) {}
+  res.json({ ok: true });
+});
+
+router.get('/api/attachments/:filename', (req, res) => {
+  const filename = req.params.filename;
+  if (!/^[a-f0-9-]+\.\w+$/i.test(filename)) return res.status(400).json({ error: 'Invalid filename' });
+  const att = db.prepare('SELECT * FROM task_attachments WHERE filename=? AND user_id=?').get(filename, req.userId);
+  if (!att) return res.status(404).json({ error: 'Not found' });
+  const filePath = path.join(UPLOAD_DIR, filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+  res.setHeader('Content-Type', att.mime_type);
+  res.setHeader('Content-Disposition', `inline; filename="${att.original_name}"`);
+  res.sendFile(filePath);
+});
+
+// ─── Custom Statuses ───
+router.get('/api/goals/:goalId/statuses', (req, res) => {
+  const goalId = Number(req.params.goalId);
+  if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'Invalid ID' });
+  const goal = db.prepare('SELECT id FROM goals WHERE id=? AND user_id=?').get(goalId, req.userId);
+  if (!goal) return res.status(404).json({ error: 'Not found' });
+  res.json(db.prepare('SELECT * FROM custom_statuses WHERE goal_id=? ORDER BY position').all(goalId));
+});
+
+router.post('/api/goals/:goalId/statuses', (req, res) => {
+  const goalId = Number(req.params.goalId);
+  if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'Invalid ID' });
+  const goal = db.prepare('SELECT id FROM goals WHERE id=? AND user_id=?').get(goalId, req.userId);
+  if (!goal) return res.status(404).json({ error: 'Not found' });
+  const { name, color, is_done } = req.body;
+  if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  if (name.trim().length > 50) return res.status(400).json({ error: 'Name too long (max 50)' });
+  const count = db.prepare('SELECT COUNT(*) as c FROM custom_statuses WHERE goal_id=?').get(goalId).c;
+  if (count >= 10) return res.status(400).json({ error: 'Max 10 custom statuses per goal' });
+  const pos = count;
+  const r = db.prepare('INSERT INTO custom_statuses (goal_id, name, color, position, is_done) VALUES (?,?,?,?,?)')
+    .run(goalId, name.trim(), color || '#6B7280', pos, is_done ? 1 : 0);
+  res.status(201).json(db.prepare('SELECT * FROM custom_statuses WHERE id=?').get(r.lastInsertRowid));
+});
+
+router.put('/api/goals/:goalId/statuses/:statusId', (req, res) => {
+  const goalId = Number(req.params.goalId);
+  const statusId = Number(req.params.statusId);
+  if (!Number.isInteger(goalId) || !Number.isInteger(statusId)) return res.status(400).json({ error: 'Invalid ID' });
+  const st = db.prepare('SELECT cs.* FROM custom_statuses cs JOIN goals g ON cs.goal_id=g.id WHERE cs.id=? AND cs.goal_id=? AND g.user_id=?').get(statusId, goalId, req.userId);
+  if (!st) return res.status(404).json({ error: 'Not found' });
+  const { name, color, position, is_done } = req.body;
+  if (name !== undefined && (!name || typeof name !== 'string' || !name.trim())) return res.status(400).json({ error: 'Name must be non-empty' });
+  db.prepare('UPDATE custom_statuses SET name=COALESCE(?,name), color=COALESCE(?,color), position=COALESCE(?,position), is_done=COALESCE(?,is_done) WHERE id=?')
+    .run(name?.trim() || null, color || null, position !== undefined ? position : null, is_done !== undefined ? (is_done ? 1 : 0) : null, statusId);
+  res.json(db.prepare('SELECT * FROM custom_statuses WHERE id=?').get(statusId));
+});
+
+router.delete('/api/goals/:goalId/statuses/:statusId', (req, res) => {
+  const goalId = Number(req.params.goalId);
+  const statusId = Number(req.params.statusId);
+  if (!Number.isInteger(goalId) || !Number.isInteger(statusId)) return res.status(400).json({ error: 'Invalid ID' });
+  const result = db.prepare('DELETE FROM custom_statuses WHERE id=? AND goal_id=? AND goal_id IN (SELECT id FROM goals WHERE user_id=?)').run(statusId, goalId, req.userId);
+  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
 });
 
 // ─── Demo Mode ───
@@ -539,6 +717,23 @@ router.post('/api/habits/:id/log', (req, res) => {
     db.prepare('INSERT INTO habit_logs (habit_id,date,count) VALUES (?,?,1)').run(id, date);
   }
   const log = db.prepare('SELECT * FROM habit_logs WHERE habit_id=? AND date=?').get(id, date);
+  // Emit habit_logged automation event
+  if (automationEngine) {
+    // Calculate current streak
+    const logs = db.prepare("SELECT date FROM habit_logs WHERE habit_id=? AND date <= ? ORDER BY date DESC LIMIT 366").all(id, date);
+    let streak = 0;
+    const d = new Date(date);
+    for (const l of logs) {
+      const expected = new Date(d);
+      expected.setDate(expected.getDate() - streak);
+      if (l.date === expected.toISOString().slice(0, 10)) streak++;
+      else break;
+    }
+    automationEngine.emit('habit_logged', { userId: req.userId, habit, date, count: log.count, streak });
+    if (streak > 0 && (streak === 7 || streak === 14 || streak === 21 || streak === 30 || streak === 60 || streak === 90 || streak === 365 || streak % 100 === 0)) {
+      automationEngine.emit('habit_streak', { userId: req.userId, habit, streak, date });
+    }
+  }
   res.json(log);
 });
 // Undo a habit log
@@ -646,9 +841,93 @@ router.get('/api/planner/:date', (req, res) => {
   res.json({ scheduled, unscheduled });
 });
 
-  // ─── AI BYOK ───
-  const createAiService = require('../services/ai');
+  // ─── AI Service ───
+  const createAiService = require('../services/ai/index');
   const aiService = createAiService(db);
+
+  // AI error handler helper
+  function aiError(res, err) {
+    if (err.message.includes('API key') || err.message.includes('not configured')) return res.status(400).json({ error: err.message });
+    if (err.message.includes('rate limit')) return res.status(429).json({ error: err.message });
+    res.status(500).json({ error: 'AI request failed' });
+  }
+
+  // ─── AI Settings & Key Management ───
+
+  router.get('/api/ai/status', (req, res) => {
+    res.json(aiService.getStatus(req.userId));
+  });
+
+  router.post('/api/ai/key', (req, res) => {
+    try {
+      const { api_key } = req.body;
+      if (!api_key || typeof api_key !== 'string' || api_key.length < 8 || api_key.length > 500) {
+        return res.status(400).json({ error: 'Invalid API key' });
+      }
+      const encrypted = aiService.encrypt(api_key);
+      aiService.setSetting(req.userId, 'ai_api_key', encrypted);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to save API key: ' + err.message });
+    }
+  });
+
+  router.delete('/api/ai/key', (req, res) => {
+    aiService.setSetting(req.userId, 'ai_api_key', '');
+    res.json({ ok: true });
+  });
+
+  router.post('/api/ai/settings', (req, res) => {
+    const allowed = ['ai_provider', 'ai_base_url', 'ai_model', 'ai_transparency_mode', 'ai_data_minimization'];
+    const updates = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) {
+        const val = String(req.body[key]).slice(0, 500);
+        aiService.setSetting(req.userId, key, val);
+        updates[key] = val;
+      }
+    }
+    res.json({ ok: true, updated: updates });
+  });
+
+  router.get('/api/ai/settings', (req, res) => {
+    const keys = ['ai_provider', 'ai_base_url', 'ai_model', 'ai_transparency_mode', 'ai_data_minimization'];
+    const settings = {};
+    for (const key of keys) {
+      settings[key] = aiService.getSetting(req.userId, key) || '';
+    }
+    settings.has_api_key = !!aiService.getUserApiKey(req.userId);
+    res.json(settings);
+  });
+
+  router.post('/api/ai/test', async (req, res) => {
+    try {
+      const result = await aiService.testConnection(req.userId);
+      res.json(result);
+    } catch (err) { aiError(res, err); }
+  });
+
+  // ─── AI History & Stats ───
+
+  router.get('/api/ai/history', (req, res) => {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const offset = parseInt(req.query.offset) || 0;
+    res.json(aiService.getHistory(req.userId, limit, offset));
+  });
+
+  router.get('/api/ai/stats', (req, res) => {
+    res.json(aiService.getUsageStats(req.userId));
+  });
+
+  // ─── AI Pre-flight (transparency) ───
+
+  router.post('/api/ai/preflight', (req, res) => {
+    const { feature, data } = req.body;
+    if (!feature) return res.status(400).json({ error: 'feature is required' });
+    res.json(aiService.getPreFlight(req.userId, feature, data || {}));
+  });
+
+  // ─── Phase 2: Backward-compat stubs + new AI endpoints ───
 
   router.post('/api/ai/suggest', async (req, res) => {
     try {
@@ -656,10 +935,7 @@ router.get('/api/planner/:date', (req, res) => {
       if (!task_title) return res.status(400).json({ error: 'task_title is required' });
       const result = await aiService.suggest(req.userId, task_title);
       res.json(result);
-    } catch (err) {
-      if (err.message.includes('API key')) return res.status(400).json({ error: 'AI API key not configured. Set your key in Settings.' });
-      res.status(500).json({ error: 'AI request failed' });
-    }
+    } catch (err) { aiError(res, err); }
   });
 
   router.post('/api/ai/schedule', async (req, res) => {
@@ -667,10 +943,239 @@ router.get('/api/planner/:date', (req, res) => {
       const { task_ids } = req.body;
       const result = await aiService.schedule(req.userId, task_ids || []);
       res.json(result);
-    } catch (err) {
-      if (err.message.includes('API key')) return res.status(400).json({ error: 'AI API key not configured. Set your key in Settings.' });
-      res.status(500).json({ error: 'AI request failed' });
-    }
+    } catch (err) { aiError(res, err); }
+  });
+
+  router.post('/api/ai/capture', async (req, res) => {
+    try {
+      const { text } = req.body;
+      if (!text || typeof text !== 'string') return res.status(400).json({ error: 'text is required' });
+      if (text.length > 1000) return res.status(400).json({ error: 'Text too long (max 1000 chars)' });
+      // Build context from user's data
+      const areas = db.prepare('SELECT id, name FROM life_areas WHERE user_id = ? AND archived = 0').all(req.userId);
+      const goals = db.prepare('SELECT id, title FROM goals WHERE user_id = ? AND status != ?').all(req.userId, 'completed');
+      const tags = db.prepare('SELECT id, name FROM tags WHERE user_id = ?').all(req.userId);
+      const result = await aiService.capture(req.userId, text, { areas, goals, tags });
+      res.json(result);
+    } catch (err) { aiError(res, err); }
+  });
+
+  router.post('/api/ai/classify', async (req, res) => {
+    try {
+      const { title, note } = req.body;
+      if (!title) return res.status(400).json({ error: 'title is required' });
+      const areas = db.prepare('SELECT id, name FROM life_areas WHERE user_id = ? AND archived = 0').all(req.userId);
+      const goals = db.prepare('SELECT g.id, g.title, a.name as area FROM goals g LEFT JOIN life_areas a ON g.area_id = a.id WHERE g.user_id = ? AND g.status != ?').all(req.userId, 'completed');
+      const tags = db.prepare('SELECT id, name FROM tags WHERE user_id = ?').all(req.userId);
+      const result = await aiService.classify(req.userId, { title, note }, { areas, goals, tags });
+      res.json(result);
+    } catch (err) { aiError(res, err); }
+  });
+
+  router.post('/api/ai/decompose', async (req, res) => {
+    try {
+      const { goal_id } = req.body;
+      if (!goal_id) return res.status(400).json({ error: 'goal_id is required' });
+      const goal = db.prepare('SELECT g.*, a.name as area_name FROM goals g LEFT JOIN life_areas a ON g.area_id = a.id WHERE g.id = ? AND g.user_id = ?').get(goal_id, req.userId);
+      if (!goal) return res.status(404).json({ error: 'Goal not found' });
+      const existingTasks = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE user_id = ? AND status != 'done'").get(req.userId).c;
+      const weeklyRate = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE user_id = ? AND completed_at >= datetime('now', '-7 days')").get(req.userId).c;
+      const result = await aiService.decompose(req.userId, goal, { area: { name: goal.area_name }, existingTasks, completionRate: weeklyRate });
+      res.json(result);
+    } catch (err) { aiError(res, err); }
+  });
+
+  router.post('/api/ai/plan-day', async (req, res) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      let tasks = db.prepare("SELECT t.*, g.title as goal_title FROM tasks t LEFT JOIN goals g ON t.goal_id = g.id WHERE t.user_id = ? AND t.status != 'done' AND (t.due_date = ? OR t.my_day = 1 OR t.status = 'doing')").all(req.userId, today);
+      tasks = enrichTasks(tasks);
+      if (!tasks.length) return res.json({ data: { plan: [], summary: 'No tasks for today!' } });
+      const completedToday = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE user_id = ? AND completed_at >= ?").get(req.userId, today).c;
+      const habits = db.prepare("SELECT name FROM habits WHERE user_id = ? AND archived = 0").all(req.userId);
+      const result = await aiService.planDay(req.userId, tasks, {
+        completedToday,
+        habitsDue: habits.map(h => h.name),
+        timeOfDay: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      });
+      res.json(result);
+    } catch (err) { aiError(res, err); }
+  });
+
+  router.post('/api/ai/next-task', async (req, res) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      let tasks = db.prepare("SELECT t.*, g.title as goal_title FROM tasks t LEFT JOIN goals g ON t.goal_id = g.id WHERE t.user_id = ? AND t.status != 'done' AND (t.due_date <= ? OR t.my_day = 1 OR t.status = 'doing' OR t.priority >= 2) LIMIT 20").all(req.userId, today);
+      tasks = enrichTasks(tasks);
+      if (!tasks.length) return res.json({ data: { task_id: null, reason: 'No active tasks — you\'re all caught up!' } });
+      const completedToday = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE user_id = ? AND completed_at >= ?").get(req.userId, today).c;
+      const result = await aiService.nextTask(req.userId, tasks, {
+        completedToday,
+        timeOfDay: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      });
+      res.json(result);
+    } catch (err) { aiError(res, err); }
+  });
+
+  router.post('/api/ai/review-week', async (req, res) => {
+    try {
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+      const completed = db.prepare("SELECT t.title, t.priority, a.name as area FROM tasks t LEFT JOIN goals g ON t.goal_id = g.id LEFT JOIN life_areas a ON g.area_id = a.id WHERE t.user_id = ? AND t.completed_at >= ?").all(req.userId, weekAgo);
+      const created = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE user_id = ? AND created_at >= ?").get(req.userId, weekAgo).c;
+      const overdue = db.prepare("SELECT title FROM tasks WHERE user_id = ? AND status != 'done' AND due_date < ?").all(req.userId, new Date().toISOString().split('T')[0]);
+      const focusMinutes = db.prepare("SELECT COALESCE(SUM(duration_sec), 0) / 60 as m FROM focus_sessions WHERE user_id = ? AND started_at >= ?").get(req.userId, weekAgo).m;
+      const habitStats = db.prepare("SELECT h.name, h.target, COUNT(hl.id) as logged FROM habits h LEFT JOIN habit_logs hl ON hl.habit_id = h.id AND hl.date >= ? WHERE h.user_id = ? AND h.archived = 0 GROUP BY h.id").all(weekAgo, req.userId);
+      // Area breakdown
+      const areaRows = db.prepare("SELECT COALESCE(a.name, 'Uncategorized') as name, COUNT(*) as c FROM tasks t LEFT JOIN goals g ON t.goal_id = g.id LEFT JOIN life_areas a ON g.area_id = a.id WHERE t.user_id = ? AND t.completed_at >= ? GROUP BY a.name").all(req.userId, weekAgo);
+      const areaBreakdown = {};
+      areaRows.forEach(r => { areaBreakdown[r.name] = r.c; });
+      // Prior review
+      const prior = db.prepare("SELECT reflection, next_week_priorities FROM weekly_reviews WHERE user_id = ? ORDER BY week_start DESC LIMIT 1").get(req.userId);
+      const result = await aiService.reviewWeek(req.userId, { completed, created, overdue, focusMinutes, habitStats, areaBreakdown }, {
+        priorReflection: prior?.reflection,
+        priorPriorities: prior?.next_week_priorities,
+      });
+      res.json(result);
+    } catch (err) { aiError(res, err); }
+  });
+
+  // ─── Phase 3: Engagement ───
+
+  router.post('/api/ai/year-in-review', async (req, res) => {
+    try {
+      const year = req.body.year || new Date().getFullYear();
+      const yearStart = `${year}-01-01`;
+      const yearEnd = `${year}-12-31`;
+      const tasksCompleted = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE user_id = ? AND completed_at BETWEEN ? AND ?").get(req.userId, yearStart, yearEnd).c;
+      const goalsAchieved = db.prepare("SELECT COUNT(*) as c FROM goals WHERE user_id = ? AND status = 'completed' AND created_at BETWEEN ? AND ?").get(req.userId, yearStart, yearEnd).c;
+      const focusHours = db.prepare("SELECT COALESCE(SUM(duration_sec), 0) / 3600.0 as h FROM focus_sessions WHERE user_id = ? AND started_at BETWEEN ? AND ?").get(req.userId, yearStart, yearEnd).h;
+      const habitLogs = db.prepare("SELECT COUNT(*) as c FROM habit_logs hl JOIN habits h ON hl.habit_id = h.id WHERE h.user_id = ? AND hl.date BETWEEN ? AND ?").get(req.userId, yearStart, yearEnd).c;
+      // Monthly breakdown
+      const monthly = db.prepare("SELECT strftime('%m', completed_at) as month, COUNT(*) as c FROM tasks WHERE user_id = ? AND completed_at BETWEEN ? AND ? GROUP BY month ORDER BY month").all(req.userId, yearStart, yearEnd);
+      // Area distribution
+      const areas = db.prepare("SELECT COALESCE(a.name, 'Other') as name, COUNT(*) as c FROM tasks t LEFT JOIN goals g ON t.goal_id = g.id LEFT JOIN life_areas a ON g.area_id = a.id WHERE t.user_id = ? AND t.completed_at BETWEEN ? AND ? GROUP BY a.name ORDER BY c DESC").all(req.userId, yearStart, yearEnd);
+      const result = await aiService.yearInReview(req.userId, { year, tasksCompleted, goalsAchieved, focusHours: Math.round(focusHours * 10) / 10, habitLogs, monthly, areas });
+      res.json(result);
+    } catch (err) { aiError(res, err); }
+  });
+
+  router.post('/api/ai/cognitive-load', async (req, res) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const activeTasks = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE user_id = ? AND status != 'done'").get(req.userId).c;
+      const overdueTasks = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE user_id = ? AND status != 'done' AND due_date < ?").get(req.userId, today).c;
+      const dueSoon = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE user_id = ? AND status != 'done' AND due_date BETWEEN ? AND date(?, ?)")
+        .get(req.userId, today, today, '+3 days').c;
+      const highPriority = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE user_id = ? AND status != 'done' AND priority >= 2").get(req.userId).c;
+      const areaCount = db.prepare("SELECT COUNT(DISTINCT a.id) as c FROM tasks t JOIN goals g ON t.goal_id = g.id JOIN life_areas a ON g.area_id = a.id WHERE t.user_id = ? AND t.status != 'done'").get(req.userId).c;
+      const weeklyCompletion = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE user_id = ? AND completed_at >= datetime('now', '-7 days')").get(req.userId).c;
+      const result = await aiService.cognitiveLoad(req.userId, { activeTasks, overdueTasks, dueSoon, highPriority, activeAreas: areaCount, weeklyCompletionRate: weeklyCompletion });
+      res.json(result);
+    } catch (err) { aiError(res, err); }
+  });
+
+  router.post('/api/ai/daily-highlight', async (req, res) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const completed = db.prepare("SELECT title FROM tasks WHERE user_id = ? AND completed_at >= ? LIMIT 10").all(req.userId, today);
+      const focusMin = db.prepare("SELECT COALESCE(SUM(duration_sec), 0) / 60 as m FROM focus_sessions WHERE user_id = ? AND started_at >= ?").get(req.userId, today).m;
+      const habitsLogged = db.prepare("SELECT h.name FROM habits h JOIN habit_logs hl ON hl.habit_id = h.id WHERE h.user_id = ? AND hl.date = ?").all(req.userId, today);
+      const result = await aiService.dailyHighlight(req.userId, { completed: completed.map(t => t.title), focusMinutes: focusMin, habitsLogged: habitsLogged.map(h => h.name), date: today });
+      res.json(result);
+    } catch (err) { aiError(res, err); }
+  });
+
+  router.post('/api/ai/accountability-check', async (req, res) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const planned = db.prepare("SELECT id, title, status, priority FROM tasks WHERE user_id = ? AND (due_date = ? OR my_day = 1) AND status != 'done'").all(req.userId, today);
+      const completed = db.prepare("SELECT id, title FROM tasks WHERE user_id = ? AND completed_at >= ?").all(req.userId, today);
+      const result = await aiService.accountabilityCheck(req.userId, planned, completed, { timeOfDay: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) });
+      res.json(result);
+    } catch (err) { aiError(res, err); }
+  });
+
+  router.post('/api/ai/accept', (req, res) => {
+    const { feature } = req.body;
+    if (!feature) return res.status(400).json({ error: 'feature is required' });
+    aiService.markAccepted(req.userId, feature);
+    res.json({ ok: true });
+  });
+
+  // ─── Phase 4: Advanced ───
+
+  router.post('/api/ai/habit-coach', async (req, res) => {
+    try {
+      const { habit_id } = req.body;
+      if (!habit_id) return res.status(400).json({ error: 'habit_id is required' });
+      const habit = db.prepare('SELECT * FROM habits WHERE id = ? AND user_id = ?').get(habit_id, req.userId);
+      if (!habit) return res.status(404).json({ error: 'Habit not found' });
+      const existingHabits = db.prepare('SELECT name, preferred_time, frequency FROM habits WHERE user_id = ? AND archived = 0 AND id != ?').all(req.userId, habit_id);
+      const result = await aiService.habitCoach(req.userId, habit, { existingHabits });
+      res.json(result);
+    } catch (err) { aiError(res, err); }
+  });
+
+  router.post('/api/ai/life-balance', async (req, res) => {
+    try {
+      const areas = db.prepare('SELECT a.id, a.name FROM life_areas a WHERE a.user_id = ? AND a.archived = 0').all(req.userId);
+      const areaData = areas.map(a => {
+        const taskCount = db.prepare("SELECT COUNT(*) as c FROM tasks t JOIN goals g ON t.goal_id = g.id WHERE g.area_id = ? AND t.user_id = ? AND t.completed_at >= datetime('now', '-30 days')").get(a.id, req.userId).c;
+        const focusMin = db.prepare("SELECT COALESCE(SUM(f.duration_sec), 0) / 60 as m FROM focus_sessions f JOIN tasks t ON f.task_id = t.id JOIN goals g ON t.goal_id = g.id WHERE g.area_id = ? AND f.user_id = ?").get(a.id, req.userId).m;
+        const lastActivity = db.prepare("SELECT MAX(t.completed_at) as d FROM tasks t JOIN goals g ON t.goal_id = g.id WHERE g.area_id = ? AND t.user_id = ?").get(a.id, req.userId).d;
+        return { name: a.name, tasksCompleted30d: taskCount, focusMinutes: focusMin, lastActivity };
+      });
+      const result = await aiService.lifeBalance(req.userId, areaData);
+      res.json(result);
+    } catch (err) { aiError(res, err); }
+  });
+
+  router.post('/api/ai/build-automation', async (req, res) => {
+    try {
+      const { description } = req.body;
+      if (!description || typeof description !== 'string') return res.status(400).json({ error: 'description is required' });
+      if (description.length > 500) return res.status(400).json({ error: 'Description too long' });
+      const result = await aiService.buildAutomation(req.userId, description, {
+        triggerTypes: ['task.created', 'task.completed', 'task.updated', 'goal.completed', 'habit.logged', 'focus.completed', 'schedule.daily', 'schedule.weekly', 'schedule.monthly'],
+        actionTypes: ['update_task', 'create_task', 'create_subtasks', 'send_notification', 'move_to_goal', 'add_tag', 'remove_tag', 'set_priority', 'set_status', 'add_to_my_day', 'log_habit'],
+      });
+      res.json(result);
+    } catch (err) { aiError(res, err); }
+  });
+
+  router.post('/api/ai/semantic-search', async (req, res) => {
+    try {
+      const { query } = req.body;
+      if (!query || typeof query !== 'string') return res.status(400).json({ error: 'query is required' });
+      // Try embedding-based search first
+      let embedding;
+      try { embedding = await aiService.generateEmbedding(req.userId, query); } catch { embedding = null; }
+      if (embedding && embedding.length > 0) {
+        const rows = db.prepare('SELECT entity_type, entity_id, embedding FROM embeddings WHERE user_id = ?').all(req.userId);
+        if (rows.length) {
+          // Cosine similarity
+          const results = rows.map(r => {
+            const stored = new Float32Array(r.embedding.buffer, r.embedding.byteOffset, r.embedding.length / 4);
+            let dot = 0, normA = 0, normB = 0;
+            for (let i = 0; i < Math.min(embedding.length, stored.length); i++) {
+              dot += embedding[i] * stored[i];
+              normA += embedding[i] ** 2;
+              normB += stored[i] ** 2;
+            }
+            const similarity = dot / (Math.sqrt(normA) * Math.sqrt(normB) || 1);
+            return { type: r.entity_type, id: r.entity_id, similarity };
+          }).filter(r => r.similarity > 0.3).sort((a, b) => b.similarity - a.similarity).slice(0, 20);
+          if (results.length) return res.json({ method: 'semantic', results });
+        }
+      }
+      // Fallback to FTS5
+      const cleaned = query.replace(/[^\w\s]/g, '').trim();
+      let fts = [];
+      if (cleaned) {
+        try { fts = db.prepare("SELECT type, id, title, snippet(search_index, 3, '<mark>', '</mark>', '...', 30) as snippet, rank FROM search_index WHERE search_index MATCH ? AND user_id = ? ORDER BY rank LIMIT 20").all(cleaned, req.userId); } catch { fts = []; }
+      }
+      res.json({ method: 'fts', results: fts });
+    } catch (err) { aiError(res, err); }
   });
 
   // ─── Webhooks ───

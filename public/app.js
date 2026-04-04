@@ -97,6 +97,170 @@ function fmtDue(d){if(!d)return'';const dt=_parseDate(d),td=new Date();td.setHou
 function isOD(d){if(!d)return false;const dt=_parseDate(d),td=new Date();td.setHours(0,0,0,0);return dt<td}
 const PL=['','Normal','High','Critical'],PC=['','var(--brand)','var(--warn)','var(--err)'];
 
+// ─── SHARED TIMELINE HELPERS ───
+const TL_HOUR_PX=60,TL_START_HR=6,TL_END_HR=22;
+function _tlMinToY(hr,min){return((hr-TL_START_HR)*60+min)*(TL_HOUR_PX/60)}
+function _tlParseHHMM(s){if(!s)return null;const[h,m]=s.split(':').map(Number);return{h,m}}
+function _tlDuration(start,end,est){
+  if(end){const s=_tlParseHHMM(start),e=_tlParseHHMM(end);if(s&&e)return(e.h*60+e.m)-(s.h*60+s.m)}
+  if(est)return Math.max(15,est);
+  return 30; // default 30min
+}
+function _tlLayoutColumns(tasks){
+  // Assign columns to overlapping tasks
+  const sorted=[...tasks].sort((a,b)=>{
+    const sa=_tlParseHHMM(a.time_block_start),sb=_tlParseHHMM(b.time_block_start);
+    return(sa.h*60+sa.m)-(sb.h*60+sb.m);
+  });
+  const groups=[];
+  for(const t of sorted){
+    const s=_tlParseHHMM(t.time_block_start);
+    const dur=_tlDuration(t.time_block_start,t.time_block_end,t.estimated_minutes);
+    const startMin=s.h*60+s.m,endMin=startMin+dur;
+    t._startMin=startMin;t._endMin=endMin;
+    let placed=false;
+    for(const g of groups){
+      if(startMin<g.end){g.items.push(t);g.end=Math.max(g.end,endMin);placed=true;break}
+    }
+    if(!placed)groups.push({items:[t],end:endMin});
+  }
+  for(const g of groups){
+    const cols=[];
+    for(const t of g.items){
+      let col=0;
+      while(cols[col]&&cols[col]>t._startMin)col++;
+      t._col=col;t._totalCols=g.items.length;
+      cols[col]=t._endMin;
+    }
+    const maxCol=Math.max(...g.items.map(i=>i._col))+1;
+    g.items.forEach(i=>i._totalCols=maxCol);
+  }
+  return sorted;
+}
+function _tlTaskHtml(t){
+  const s=_tlParseHHMM(t.time_block_start);if(!s)return'';
+  const dur=_tlDuration(t.time_block_start,t.time_block_end,t.estimated_minutes);
+  const top=_tlMinToY(s.h,s.m);
+  const height=Math.max(dur*(TL_HOUR_PX/60),18);
+  const col=t._col||0,totalCols=t._totalCols||1;
+  const widthPct=100/totalCols;
+  const leftPct=col*widthPct;
+  const color=t.goal_color||'var(--brand)';
+  const endTime=t.time_block_end||_tlFmtMin(s.h*60+s.m+dur);
+  return`<div class="planner-task ${t.status==='done'?'done':''}" draggable="true" data-id="${t.id}"
+    data-start="${t.time_block_start}" data-end="${endTime}" data-dur="${dur}"
+    style="top:${top}px;height:${height}px;left:${leftPct}%;width:calc(${widthPct}% - 4px);border-left-color:${escA(color)};background:${escA(color)}18">
+    <div class="pt-header">
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500">${esc(t.title)}</span>
+      <span class="pt-time">${t.time_block_start}–${endTime}</span>
+      <span class="pt-actions">
+        <span class="material-icons-round" style="cursor:pointer;color:var(--txd)" data-unblock="${t.id}" title="Remove">close</span>
+      </span>
+    </div>
+    ${height>30?`<div style="font-size:9px;color:var(--txd);margin-top:2px">${dur}min${t.goal_title?' · '+esc(t.goal_title):''}</div>`:''}
+    <div class="pt-resize" data-id="${t.id}"></div>
+  </div>`;
+}
+function _tlFmtMin(totalMin){return String(Math.floor(totalMin/60)).padStart(2,'0')+':'+String(totalMin%60).padStart(2,'0')}
+function _tlBuildGrid(tasks,opts){
+  const {showNowLine,colId}=opts||{};
+  const laid=_tlLayoutColumns(tasks.filter(t=>t.time_block_start));
+  const totalHeight=(TL_END_HR-TL_START_HR)*TL_HOUR_PX;
+  let h=`<div class="planner-timeline" style="position:relative">`;
+  // Hour rows
+  for(let hr=TL_START_HR;hr<=TL_END_HR;hr++){
+    const label=hr<12?(hr+' AM'):hr===12?'12 PM':((hr-12)+' PM');
+    const hKey=String(hr).padStart(2,'0');
+    h+=`<div class="planner-hour" data-hour="${hKey}" ${colId?`data-col="${colId}"`:''}><div class="planner-hour-label">${label}</div><div class="planner-hour-body" data-hour="${hKey}" ${colId?`data-col="${colId}"`:''}>`;
+    h+=`</div></div>`;
+  }
+  // Absolute positioned task blocks
+  h+=`<div style="position:absolute;top:0;left:56px;right:0;height:${totalHeight}px;pointer-events:none">`;
+  h+=`<div style="position:relative;width:100%;height:100%;pointer-events:auto">`;
+  laid.forEach(t=>h+=_tlTaskHtml(t));
+  h+=`</div></div>`;
+  // Now line
+  if(showNowLine){
+    const now=new Date();const nowH=now.getHours(),nowM=now.getMinutes();
+    if(nowH>=TL_START_HR&&nowH<=TL_END_HR){
+      const nowY=_tlMinToY(nowH,nowM);
+      h+=`<div class="planner-now-dot" style="top:${nowY}px"></div><div class="planner-now-line" style="top:${nowY}px"></div>`;
+    }
+  }
+  h+=`</div>`;
+  return h;
+}
+function _tlWireEvents(container,dateStr,refreshFn){
+  // Drag & drop tasks to time slots
+  container.querySelectorAll('.planner-task[draggable],.planner-task-unsched[draggable]').forEach(el=>{
+    el.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',el.dataset.id);el.classList.add('planner-task-drag')});
+    el.addEventListener('dragend',()=>el.classList.remove('planner-task-drag'));
+  });
+  container.querySelectorAll('.planner-hour-body').forEach(slot=>{
+    slot.addEventListener('dragover',e=>{e.preventDefault();slot.classList.add('dragover')});
+    slot.addEventListener('dragleave',()=>slot.classList.remove('dragover'));
+    slot.addEventListener('drop',async e=>{
+      e.preventDefault();slot.classList.remove('dragover');
+      const taskId=Number(e.dataTransfer.getData('text/plain'));if(!taskId)return;
+      const hour=slot.dataset.hour;
+      // Calculate drop position within the hour for 15-min snapping
+      const rect=slot.getBoundingClientRect();
+      const yInSlot=e.clientY-rect.top;
+      const minuteOffset=Math.round(yInSlot/(TL_HOUR_PX/60)/15)*15;
+      const startMin=Number(hour)*60+Math.min(minuteOffset,45);
+      const endMin=startMin+30; // default 30min
+      const d=slot.dataset.col||dateStr;
+      await api.put('/api/tasks/'+taskId,{due_date:d,time_block_start:_tlFmtMin(startMin),time_block_end:_tlFmtMin(endMin)});
+      refreshFn();
+    });
+  });
+  // Click to open task detail
+  container.querySelectorAll('.planner-task[data-id]').forEach(el=>{
+    el.addEventListener('click',e=>{if(e.target.closest('[data-unblock]')||e.target.closest('.pt-resize'))return;openDP(Number(el.dataset.id))});
+  });
+  // Remove time block
+  container.querySelectorAll('[data-unblock]').forEach(el=>el.addEventListener('click',async e=>{
+    e.stopPropagation();
+    await api.put('/api/tasks/'+Number(el.dataset.unblock),{time_block_start:null,time_block_end:null});
+    refreshFn();
+  }));
+  // Resize handle — drag to extend/shrink
+  container.querySelectorAll('.pt-resize').forEach(handle=>{
+    handle.addEventListener('mousedown',e=>{
+      e.preventDefault();e.stopPropagation();
+      const taskEl=handle.closest('.planner-task');
+      const taskId=Number(taskEl.dataset.id);
+      const origDur=Number(taskEl.dataset.dur);
+      const startTime=taskEl.dataset.start;
+      const startParsed=_tlParseHHMM(startTime);
+      const startMin=startParsed.h*60+startParsed.m;
+      const startY=e.clientY;
+      taskEl.classList.add('resizing');
+      const onMove=ev=>{
+        const dy=ev.clientY-startY;
+        const durDelta=Math.round(dy/(TL_HOUR_PX/60)/15)*15;
+        const newDur=Math.max(15,origDur+durDelta);
+        taskEl.style.height=Math.max(newDur*(TL_HOUR_PX/60),18)+'px';
+        const endMin=startMin+newDur;
+        taskEl.querySelector('.pt-time').textContent=startTime+'–'+_tlFmtMin(endMin);
+      };
+      const onUp=async ev=>{
+        document.removeEventListener('mousemove',onMove);
+        document.removeEventListener('mouseup',onUp);
+        taskEl.classList.remove('resizing');
+        const dy=ev.clientY-startY;
+        const durDelta=Math.round(dy/(TL_HOUR_PX/60)/15)*15;
+        const newDur=Math.max(15,origDur+durDelta);
+        const endMin=startMin+newDur;
+        await api.put('/api/tasks/'+taskId,{time_block_end:_tlFmtMin(endMin)});
+        refreshFn();
+      };
+      document.addEventListener('mousemove',onMove);
+      document.addEventListener('mouseup',onUp);
+    });
+  });
+}
+
 // Swatch builder
 function buildSwatches(containerId, hiddenId, active){
   const c=$(containerId);if(!c)return;
@@ -113,6 +277,7 @@ let currentView='myday',activeAreaId=null,activeGoalId=null,goalTab='list';
 // Restore last view from localStorage
 {const lv=localStorage.getItem('lf-lastView');if(lv&&['myday','all','board','calendar','overdue','dashboard','weekly','matrix','logbook','tags','focushistory','templates','settings','habits','planner','inbox','review','notes','timeanalytics','rules','tasks','focus'].includes(lv))currentView=lv}
 let calY,calM;{const n=new Date();calY=n.getFullYear();calM=n.getMonth()}
+let calMode=localStorage.getItem('lf-calMode')||'month';
 let editingId=null;
 const expandedTasks=new Set();
 
@@ -367,6 +532,7 @@ async function render(){
   else if(currentView==='settings')await renderSettings();
   else if(currentView==='habits')await renderHabits();
   else if(currentView==='planner')await renderPlanner();
+  else if(currentView==='upcoming')await renderUpcoming();
   else if(currentView==='inbox')await renderInbox();
   else if(currentView==='review')await renderWeeklyReview();
   else if(currentView==='notes')await renderNotes();
@@ -477,6 +643,8 @@ async function renderToday(){
     api.get('/api/habits').catch(()=>[]),
     api.get('/api/stats/balance').catch(()=>({areas:[],dominant:null,lowest:null}))
   ]);
+  let gamification={xp_total:0,level:1,daily_goal:5,daily_done:0,weekly_goal:25,weekly_done:0};
+  try{gamification=await api.get('/api/gamification/stats')}catch(e){}
   $('myday-badge').textContent=t.filter(x=>x.status!=='done').length;
   const pct=stats.total?Math.round(stats.done/stats.total*100):0;
   const sEmoji=streakEmoji(streakData.streak||0);
@@ -509,6 +677,8 @@ async function renderToday(){
     <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--brand)">timer</span>${stats.focusMinutes||0}min focus</div>
     <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--warn)">local_fire_department</span>${sEmoji?sEmoji+' ':''}${streakData.streak||0} streak</div>
     ${overdue.length?`<div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--err)">warning</span>${overdue.length} overdue</div>`:''}
+    <div class="today-stat"><span class="material-icons-round" style="font-size:14px;color:var(--brand)">military_tech</span>Lv${gamification.level} · ${gamification.xp_total}XP</div>
+    <div class="today-stat" title="Daily: ${gamification.daily_done}/${gamification.daily_goal}  Weekly: ${gamification.weekly_done}/${gamification.weekly_goal}"><span class="material-icons-round" style="font-size:14px;color:${gamification.daily_done>=gamification.daily_goal?'var(--ok)':'var(--txd)'}">emoji_events</span>${gamification.daily_done}/${gamification.daily_goal} daily</div>
   </div>`;
   }
   // Tab toggle
@@ -519,6 +689,11 @@ async function renderToday(){
       <span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">center_focus_strong</span>Focus</button>
     <button class="btn-c today-tab${todayTab==='timeline'?' active':''}" data-ttab="timeline" style="font-size:12px;padding:6px 14px;${todayTab==='timeline'?'background:var(--brand);color:#fff;border-color:var(--brand)':''}">
       <span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">schedule</span>Timeline</button>
+    <span style="flex:1"></span>
+    <button class="btn-c ai-btn" id="ai-plan-day" title="AI: Plan my day" style="font-size:11px;padding:5px 10px;border-color:var(--brand)">
+      <span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:3px;color:var(--brand)">smart_toy</span>Plan Day</button>
+    <button class="btn-c ai-btn" id="ai-next-task" title="AI: What should I do next?" style="font-size:11px;padding:5px 10px;border-color:var(--brand)">
+      <span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:3px;color:var(--brand)">play_arrow</span>Next</button>
   </div>`;
 
   if(todayTab==='list'){
@@ -560,16 +735,18 @@ async function renderToday(){
       d.forEach(tk=>h+=tcHtml(tk,true));
       h+=`</div>`;
     }
-    // "What's Next?" suggestions when few pending tasks
+    // Smart My Day suggestions drawer
     if(p.length<3){
       try{
-        const suggested=await api.get('/api/tasks/suggested');
+        const suggested=await api.get('/api/tasks/suggestions');
         if(suggested.length){
-          h+=`<div class="sl" style="margin-top:12px">What's Next? <span class="c">${suggested.length}</span></div>`;
+          h+=`<div class="sl" style="margin-top:12px"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;color:var(--brand)">lightbulb</span> Suggested for Today <span class="c">${suggested.length}</span></div>`;
           suggested.forEach(tk=>{
+            const reasons = (tk.reasons||[]).join(', ');
             h+=`<div class="suggestion-card" style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-bottom:4px;border-radius:var(--rs);background:var(--bg-s);font-size:13px">
-              <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(tk.title)}</span>
+              <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escA(reasons)}">${esc(tk.title)}</span>
               ${tk.due_date?`<span style="font-size:11px;color:var(--txd)">${fmtDue(tk.due_date)}</span>`:''}
+              <span style="font-size:10px;color:var(--brand);font-weight:600">${tk.score}pt</span>
               <button class="btn-c add-myday-btn" data-id="${tk.id}" style="font-size:11px;padding:3px 8px" title="Add to My Day">
                 <span class="material-icons-round" style="font-size:14px">add</span>My Day</button>
             </div>`;
@@ -595,30 +772,18 @@ async function renderToday(){
       h+=`<div class="all-done-card"><span class="material-icons-round" style="font-size:48px;color:var(--ok)">celebration</span><h3 style="margin:8px 0 4px">All done! 🎉</h3></div>`;
     }
   }else{
-    // Timeline tab — inline planner
+    // Timeline tab — inline planner with absolute positioning
     const planDate=_toDateStr(new Date());
     let planData={scheduled:[],unscheduled:[]};
     try{planData=await api.get('/api/planner/'+planDate)}catch(e){}
     const myDayUnscheduled=t.filter(tk=>!tk.time_block_start&&tk.status!=='done');
     const allUnsched=[...planData.unscheduled,...myDayUnscheduled.filter(u=>!planData.unscheduled.find(x=>x.id===u.id))];
-    h+=`<div class="planner-wrap"><div class="planner-timeline">`;
-    for(let hr=6;hr<=22;hr++){
-      const label=hr<12?(hr+' AM'):hr===12?'12 PM':((hr-12)+' PM');
-      const hKey=String(hr).padStart(2,'0');
-      const slotTasks=planData.scheduled.filter(st=>st.time_block_start&&parseInt(st.time_block_start.split(':')[0])===hr);
-      h+=`<div class="planner-hour" data-hour="${hKey}"><div class="planner-hour-label">${label}</div><div class="planner-hour-tasks" data-hour="${hKey}">`;
-      slotTasks.forEach(st=>{
-        h+=`<div class="planner-task ${st.status==='done'?'done':''}" draggable="true" data-id="${st.id}" style="border-left-color:${escA(st.goal_color||'var(--brand)')};background:${escA(st.goal_color||'var(--brand)')}15">
-          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(st.title)}</span>
-          <span style="font-size:10px;color:var(--txd)">${st.time_block_start}${st.time_block_end?'–'+st.time_block_end:''}</span>
-          <span class="material-icons-round" style="font-size:12px;cursor:pointer;color:var(--txd)" data-unblock="${st.id}">close</span></div>`;
-      });
-      h+=`</div></div>`;
-    }
-    h+=`</div><div class="planner-sidebar"><div class="planner-unscheduled"><h4>Unscheduled (${allUnsched.length})</h4>`;
+    h+=`<div class="planner-wrap">`;
+    h+=_tlBuildGrid(planData.scheduled,{showNowLine:true});
+    h+=`<div class="planner-sidebar"><div class="planner-unscheduled"><h4>Unscheduled (${allUnsched.length})</h4>`;
     if(!allUnsched.length)h+=`<div style="text-align:center;padding:12px;color:var(--txd);font-size:12px">Drag tasks to time slots</div>`;
     allUnsched.forEach(u=>{
-      h+=`<div class="planner-task" draggable="true" data-id="${u.id}" style="border-left-color:${escA(u.goal_color||'var(--brand)')};background:${escA(u.goal_color||'var(--brand)')}15;margin-bottom:4px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.title)}</span></div>`;
+      h+=`<div class="planner-task-unsched" draggable="true" data-id="${u.id}" style="border-left-color:${escA(u.goal_color||'var(--brand)')};background:${escA(u.goal_color||'var(--brand)')}15"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.title)}</span></div>`;
     });
     h+=`</div></div></div>`;
   }
@@ -668,30 +833,7 @@ async function renderToday(){
   }));
   // Timeline drag&drop
   if(todayTab==='timeline'){
-    c.querySelectorAll('.planner-task[draggable]').forEach(el=>{
-      el.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',el.dataset.id);el.classList.add('planner-task-drag')});
-      el.addEventListener('dragend',()=>el.classList.remove('planner-task-drag'));
-    });
-    c.querySelectorAll('.planner-hour-tasks').forEach(slot=>{
-      slot.addEventListener('dragover',e=>{e.preventDefault();slot.classList.add('dragover')});
-      slot.addEventListener('dragleave',()=>slot.classList.remove('dragover'));
-      slot.addEventListener('drop',async e=>{
-        e.preventDefault();slot.classList.remove('dragover');
-        const taskId=Number(e.dataTransfer.getData('text/plain'));if(!taskId)return;
-        const hour=slot.dataset.hour;const endHr=String(Number(hour)+1).padStart(2,'0');
-        await api.put('/api/tasks/'+taskId,{due_date:_toDateStr(new Date()),time_block_start:hour+':00',time_block_end:endHr+':00'});
-        renderToday();
-      });
-    });
-    c.querySelectorAll('.planner-task[data-id]').forEach(el=>{
-      el.addEventListener('click',e=>{if(e.target.closest('[data-unblock]'))return;openDP(Number(el.dataset.id))});
-    });
-    c.querySelectorAll('[data-unblock]').forEach(el=>el.addEventListener('click',async e=>{
-      e.stopPropagation();
-      await api.put('/api/tasks/'+Number(el.dataset.unblock),{time_block_start:null,time_block_end:null});
-      renderToday();
-    }));
-    // Touch drag support for timeline
+    _tlWireEvents(c,_toDateStr(new Date()),renderToday);
     attachTouchWeeklyDnD();
   }
 }
@@ -709,6 +851,31 @@ function todayHabitsStrip(habits){
 }
 function wireTodayTabs(c){
   c.querySelectorAll('.today-tab').forEach(btn=>btn.addEventListener('click',()=>{todayTab=btn.dataset.ttab;localStorage.setItem('todayTab',todayTab);renderToday()}));
+  // AI buttons
+  $('ai-plan-day')?.addEventListener('click',async()=>{
+    const btn=$('ai-plan-day');
+    if(btn)btn.disabled=true;
+    try{
+      const r=await api.post('/api/ai/plan-day',{});
+      if(r.data)showAiPlanModal(r.data);
+      else showToast('No plan generated','info');
+    }catch(e){showToast(e.message||'AI unavailable','error')}
+    finally{if(btn)btn.disabled=false}
+  });
+  $('ai-next-task')?.addEventListener('click',async()=>{
+    const btn=$('ai-next-task');
+    if(btn)btn.disabled=true;
+    try{
+      const r=await api.post('/api/ai/next-task',{});
+      if(r.data?.task_id){
+        showToast(`Next: ${esc(r.data.reason||'Focus on your highest-priority task')}`,'ok',6000);
+        openDP(r.data.task_id);
+      }else if(r.data?.reason){
+        showToast(r.data.reason,'ok',4000);
+      }else{showToast('No suggestions available','info')}
+    }catch(e){showToast(e.message||'AI unavailable','error')}
+    finally{if(btn)btn.disabled=false}
+  });
 }
 function wireTodayHabits(c){
   c.querySelectorAll('.today-hab').forEach(btn=>btn.addEventListener('click',async()=>{
@@ -1187,11 +1354,21 @@ async function renderGoal(){
   if(!activeGoalId)return;
   tasks=await api.get('/api/goals/'+activeGoalId+'/tasks');
   const c=$('ct');
-  let h=`<div class="qa"><input type="text" id="ti" placeholder="Add a task..."><button id="tab"><span class="material-icons-round" style="font-size:15px">add</span>Add</button></div>`;
+  let h=`<div class="qa"><input type="text" id="ti" placeholder="Add a task..."><button id="tab"><span class="material-icons-round" style="font-size:15px">add</span>Add</button><button class="btn-c" id="ai-decompose" title="AI: Break down this goal into tasks" style="font-size:11px;padding:5px 10px;border-color:var(--brand)"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:3px;color:var(--brand)">smart_toy</span>Decompose</button></div>`;
   if(goalTab==='board')h+=renderBoard();else h+=renderTL();
   c.innerHTML=h;attachTA();attachTE();
   if(goalTab==='board')attachBD();
   document.querySelectorAll('.vt-btn').forEach(t=>{t.addEventListener('click',()=>{goalTab=t.dataset.tab;document.querySelectorAll('.vt-btn').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderGoal()})});
+  // AI Decompose
+  $('ai-decompose')?.addEventListener('click',async()=>{
+    const btn=$('ai-decompose');
+    if(btn){btn.disabled=true;btn.innerHTML='<span class="material-icons-round" style="font-size:14px;vertical-align:middle;animation:spin 1s linear infinite">sync</span> Thinking...';}
+    try{
+      const r=await api.post('/api/ai/decompose',{goal_id:activeGoalId});
+      showAiDecomposeModal(r,activeGoalId);
+    }catch(e){showToast(e.message||'AI unavailable','error')}
+    finally{if(btn){btn.disabled=false;btn.innerHTML='<span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:3px;color:var(--brand)">smart_toy</span>Decompose';}}
+  });
 }
 function renderTL(){
   if(!tasks.length)return emptyS('task_alt','No tasks yet','Add your first action');
@@ -1215,38 +1392,177 @@ function renderBoard(){
 async function renderCal(target){
   const c=target||$('ct');
   const ws=Number(appSettings.weekStart)||0;
-  const f=new Date(calY,calM,1),l=new Date(calY,calM+1,0);
-  const sd=new Date(f);while(sd.getDay()!==ws)sd.setDate(sd.getDate()-1);
-  const ed=new Date(l);while(ed.getDay()!==(ws+6)%7)ed.setDate(ed.getDate()+1);
-  const ss=_toDateStr(sd),es=_toDateStr(ed);
-  const ct2=await api.get(`/api/tasks/calendar?start=${ss}&end=${es}`);
-  const bd={};ct2.forEach(t=>{if(!bd[t.due_date])bd[t.due_date]=[];bd[t.due_date].push(t)});
-  const mn=f.toLocaleDateString('en-US',{month:'long',year:'numeric'});
-  const ts=_toDateStr(new Date());
-  const isCurrentMonth=calY===new Date().getFullYear()&&calM===new Date().getMonth();
-  let h=`<div class="ch"><button class="material-icons-round" id="cp">chevron_left</button><span class="ctt">${mn}</span><button class="material-icons-round" id="cn">chevron_right</button>${!isCurrentMonth?'<button id="cal-today" style="margin-left:8px;padding:4px 12px;border-radius:6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx);font-size:11px;cursor:pointer;font-family:inherit">Today</button>':''}</div><div class="cg">`;
-  const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  for(let i=0;i<7;i++)h+=`<div class="cdh">${dayNames[(ws+i)%7]}</div>`;
-  const cur=new Date(sd);while(cur<=ed){
-    const ds=_toDateStr(cur);const dt=bd[ds]||[];
-    h+=`<div class="cc ${ds===ts?'today':''} ${cur.getMonth()!==calM?'om':''}" data-date="${ds}"><div class="cd">${cur.getDate()}</div>`;
-    dt.slice(0,3).forEach(t=>h+=`<span class="ctd" data-id="${t.id}" style="background:${escA(t.goal_color||'var(--brand)')}">${esc(t.title.substring(0,18))}</span>`);
-    if(dt.length>3)h+=`<span style="font-size:9px;color:var(--txd)">+${dt.length-3}</span>`;
-    h+=`</div>`;cur.setDate(cur.getDate()+1);}
-  h+=`</div>`;c.innerHTML=h;
-  $('cp').addEventListener('click',()=>{calM--;if(calM<0){calM=11;calY--}renderCal()});
-  $('cn').addEventListener('click',()=>{calM++;if(calM>11){calM=0;calY++}renderCal()});
-  if(!isCurrentMonth&&$('cal-today'))$('cal-today').addEventListener('click',()=>{calM=new Date().getMonth();calY=new Date().getFullYear();renderCal()});
-  // Clickable calendar events
-  c.querySelectorAll('.ctd[data-id]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();openDP(Number(el.dataset.id))}));
-  // Click empty day cell to create task for that date
-  c.querySelectorAll('.cc[data-date]').forEach(cell=>cell.addEventListener('dblclick',e=>{
-    if(e.target.closest('.ctd'))return;
-    const date=cell.dataset.date;
-    openQuickCapture();
-    // Pre-fill date in quick capture
-    setTimeout(()=>{const inp=document.querySelector('.qc-input input');if(inp)inp.value=`due:${date} `},100);
-  }));
+  const todayStr=_toDateStr(new Date());
+  const modes=[
+    {id:'day',label:'Day',icon:'view_day'},
+    {id:'3day',label:'3 Day',icon:'view_column'},
+    {id:'workweek',label:'Work Week',icon:'work'},
+    {id:'week',label:'Week',icon:'view_week'},
+    {id:'month',label:'Month',icon:'calendar_month'}
+  ];
+
+  // Calculate date range based on mode
+  let dateLabel='',dates=[];
+  const refDate=new Date(calY,calM,new Date().getDate());
+  // Use a stored calDay for day-level navigation
+  if(!window._calDay)window._calDay=_toDateStr(new Date());
+
+  if(calMode==='day'){
+    dates=[window._calDay];
+    const d=_parseDate(window._calDay);
+    dateLabel=d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  }else if(calMode==='3day'){
+    const base=_parseDate(window._calDay);
+    for(let i=0;i<3;i++){const d=new Date(base);d.setDate(base.getDate()+i);dates.push(_toDateStr(d))}
+    dateLabel=_parseDate(dates[0]).toLocaleDateString('en-US',{month:'short',day:'numeric'})+' – '+_parseDate(dates[2]).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  }else if(calMode==='workweek'){
+    const base=_parseDate(window._calDay);const dow=base.getDay()||7;
+    const mon=new Date(base);mon.setDate(base.getDate()-(dow-1));
+    for(let i=0;i<5;i++){const d=new Date(mon);d.setDate(mon.getDate()+i);dates.push(_toDateStr(d))}
+    dateLabel=_parseDate(dates[0]).toLocaleDateString('en-US',{month:'short',day:'numeric'})+' – '+_parseDate(dates[4]).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  }else if(calMode==='week'){
+    const base=_parseDate(window._calDay);const dow=(base.getDay()-ws+7)%7;
+    const start=new Date(base);start.setDate(base.getDate()-dow);
+    for(let i=0;i<7;i++){const d=new Date(start);d.setDate(start.getDate()+i);dates.push(_toDateStr(d))}
+    dateLabel=_parseDate(dates[0]).toLocaleDateString('en-US',{month:'short',day:'numeric'})+' – '+_parseDate(dates[6]).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  }
+
+  // MONTH VIEW — existing behavior
+  if(calMode==='month'){
+    const f=new Date(calY,calM,1),l=new Date(calY,calM+1,0);
+    const sd=new Date(f);while(sd.getDay()!==ws)sd.setDate(sd.getDate()-1);
+    const ed=new Date(l);while(ed.getDay()!==(ws+6)%7)ed.setDate(ed.getDate()+1);
+    const ss=_toDateStr(sd),es=_toDateStr(ed);
+    const ct2=await api.get(`/api/tasks/calendar?start=${ss}&end=${es}`);
+    const bd={};ct2.forEach(t=>{if(!bd[t.due_date])bd[t.due_date]=[];bd[t.due_date].push(t)});
+    const mn=f.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+    const isCurrentMonth=calY===new Date().getFullYear()&&calM===new Date().getMonth();
+    let h=`<div class="ch">
+      <button class="material-icons-round" id="cp">chevron_left</button><span class="ctt">${mn}</span><button class="material-icons-round" id="cn">chevron_right</button>
+      ${!isCurrentMonth?'<button id="cal-today" style="margin-left:8px;padding:4px 12px;border-radius:6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx);font-size:11px;cursor:pointer;font-family:inherit">Today</button>':''}
+      <span style="flex:1"></span>
+      <div class="cal-view-bar">${modes.map(m=>`<button class="cal-view-btn${calMode===m.id?' active':''}" data-mode="${m.id}">${m.label}</button>`).join('')}</div>
+    </div><div class="cg">`;
+    const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    for(let i=0;i<7;i++)h+=`<div class="cdh">${dayNames[(ws+i)%7]}</div>`;
+    const cur=new Date(sd);while(cur<=ed){
+      const ds=_toDateStr(cur);const dt=bd[ds]||[];
+      h+=`<div class="cc ${ds===todayStr?'today':''} ${cur.getMonth()!==calM?'om':''}" data-date="${ds}"><div class="cd">${cur.getDate()}</div>`;
+      dt.slice(0,3).forEach(t=>h+=`<span class="ctd" data-id="${t.id}" style="background:${escA(t.goal_color||'var(--brand)')}">${esc(t.title.substring(0,18))}</span>`);
+      if(dt.length>3)h+=`<span style="font-size:9px;color:var(--txd)">+${dt.length-3}</span>`;
+      h+=`</div>`;cur.setDate(cur.getDate()+1);}
+    h+=`</div>`;c.innerHTML=h;
+    $('cp').addEventListener('click',()=>{calM--;if(calM<0){calM=11;calY--}renderCal()});
+    $('cn').addEventListener('click',()=>{calM++;if(calM>11){calM=0;calY++}renderCal()});
+    if(!isCurrentMonth&&$('cal-today'))$('cal-today').addEventListener('click',()=>{calM=new Date().getMonth();calY=new Date().getFullYear();window._calDay=_toDateStr(new Date());renderCal()});
+    c.querySelectorAll('.ctd[data-id]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();openDP(Number(el.dataset.id))}));
+    c.querySelectorAll('.cc[data-date]').forEach(cell=>{
+      cell.addEventListener('dblclick',e=>{
+        if(e.target.closest('.ctd'))return;
+        openQuickCapture();setTimeout(()=>{const inp=document.querySelector('.qc-input input');if(inp)inp.value=`due:${cell.dataset.date} `},100);
+      });
+      cell.addEventListener('click',e=>{
+        if(e.target.closest('.ctd'))return;
+        // Click a day cell to switch to day view for that date
+        window._calDay=cell.dataset.date;calMode='day';localStorage.setItem('lf-calMode','day');renderCal();
+      });
+    });
+    c.querySelectorAll('.cal-view-btn').forEach(btn=>btn.addEventListener('click',()=>{calMode=btn.dataset.mode;localStorage.setItem('lf-calMode',calMode);renderCal()}));
+    return;
+  }
+
+  // DAY / MULTI-DAY TIMELINE VIEWS
+  const allDatesStr=dates.join(',');
+  const rangeStart=dates[0],rangeEnd=dates[dates.length-1];
+  // Fetch tasks for the date range
+  let allTasks=[];
+  try{
+    const calTasks=await api.get(`/api/tasks/calendar?start=${rangeStart}&end=${rangeEnd}`);
+    allTasks=calTasks;
+  }catch(e){}
+
+  // Header
+  let h=`<div class="ch">
+    <button class="material-icons-round" id="cp">chevron_left</button><span class="ctt">${dateLabel}</span><button class="material-icons-round" id="cn">chevron_right</button>
+    <button id="cal-today" style="margin-left:8px;padding:4px 12px;border-radius:6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx);font-size:11px;cursor:pointer;font-family:inherit">Today</button>
+    <span style="flex:1"></span>
+    <div class="cal-view-bar">${modes.map(m=>`<button class="cal-view-btn${calMode===m.id?' active':''}" data-mode="${m.id}">${m.label}</button>`).join('')}</div>
+  </div>`;
+
+  // Multi-column timeline
+  const isSingleDay=dates.length===1;
+  h+=`<div style="display:flex;height:calc(100vh - 120px);border:1px solid var(--brd);border-radius:var(--r);overflow:hidden">`;
+  // Hour labels column
+  h+=`<div style="flex-shrink:0;width:56px;overflow-y:auto;border-right:1px solid var(--brd)" id="cal-hour-labels">`;
+  for(let hr=TL_START_HR;hr<=TL_END_HR;hr++){
+    const label=hr<12?(hr+' AM'):hr===12?'12 PM':((hr-12)+' PM');
+    h+=`<div style="height:${TL_HOUR_PX}px;font-size:11px;font-weight:500;color:var(--txd);padding:4px 8px;text-align:right;border-bottom:1px solid var(--brd);box-sizing:border-box">${label}</div>`;
+  }
+  h+=`</div>`;
+  // Day columns
+  h+=`<div style="flex:1;display:flex;overflow-y:auto;overflow-x:auto" id="cal-cols-wrap">`;
+  const dayNamesShort=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  dates.forEach(ds=>{
+    const dayTasks=allTasks.filter(t=>t.due_date===ds&&t.time_block_start);
+    const isToday=ds===todayStr;
+    const dd=_parseDate(ds);
+    const headerTxt=isSingleDay?'':`<div class="cal-day-header ${isToday?'today':''}"><div class="cal-day-num">${dd.getDate()}</div>${dayNamesShort[dd.getDay()]}</div>`;
+    const laid=_tlLayoutColumns(dayTasks);
+    const totalHeight=(TL_END_HR-TL_START_HR)*TL_HOUR_PX;
+    h+=`<div class="cal-day-col" data-date="${ds}">${headerTxt}`;
+    h+=`<div style="position:relative;min-height:${totalHeight}px">`;
+    // Hour grid lines
+    for(let hr=TL_START_HR;hr<=TL_END_HR;hr++){
+      const hKey=String(hr).padStart(2,'0');
+      h+=`<div class="planner-hour-body" data-hour="${hKey}" data-col="${ds}" style="position:absolute;top:${(hr-TL_START_HR)*TL_HOUR_PX}px;left:0;right:0;height:${TL_HOUR_PX}px;border-bottom:1px solid var(--brd);box-sizing:border-box"></div>`;
+    }
+    // Task blocks
+    laid.forEach(t=>h+=_tlTaskHtml(t));
+    // Now line
+    if(isToday){
+      const now=new Date();const nowH=now.getHours(),nowM=now.getMinutes();
+      if(nowH>=TL_START_HR&&nowH<=TL_END_HR){
+        const nowY=_tlMinToY(nowH,nowM);
+        h+=`<div style="position:absolute;top:${nowY}px;left:0;right:0;height:2px;background:var(--err);z-index:5;pointer-events:none"></div>`;
+      }
+    }
+    // Unscheduled tasks at bottom
+    const unscheduled=allTasks.filter(t=>t.due_date===ds&&!t.time_block_start&&t.status!=='done');
+    if(unscheduled.length){
+      h+=`<div style="position:absolute;top:${totalHeight+4}px;left:4px;right:4px">`;
+      unscheduled.forEach(t=>{
+        h+=`<div class="planner-task-unsched" draggable="true" data-id="${t.id}" style="border-left-color:${escA(t.goal_color||'var(--brand)')};background:${escA(t.goal_color||'var(--brand)')}15;font-size:10px;padding:3px 6px">
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title)}</span></div>`;
+      });
+      h+=`</div>`;
+    }
+    h+=`</div></div>`;
+  });
+  h+=`</div></div>`;
+  c.innerHTML=h;
+
+  // Sync hour labels scroll with columns scroll
+  const colsWrap=c.querySelector('#cal-cols-wrap');
+  const hourLabels=c.querySelector('#cal-hour-labels');
+  if(colsWrap&&hourLabels){
+    colsWrap.addEventListener('scroll',()=>{hourLabels.scrollTop=colsWrap.scrollTop});
+    hourLabels.addEventListener('scroll',()=>{colsWrap.scrollTop=hourLabels.scrollTop});
+  }
+
+  // Navigation
+  const step=calMode==='day'?1:calMode==='3day'?3:7;
+  $('cp').addEventListener('click',()=>{const d=_parseDate(window._calDay);d.setDate(d.getDate()-step);window._calDay=_toDateStr(d);calY=d.getFullYear();calM=d.getMonth();renderCal()});
+  $('cn').addEventListener('click',()=>{const d=_parseDate(window._calDay);d.setDate(d.getDate()+step);window._calDay=_toDateStr(d);calY=d.getFullYear();calM=d.getMonth();renderCal()});
+  $('cal-today')?.addEventListener('click',()=>{window._calDay=_toDateStr(new Date());calY=new Date().getFullYear();calM=new Date().getMonth();renderCal()});
+  c.querySelectorAll('.cal-view-btn').forEach(btn=>btn.addEventListener('click',()=>{calMode=btn.dataset.mode;localStorage.setItem('lf-calMode',calMode);renderCal()}));
+
+  // Wire timeline events for each day column
+  dates.forEach(ds=>{
+    _tlWireEvents(c,ds,renderCal);
+  });
+
+  // Scroll to ~8am on load
+  if(colsWrap){const scrollTo=(8-TL_START_HR)*TL_HOUR_PX;colsWrap.scrollTop=scrollTo;hourLabels.scrollTop=scrollTo}
 }
 
 // ─── Focus mode minimal task card ───
@@ -1265,6 +1581,8 @@ function tcHtml(t,ctx){
   const cls=['tc'];if(t.status==='done')cls.push('done');
   if(t.priority===3)cls.push('p3');else if(t.priority===2)cls.push('p2');else if(t.priority===1)cls.push('p1');
   let meta='';
+  if(t.starred)meta+=`<span class="star-badge">⭐</span>`;
+  if(t.start_date)meta+=`<span><span class="material-icons-round">play_arrow</span>${fmtDue(t.start_date)}</span>`;
   if(t.due_date){const o=isOD(t.due_date)&&t.status!=='done';const tm=t.due_time?(' '+new Date('2000-01-01T'+t.due_time).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})):'';meta+=`<span class="${o?'od':''}"><span class="material-icons-round">event</span>${fmtDue(t.due_date)}${tm}</span>`}
   if(t.priority>0)meta+=`<span style="color:${PC[t.priority]}">${PL[t.priority]}</span>`;
   if(t.assigned_to_user_id&&t.assignee_name){const isMe=currentUser&&t.assigned_to_user_id===currentUser.id;meta+=`<span class="asg-badge">👤 ${isMe?'You':esc(t.assignee_name)}</span>`}else if(t.assigned_to)meta+=`<span>👤 ${esc(t.assigned_to)}</span>`;
@@ -1292,8 +1610,8 @@ function tcHtml(t,ctx){
     <div class="ms-chk" data-id="${t.id}"></div>
     <div class="tk" data-id="${t.id}" role="checkbox" tabindex="0" aria-checked="${t.status==='done'}" aria-label="Complete task"><span class="material-icons-round">check</span></div>
     <div class="tb2"><div class="tt">${esc(t.title)}</div>${meta?`<div class="tm">${meta}</div>`:''}${stBar}${stList}</div>
-    <div class="ta" style="position:relative">${currentView!=='myday'?`<span class="material-icons-round myday-toggle ${t.my_day?'active':''}" data-id="${t.id}" title="${t.my_day?'Remove from My Day':'Add to My Day'}">${t.my_day?'wb_sunny':'light_mode'}</span>`:''}<button class="material-icons-round snz-btn" data-id="${t.id}" title="Reschedule">schedule</button><button class="material-icons-round ft-start" data-id="${t.id}" title="Focus timer">timer</button><button class="material-icons-round et" data-id="${t.id}">edit</button><button class="material-icons-round dt" data-id="${t.id}">delete_outline</button></div>
-    <div class="qa-row"><button class="qa-btn qa-pri pri-${t.priority}" data-id="${t.id}" data-next="${nextPri}" title="Cycle priority (${PL[t.priority]||'None'}→${PL[nextPri]||'None'})"><span class="material-icons-round">flag</span></button><button class="qa-btn qa-date" data-id="${t.id}" title="Set due date"><span class="material-icons-round">event</span></button><button class="qa-btn qa-myday" data-id="${t.id}" title="${t.my_day?'Remove from':'Add to'} My Day"><span class="material-icons-round">${t.my_day?'wb_sunny':'light_mode'}</span></button>${t.recurring?`<button class="qa-btn qa-skip" data-id="${t.id}" title="Skip occurrence"><span class="material-icons-round">skip_next</span></button>`:''}<button class="qa-btn qa-edit" data-id="${t.id}" title="Edit"><span class="material-icons-round">edit</span></button></div>
+    <div class="ta" style="position:relative"><span class="material-icons-round star-toggle ${t.starred?'active':''}" data-id="${t.id}" title="${t.starred?'Unstar':'Star'}">${t.starred?'star':'star_outline'}</span>${currentView!=='myday'?`<span class="material-icons-round myday-toggle ${t.my_day?'active':''}" data-id="${t.id}" title="${t.my_day?'Remove from My Day':'Add to My Day'}">${t.my_day?'wb_sunny':'light_mode'}</span>`:''}<button class="material-icons-round snz-btn" data-id="${t.id}" title="Reschedule">schedule</button><button class="material-icons-round ft-start" data-id="${t.id}" title="Focus timer">timer</button><button class="material-icons-round et" data-id="${t.id}">edit</button><button class="material-icons-round dt" data-id="${t.id}">delete_outline</button></div>
+    <div class="qa-row"><button class="qa-btn qa-star ${t.starred?'active':''}" data-id="${t.id}" title="${t.starred?'Unstar':'Star'} task"><span class="material-icons-round">${t.starred?'star':'star_outline'}</span></button><button class="qa-btn qa-pri pri-${t.priority}" data-id="${t.id}" data-next="${nextPri}" title="Cycle priority (${PL[t.priority]||'None'}→${PL[nextPri]||'None'})"><span class="material-icons-round">flag</span></button><button class="qa-btn qa-date" data-id="${t.id}" title="Set due date"><span class="material-icons-round">event</span></button><button class="qa-btn qa-myday" data-id="${t.id}" title="${t.my_day?'Remove from':'Add to'} My Day"><span class="material-icons-round">${t.my_day?'wb_sunny':'light_mode'}</span></button>${t.recurring?`<button class="qa-btn qa-skip" data-id="${t.id}" title="Skip occurrence"><span class="material-icons-round">skip_next</span></button>`:''}<button class="qa-btn qa-edit" data-id="${t.id}" title="Edit"><span class="material-icons-round">edit</span></button></div>
   </div>`;
 }
 
@@ -1342,6 +1660,22 @@ function attachTE(){
       await loadAreas();render();loadOverdueBadge();showToast('Task restored');
     } : null);
     await loadAreas();render();loadOverdueBadge();
+  }));
+  // Star toggle
+  document.querySelectorAll('.star-toggle').forEach(el=>el.addEventListener('click',async e=>{
+    e.stopPropagation();const id=Number(el.dataset.id);
+    const isActive=el.classList.contains('active');
+    await api.put('/api/tasks/'+id,{starred:isActive?0:1});
+    showToast(isActive?'Unstarred':'Starred');
+    await loadAreas();render();
+  }));
+  // Quick star (qa-row)
+  document.querySelectorAll('.qa-star').forEach(el=>el.addEventListener('click',async e=>{
+    e.stopPropagation();const id=Number(el.dataset.id);
+    const isActive=el.classList.contains('active');
+    await api.put('/api/tasks/'+id,{starred:isActive?0:1});
+    showToast(isActive?'Unstarred':'Starred');
+    await loadAreas();render();
   }));
   // My Day quick toggle
   document.querySelectorAll('.myday-toggle').forEach(el=>el.addEventListener('click',async e=>{
@@ -1903,11 +2237,12 @@ async function openDP(id){
 }
 function renderDPBody(){
   const t=dpTask;
-  let h=`<label>Title</label><input type="text" id="dp-ttl" value="${escA(t.title)}">
+  let h=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="flex:1;margin:0">Title</label><span class="material-icons-round dp-star-toggle" id="dp-star" style="cursor:pointer;font-size:22px;color:${t.starred?'var(--warn,#f59e0b)':'var(--txd)'}" title="${t.starred?'Unstar':'Star'}">${t.starred?'star':'star_outline'}</span></div><input type="text" id="dp-ttl" value="${escA(t.title)}">
     <label>Notes</label><textarea id="dp-note">${esc(t.note||'')}</textarea>
     <div id="dp-note-preview" class="md-note" style="display:none;padding:8px 10px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--rs);margin:-6px 0 10px;max-height:200px;overflow-y:auto"></div>
-    <div class="dp-row"><div><label>Due Date</label><div style="display:flex;gap:6px"><input type="date" id="dp-due" value="${t.due_date||''}" style="flex:1"><input type="time" id="dp-time" value="${t.due_time||''}" style="width:100px"></div></div>
-    <div><label>Priority</label><select id="dp-pri"><option value="0" ${t.priority===0?'selected':''}>None</option><option value="1" ${t.priority===1?'selected':''}>Normal</option><option value="2" ${t.priority===2?'selected':''}>High</option><option value="3" ${t.priority===3?'selected':''}>Critical</option></select></div></div>
+    <div class="dp-row"><div><label>Start Date</label><input type="date" id="dp-start" value="${t.start_date||''}"></div>
+    <div><label>Due Date</label><div style="display:flex;gap:6px"><input type="date" id="dp-due" value="${t.due_date||''}" style="flex:1"><input type="time" id="dp-time" value="${t.due_time||''}" style="width:100px"></div></div></div>
+    <div class="dp-row"><div><label>Priority</label><select id="dp-pri"><option value="0" ${t.priority===0?'selected':''}>None</option><option value="1" ${t.priority===1?'selected':''}>Normal</option><option value="2" ${t.priority===2?'selected':''}>High</option><option value="3" ${t.priority===3?'selected':''}>Critical</option></select></div>
     <div class="dp-row"><div><label>Assigned To</label><select id="dp-asg-user"><option value="">Unassigned</option></select></div>
     <div><label>Recurring</label><select id="dp-rec"><option value="">None</option><option value="daily" ${t.recurring==='daily'?'selected':''}>Daily</option><option value="weekdays" ${t.recurring==='weekdays'?'selected':''}>Weekdays</option><option value="weekly" ${t.recurring==='weekly'?'selected':''}>Weekly</option><option value="biweekly" ${t.recurring==='biweekly'?'selected':''}>Every 2 Weeks</option><option value="monthly" ${t.recurring==='monthly'?'selected':''}>Monthly</option><option value="yearly" ${t.recurring==='yearly'?'selected':''}>Yearly</option><option value="custom" ${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)?'selected':''}>Custom…</option></select><div id="dp-rec-custom" style="display:${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)&&t.recurring!=='every-2-weeks'?'flex':'none'};gap:6px;margin-top:4px;align-items:center"><span style="font-size:11px">Every</span><input type="number" id="dp-rec-n" min="1" max="365" style="width:60px" value="${(t.recurring?.match(/^every-(\d+)/)||[])[1]||'3'}"><select id="dp-rec-unit" style="width:80px"><option value="days" ${t.recurring?.endsWith('-days')?'selected':''}>Days</option><option value="weeks" ${t.recurring?.endsWith('-weeks')?'selected':''}>Weeks</option></select></div><div id="dp-rec-preview" style="display:${t.recurring?'block':'none'};margin-top:6px;padding:6px 8px;background:var(--bg-c);border-radius:4px;font-size:10px;color:var(--tx2)"><span class="material-icons-round" style="font-size:12px;vertical-align:middle">repeat</span> <span id="dp-rec-txt">${esc(t.recurring||'')} </span></div></div></div>
     <div><label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:10px"><input type="checkbox" id="dp-md" ${t.my_day?'checked':''} style="width:auto;margin:0">Add to My Day</label></div>
@@ -1917,8 +2252,10 @@ function renderDPBody(){
     <label>Tags</label><div class="tg-wrap" id="tg-wrap"><div class="tgi" id="tgi"></div></div>
     <label>Subtasks</label><div class="sta"><input type="text" id="st-input" placeholder="Add subtask..."><button id="st-add">Add</button></div><div class="stl" id="stl"></div>
     <label>Dependencies</label><div id="dp-deps"></div>
-    <label>Comments</label><div class="sta"><input type="text" id="cmt-input" placeholder="Add a comment..."><button id="cmt-add">Post</button></div><div id="dp-comments"></div>
-    <label>Custom Fields</label><div id="dp-cf"></div>`;
+    <label>Comments</label><div class="sta"><input type="text" id="cmt-input" placeholder="Add a comment... (use @name to mention)"><button id="cmt-add">Post</button></div><div id="dp-comments"></div>
+    <label>Attachments</label><div id="dp-attachments"></div><div class="sta"><input type="file" id="att-input" accept="image/*,.pdf,.txt,.json,.csv,.md"><button id="att-upload">Upload</button></div>
+    <label>Custom Fields</label><div id="dp-cf"></div>
+    <label>Activity</label><div id="dp-activity" style="font-size:11px;color:var(--txd)">Loading...</div>`;
   $('dp-body').innerHTML=h;
   // Populate list picker
   const dpListSel=$('dp-list');
@@ -1940,10 +2277,12 @@ function renderDPBody(){
   renderDeps();
   renderComments();
   renderDPCustomFields();
+  renderDPAttachments();
   $('st-add').addEventListener('click',addSubtask);
   $('st-input').addEventListener('keydown',e=>{if(e.key==='Enter')addSubtask()});
   $('cmt-add').addEventListener('click',addComment);
   $('cmt-input').addEventListener('keydown',e=>{if(e.key==='Enter')addComment()});
+  $('att-upload')?.addEventListener('click',uploadAttachment);
   // Custom recurring toggle + preview
   $('dp-rec').addEventListener('change',()=>{
     const v=$('dp-rec').value;
@@ -1957,6 +2296,29 @@ function renderDPBody(){
   function updateNotePrev(){const v=noteEl.value.trim();if(v){prevEl.innerHTML=renderMd(v);prevEl.style.display='block'}else{prevEl.style.display='none'}}
   noteEl.addEventListener('blur',updateNotePrev);
   if(t.note)updateNotePrev();
+  // Star toggle in detail panel
+  $('dp-star').addEventListener('click',async()=>{
+    dpTask.starred=dpTask.starred?0:1;
+    $('dp-star').textContent=dpTask.starred?'star':'star_outline';
+    $('dp-star').style.color=dpTask.starred?'var(--warn,#f59e0b)':'var(--txd)';
+    $('dp-star').title=dpTask.starred?'Unstar':'Star';
+  });
+  // Activity feed
+  renderDPActivity();
+}
+async function renderDPActivity(){
+  const el=$('dp-activity');if(!el||!dpTask)return;
+  try{
+    const acts=await api.get('/api/tasks/'+dpTask.id+'/activity');
+    if(!acts.length){el.innerHTML='<div style="padding:4px 0">No activity recorded yet</div>';return}
+    const actionLabels={task_created:'Created',task_updated:'Updated',task_deleted:'Deleted',task_completed:'Completed'};
+    el.innerHTML=acts.map(a=>{
+      const d=new Date(a.created_at+'Z');
+      const when=d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+      const label=actionLabels[a.action]||a.action;
+      return `<div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid var(--brd)"><span style="color:var(--tx)">${esc(label)}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.detail||'')}</span><span style="flex-shrink:0">${when}</span></div>`;
+    }).join('');
+  }catch(e){el.innerHTML='<div style="padding:4px 0">Could not load activity</div>'}
 }
 async function renderComments(){
   const el=$('dp-comments');if(!el||!dpTask)return;
@@ -1966,7 +2328,7 @@ async function renderComments(){
     el.innerHTML=comments.map(c=>{
       const d=new Date(c.created_at);
       const when=d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
-      return `<div class="dp-comment"><div style="flex:1;min-width:0;overflow:hidden">${esc(c.text)}</div><span class="dp-comment-time">${when}</span><span class="material-icons-round dp-comment-del" data-cid="${c.id}">close</span></div>`;
+      return `<div class="dp-comment"><div style="flex:1;min-width:0;overflow:hidden">${esc(c.text).replace(/@([a-zA-Z0-9_.]+)/g,'<span style="color:var(--brand);font-weight:600">@$1</span>')}</div><span class="dp-comment-time">${when}</span><span class="material-icons-round dp-comment-del" data-cid="${c.id}">close</span></div>`;
     }).join('');
     el.querySelectorAll('.dp-comment-del').forEach(b=>b.addEventListener('click',async()=>{
       await api.del('/api/tasks/'+dpTask.id+'/comments/'+b.dataset.cid);renderComments();
@@ -1978,6 +2340,39 @@ async function addComment(){
   const text=inp.value.trim();if(!text||!dpTask)return;
   await api.post('/api/tasks/'+dpTask.id+'/comments',{text});
   inp.value='';renderComments();
+}
+async function renderDPAttachments(){
+  const el=$('dp-attachments');if(!el||!dpTask)return;
+  try{
+    const atts=await api.get('/api/tasks/'+dpTask.id+'/attachments');
+    if(!atts.length){el.innerHTML='<div style="font-size:11px;color:var(--txd);padding:4px 0">No attachments</div>';return}
+    el.innerHTML=atts.map(a=>{
+      const isImg=/^image\//.test(a.mime_type);
+      const sizeKB=Math.round(a.size_bytes/1024);
+      return `<div class="dp-attachment" style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--brd)">
+        <span class="material-icons-round" style="font-size:16px;color:var(--txd)">${isImg?'image':'attach_file'}</span>
+        <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.original_name)}</span>
+        <span style="font-size:10px;color:var(--txd)">${sizeKB}KB</span>
+        <span class="material-icons-round att-del" data-aid="${a.id}" style="font-size:14px;color:var(--err);cursor:pointer" title="Delete">close</span>
+      </div>`;
+    }).join('');
+    el.querySelectorAll('.att-del').forEach(b=>b.addEventListener('click',async()=>{
+      await api.del('/api/tasks/'+dpTask.id+'/attachments/'+b.dataset.aid);renderDPAttachments();
+    }));
+  }catch(e){el.innerHTML=''}
+}
+async function uploadAttachment(){
+  const inp=$('att-input');if(!inp||!inp.files.length||!dpTask)return;
+  const file=inp.files[0];
+  if(file.size>10*1024*1024){showToast('File too large (max 10 MB)','error');return}
+  try{
+    const resp=await fetch('/api/tasks/'+dpTask.id+'/attachments',{
+      method:'POST',headers:{'x-filename':file.name,'x-mime-type':file.type,'content-type':'application/octet-stream'},
+      body:file,credentials:'include'
+    });
+    if(!resp.ok){const e=await resp.json();showToast(e.error||'Upload failed','error');return}
+    inp.value='';renderDPAttachments();showToast('File attached');
+  }catch(e){showToast('Upload failed','error')}
 }
 async function renderDPCustomFields(){
   const el=$('dp-cf');if(!el||!dpTask)return;
@@ -2043,15 +2438,28 @@ function showTagDD(q){
 }
 function renderSubtasks(){
   const el=$('stl');
-  el.innerHTML=dpSubtasks.map((s,i)=>`<div class="sti ${s.done?'stdone':''}" data-id="${s.id}" data-idx="${i}" draggable="true" style="display:flex;align-items:center;gap:7px;padding:5px 0">
+  // Build tree structure for nested subtasks
+  const roots=dpSubtasks.filter(s=>!s.parent_id);
+  const childMap={};
+  dpSubtasks.forEach(s=>{if(s.parent_id){if(!childMap[s.parent_id])childMap[s.parent_id]=[];childMap[s.parent_id].push(s)}});
+  function renderSubNode(s,depth){
+    const indent=depth*24;
+    const i=dpSubtasks.indexOf(s);
+    let h=`<div class="sti ${s.done?'stdone':''}" data-id="${s.id}" data-idx="${i}" draggable="true" style="display:flex;align-items:center;gap:7px;padding:5px 0;padding-left:${indent}px">
     <span class="st-handle material-icons-round" style="cursor:grab;font-size:14px;color:var(--txd);flex-shrink:0">drag_indicator</span>
     <div class="stk" data-id="${s.id}" style="width:16px;height:16px;border-radius:50%;border:2px solid ${s.done?'var(--ok)':'var(--ck-bd,var(--txd))'};background:${s.done?'var(--ok)':'var(--ck-bg,transparent)'};cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">
       <span class="material-icons-round" style="font-size:10px;color:#fff;display:${s.done?'block':'none'}">check</span>
     </div>
     <span class="stx">${esc(s.title)}</span>
+    ${depth<2?`<button class="st-nest material-icons-round" data-id="${s.id}" title="Add nested subtask" style="font-size:14px;color:var(--txd);cursor:pointer;border:none;background:none;padding:0">subdirectory_arrow_right</button>`:''}
     <button class="stde material-icons-round" data-id="${s.id}">close</button>
   </div>
-  <div class="stn" data-id="${s.id}" contenteditable="true" title="Click to add note" style="font-size:10px;color:var(--txd);margin:0 0 4px 28px;padding:2px 4px;border-radius:3px;outline:none;font-style:italic;min-height:14px;border:1px solid transparent;cursor:text" onfocus="this.style.borderColor='var(--brd)'" onblur="this.style.borderColor='transparent'">${esc(s.note||'')}</div>`).join('');
+  <div class="stn" data-id="${s.id}" contenteditable="true" title="Click to add note" style="font-size:10px;color:var(--txd);margin:0 0 4px ${28+indent}px;padding:2px 4px;border-radius:3px;outline:none;font-style:italic;min-height:14px;border:1px solid transparent;cursor:text" onfocus="this.style.borderColor='var(--brd)'" onblur="this.style.borderColor='transparent'">${esc(s.note||'')}</div>`;
+    const children=childMap[s.id]||[];
+    children.forEach(c=>{h+=renderSubNode(c,depth+1)});
+    return h;
+  }
+  el.innerHTML=roots.map(s=>renderSubNode(s,0)).join('');
   if(!dpSubtasks.length) el.innerHTML='';
   // Drag reorder
   let dragIdx=null;
@@ -2077,6 +2485,14 @@ function renderSubtasks(){
     const sid=Number(n.dataset.id);const note=n.textContent.trim();
     await api.put('/api/subtasks/'+sid,{note});
     const s=dpSubtasks.find(x=>x.id===sid);if(s)s.note=note;
+  }));
+  // Nested subtask buttons
+  el.querySelectorAll('.st-nest').forEach(btn=>btn.addEventListener('click',async()=>{
+    const parentId=Number(btn.dataset.id);
+    const title=prompt('Nested subtask title:');
+    if(!title||!title.trim()||!dpTask)return;
+    const s=await api.post('/api/tasks/'+dpTask.id+'/subtasks',{title:title.trim(),parent_id:parentId});
+    dpSubtasks.push(s);renderSubtasks();
   }));
 }
 async function addSubtask(){
@@ -2128,9 +2544,9 @@ $('dp-save').addEventListener('click',async()=>{
   if(rec==='custom'){const n=parseInt($('dp-rec-n').value)||3;const u=$('dp-rec-unit').value;rec='every-'+n+'-'+u}
   await api.put('/api/tasks/'+dpTask.id,{
     title:$('dp-ttl').value, note:$('dp-note').value, due_date:$('dp-due').value||null,
-    due_time:$('dp-time').value||null,
+    due_time:$('dp-time').value||null, start_date:$('dp-start').value||null,
     priority:Number($('dp-pri').value), assigned_to_user_id:$('dp-asg-user').value?Number($('dp-asg-user').value):null,
-    recurring:rec, my_day:$('dp-md').checked,
+    recurring:rec, my_day:$('dp-md').checked, starred:dpTask.starred?1:0,
     estimated_minutes:Number($('dp-est').value)||null, actual_minutes:Number($('dp-act').value)||0,
     list_id:$('dp-list').value?Number($('dp-list').value):null
   });
@@ -2248,6 +2664,197 @@ function showToast(msg, undoFn, duration=5000) {
 function removeToast(el) {
   el.classList.add('fading');
   setTimeout(() => el.remove(), 200);
+}
+
+// ─── AI MODALS ───
+function showAiPlanModal(plan){
+  const ov=document.createElement('div');
+  ov.className='ov active';
+  ov.id='ai-plan-ov';
+  let h=`<div class="modal" style="max-width:520px;max-height:80vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <span class="material-icons-round" style="font-size:22px;color:var(--brand)">smart_toy</span>
+      <h3 style="margin:0;font-size:16px">AI Daily Plan</h3>
+      <span style="flex:1"></span><button class="btn-c ai-modal-close"><span class="material-icons-round">close</span></button>
+    </div>`;
+  if(plan.summary)h+=`<div style="padding:10px 14px;background:var(--sf);border-radius:var(--rs);margin-bottom:12px;font-size:13px">${esc(plan.summary)}</div>`;
+  if(plan.estimated_hours)h+=`<div style="font-size:11px;color:var(--txd);margin-bottom:10px">Estimated: ${plan.estimated_hours}h</div>`;
+  if(plan.plan?.length){
+    h+=`<div style="display:flex;flex-direction:column;gap:6px">`;
+    plan.plan.forEach((p,i)=>{
+      h+=`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg-c);border-radius:var(--rs);border-left:3px solid ${p.energy_level==='high'?'var(--err)':p.energy_level==='medium'?'var(--warn)':'var(--ok)'}">
+        <span style="font-size:11px;color:var(--txd);font-weight:600;min-width:18px">${i+1}</span>
+        ${p.suggested_time?`<span class="ai-time" style="font-size:11px;font-weight:500;color:var(--brand);min-width:42px">${esc(p.suggested_time)}</span>`:''}
+        <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" data-tid="${p.task_id}">${esc(p.reason||'Task #'+p.task_id)}</div>
+        ${p.energy_level?`<div style="font-size:10px;color:var(--txd)">Energy: ${p.energy_level}</div>`:''}</div>
+      </div>`;
+    });
+    h+=`</div>`;
+  }
+  if(plan.deferred?.length){
+    h+=`<div style="margin-top:12px"><div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--txd)">Suggested to defer:</div>`;
+    plan.deferred.forEach(d=>{
+      h+=`<div style="font-size:11px;color:var(--txd);padding:4px 0">${esc(d.reason)}${d.suggested_date?' → '+d.suggested_date:''}</div>`;
+    });
+    h+=`</div>`;
+  }
+  h+=`<div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn-c ai-modal-close" style="font-size:12px;padding:8px 16px">Close</button>
+    <button class="btn-s ai-plan-accept" style="font-size:12px;padding:8px 16px"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">check</span>Looks good!</button>
+  </div></div>`;
+  ov.innerHTML=h;
+  document.body.appendChild(ov);
+  ov.querySelectorAll('.ai-modal-close').forEach(b=>b.addEventListener('click',()=>ov.remove()));
+  ov.querySelector('.ai-plan-accept')?.addEventListener('click',async()=>{
+    try{await api.post('/api/ai/accept',{feature:'daily_plan'})}catch{}
+    showToast('Plan accepted! Time to execute.','ok');
+    ov.remove();
+  });
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove()});
+}
+
+function showAiDecomposeModal(result,goalId){
+  const ov=document.createElement('div');
+  ov.className='ov active';
+  ov.id='ai-decompose-ov';
+  const data=result.data||result;
+  let h=`<div class="modal" style="max-width:560px;max-height:80vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <span class="material-icons-round" style="font-size:22px;color:var(--brand)">account_tree</span>
+      <h3 style="margin:0;font-size:16px">Goal Decomposition</h3>
+      <span style="flex:1"></span><button class="btn-c ai-modal-close"><span class="material-icons-round">close</span></button>
+    </div>`;
+  if(data.notes)h+=`<div style="padding:10px 14px;background:var(--sf);border-radius:var(--rs);margin-bottom:12px;font-size:12px;color:var(--txd)">${esc(data.notes)}</div>`;
+  if(data.estimated_total_hours)h+=`<div style="font-size:11px;color:var(--txd);margin-bottom:10px">Est. total: ${data.estimated_total_hours}h</div>`;
+  if(data.milestones?.length){
+    data.milestones.forEach((m,mi)=>{
+      h+=`<div style="margin-bottom:12px"><div style="font-weight:600;font-size:13px;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+        <span style="background:var(--brand);color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0">${mi+1}</span>${esc(m.title)}</div>`;
+      if(m.tasks?.length){
+        m.tasks.forEach(t=>{
+          h+=`<div style="margin-left:26px;padding:4px 0;font-size:12px;display:flex;align-items:center;gap:6px">
+            <input type="checkbox" class="ai-task-check" data-mi="${mi}" data-title="${escA(t.title)}" checked style="margin:0">
+            <span>${esc(t.title)}</span>
+            ${t.estimated_minutes?`<span style="color:var(--txd);font-size:10px">${t.estimated_minutes}min</span>`:''}
+            ${t.priority?`<span style="font-size:10px;padding:1px 4px;border-radius:3px;background:${t.priority>=3?'var(--err)':t.priority>=2?'var(--warn)':'var(--ok)'};color:#fff">P${t.priority}</span>`:''}
+          </div>`;
+          if(t.subtasks?.length){
+            t.subtasks.forEach(s=>{
+              h+=`<div style="margin-left:52px;padding:2px 0;font-size:11px;color:var(--txd)">• ${esc(s)}</div>`;
+            });
+          }
+        });
+      }
+      h+=`</div>`;
+    });
+  }
+  h+=`<div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn-c ai-modal-close" style="font-size:12px;padding:8px 16px">Cancel</button>
+    <button class="btn-s ai-decompose-apply" style="font-size:12px;padding:8px 16px"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">add_task</span>Create Tasks</button>
+  </div></div>`;
+  ov.innerHTML=h;
+  document.body.appendChild(ov);
+  ov.querySelectorAll('.ai-modal-close').forEach(b=>b.addEventListener('click',()=>ov.remove()));
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove()});
+  ov.querySelector('.ai-decompose-apply')?.addEventListener('click',async()=>{
+    const checked=ov.querySelectorAll('.ai-task-check:checked');
+    let created=0;
+    for(const cb of checked){
+      try{
+        await api.post(`/api/goals/${goalId}/tasks`,{title:cb.dataset.title,status:'todo'});
+        created++;
+      }catch{}
+    }
+    try{await api.post('/api/ai/accept',{feature:'decompose'})}catch{}
+    showToast(`Created ${created} tasks from AI plan`,'ok');
+    ov.remove();
+    render();
+  });
+}
+
+function showAiReviewModal(result){
+  const ov=document.createElement('div');
+  ov.className='ov active';
+  ov.id='ai-review-ov';
+  const data=result.data||result;
+  let h=`<div class="modal" style="max-width:520px;max-height:80vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <span class="material-icons-round" style="font-size:22px;color:var(--brand)">rate_review</span>
+      <h3 style="margin:0;font-size:16px">AI Weekly Review</h3>
+      <span style="flex:1"></span><button class="btn-c ai-modal-close"><span class="material-icons-round">close</span></button>
+    </div>`;
+  if(data.wins?.length){
+    h+=`<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ok)">🎉 Wins</div>`;
+    data.wins.forEach(w=>{h+=`<div style="font-size:12px;padding:4px 0">${esc(w)}</div>`});
+    h+=`</div>`;
+  }
+  if(data.patterns?.length){
+    h+=`<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:600;margin-bottom:6px">📊 Patterns</div>`;
+    data.patterns.forEach(p=>{h+=`<div style="font-size:12px;padding:4px 0;color:var(--txd)">${esc(p)}</div>`});
+    h+=`</div>`;
+  }
+  if(data.balanceAlert){
+    h+=`<div style="padding:10px;background:var(--warn-bg,rgba(255,152,0,.1));border-radius:var(--rs);margin-bottom:12px;font-size:12px">⚠️ ${esc(data.balanceAlert)}</div>`;
+  }
+  if(data.reflectionQuestions?.length){
+    h+=`<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:600;margin-bottom:6px">🤔 Reflect</div>`;
+    data.reflectionQuestions.forEach(q=>{h+=`<div style="font-size:12px;padding:4px 0;font-style:italic;color:var(--txd)">${esc(q)}</div>`});
+    h+=`</div>`;
+  }
+  if(data.nextWeekFocus){
+    h+=`<div style="padding:10px;background:var(--sf);border-radius:var(--rs);margin-bottom:12px;font-size:12px"><strong>Focus next week:</strong> ${esc(data.nextWeekFocus)}</div>`;
+  }
+  if(data.motivationalNote){
+    h+=`<div style="font-size:12px;color:var(--txd);font-style:italic;margin-bottom:12px">${esc(data.motivationalNote)}</div>`;
+  }
+  h+=`<div style="display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn-c ai-modal-close" style="font-size:12px;padding:8px 16px">Close</button>
+  </div></div>`;
+  ov.innerHTML=h;
+  document.body.appendChild(ov);
+  ov.querySelectorAll('.ai-modal-close').forEach(b=>b.addEventListener('click',()=>ov.remove()));
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove()});
+}
+
+function showAiYearReviewModal(data){
+  const ov=document.createElement('div');
+  ov.className='ov active';
+  let h=`<div class="modal" style="max-width:560px;max-height:85vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <span class="material-icons-round" style="font-size:22px;color:var(--brand)">auto_awesome</span>
+      <h3 style="margin:0;font-size:16px">${data.headline||'Your Year in Review'}</h3>
+      <span style="flex:1"></span><button class="btn-c ai-modal-close"><span class="material-icons-round">close</span></button>
+    </div>`;
+  if(data.growthStory)h+=`<div style="padding:12px 14px;background:var(--sf);border-radius:var(--rs);margin-bottom:14px;font-size:13px;line-height:1.5">${esc(data.growthStory)}</div>`;
+  // Stats grid
+  h+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">`;
+  const statsMap={tasksCompleted:'Tasks Done',goalsAchieved:'Goals Hit',focusHours:'Focus Hours',streakRecord:'Best Streak',habitLogs:'Habit Logs'};
+  const ts=data.totalStats||{};
+  Object.entries(statsMap).forEach(([k,l])=>{
+    if(ts[k]!=null)h+=`<div style="text-align:center;padding:10px;background:var(--bg-c);border-radius:var(--rs)"><div style="font-size:20px;font-weight:700;color:var(--brand)">${typeof ts[k]==='number'?ts[k].toLocaleString():ts[k]}</div><div style="font-size:10px;color:var(--txd)">${l}</div></div>`;
+  });
+  h+=`</div>`;
+  if(data.topAreas?.length){
+    h+=`<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:600;margin-bottom:6px">Top Areas</div>`;
+    data.topAreas.forEach(a=>{h+=`<div style="font-size:12px;padding:4px 0">${esc(a.name)} — ${a.percentage}% — ${esc(a.insight||'')}</div>`});
+    h+=`</div>`;
+  }
+  if(data.achievements?.length){
+    h+=`<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:600;margin-bottom:6px">🏆 Achievements</div>`;
+    data.achievements.forEach(a=>{h+=`<div style="font-size:12px;padding:3px 0">${esc(a)}</div>`});
+    h+=`</div>`;
+  }
+  if(data.funFacts?.length){
+    h+=`<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:600;margin-bottom:6px">🎲 Fun Facts</div>`;
+    data.funFacts.forEach(f=>{h+=`<div style="font-size:12px;padding:3px 0;color:var(--txd)">${esc(f)}</div>`});
+    h+=`</div>`;
+  }
+  if(data.nextYearSuggestion)h+=`<div style="padding:10px;background:var(--sf);border-radius:var(--rs);font-size:12px"><strong>Next year:</strong> ${esc(data.nextYearSuggestion)}</div>`;
+  h+=`<div style="margin-top:14px;text-align:right"><button class="btn-c ai-modal-close" style="font-size:12px;padding:8px 16px">Close</button></div></div>`;
+  ov.innerHTML=h;
+  document.body.appendChild(ov);
+  ov.querySelectorAll('.ai-modal-close').forEach(b=>b.addEventListener('click',()=>ov.remove()));
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove()});
 }
 
 // ─── WIRE DATA-ACTION BUTTONS ───
@@ -2848,6 +3455,12 @@ async function renderDashboard(){
     <div class="streak-card"><div class="s-num" style="color:var(--brand)">${s.thisWeek}</div><div class="s-label">This Week</div></div>
     <div class="streak-card"><div class="s-num" style="color:var(--warn)">${s.dueToday}</div><div class="s-label">Due Today</div></div>
   </div>`;
+  // AI action bar
+  h+=`<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+    <button class="btn-c ai-btn" id="ai-cognitive-load" style="font-size:11px;padding:5px 10px;border-color:var(--brand)"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:3px;color:var(--brand)">psychology</span>Cognitive Load</button>
+    <button class="btn-c ai-btn" id="ai-life-balance" style="font-size:11px;padding:5px 10px;border-color:var(--brand)"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:3px;color:var(--brand)">donut_large</span>Life Balance</button>
+    <button class="btn-c ai-btn" id="ai-year-review" style="font-size:11px;padding:5px 10px;border-color:var(--brand)"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:3px;color:var(--brand)">auto_awesome</span>Year Review</button>
+  </div>`;
   h+=`<div class="ds-grid">
     <div class="ds-card clickable" data-go="all"><div class="ds-num">${s.total}</div><div class="ds-label">Total Tasks</div></div>
     <div class="ds-card clickable" data-go="logbook"><div class="ds-num" style="color:var(--ok)">${s.done}</div><div class="ds-label">Completed</div></div>
@@ -2903,6 +3516,40 @@ async function renderDashboard(){
     const a=areas.find(x=>x.name===el.querySelector('.ds-aname')?.textContent);
     if(a){activeAreaId=a.id;activeGoalId=null;currentView='area';document.querySelectorAll('.ni,.ai').forEach(n=>n.classList.remove('active'));render()}
   })});
+  // AI Dashboard buttons
+  $('ai-cognitive-load')?.addEventListener('click',async()=>{
+    const btn=$('ai-cognitive-load');
+    if(btn)btn.disabled=true;
+    try{
+      const r=await api.post('/api/ai/cognitive-load',{});
+      const d=r.data||r;
+      const colors={light:'var(--ok)',moderate:'var(--brand)',heavy:'var(--warn)',overloaded:'var(--err)'};
+      const msg=`Load: ${d.level||'?'} (${d.score||'?'}/10)${d.suggestions?.length?' — '+d.suggestions[0]:''}`;
+      showToast(msg,null,8000);
+    }catch(e){showToast(e.message||'AI unavailable','error')}
+    finally{if(btn)btn.disabled=false}
+  });
+  $('ai-life-balance')?.addEventListener('click',async()=>{
+    const btn=$('ai-life-balance');
+    if(btn)btn.disabled=true;
+    try{
+      const r=await api.post('/api/ai/life-balance',{});
+      const d=r.data||r;
+      let msg=d.commentary||'';
+      if(d.neglectedAreas?.length)msg+=` Neglected: ${d.neglectedAreas.map(a=>a.name).join(', ')}.`;
+      showToast(msg||'Analysis complete',null,8000);
+    }catch(e){showToast(e.message||'AI unavailable','error')}
+    finally{if(btn)btn.disabled=false}
+  });
+  $('ai-year-review')?.addEventListener('click',async()=>{
+    const btn=$('ai-year-review');
+    if(btn){btn.disabled=true;btn.innerHTML='<span class="material-icons-round" style="font-size:14px;vertical-align:middle;animation:spin 1s linear infinite">sync</span> Generating...';}
+    try{
+      const r=await api.post('/api/ai/year-in-review',{year:new Date().getFullYear()});
+      showAiYearReviewModal(r.data||r);
+    }catch(e){showToast(e.message||'AI unavailable','error')}
+    finally{if(btn){btn.disabled=false;btn.innerHTML='<span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:3px">auto_awesome</span>Year Review';}}
+  });
 }
 function timeAgo(iso){const d=new Date(iso),n=Date.now(),s=Math.floor((n-d)/1e3);if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago'}
 
@@ -3720,6 +4367,170 @@ function vimMove(delta){
 }
 
 // ─── CUSTOM FIELDS SETTINGS ───
+async function renderAiSettings(c, tabsHtml, wireSettingsTabs){
+  const settings=await api.get('/api/ai/settings');
+  const status=await api.get('/api/ai/status');
+  let stats=null;
+  try{stats=await api.get('/api/ai/stats')}catch{}
+  const providers=[{v:'openai',l:'OpenAI'},{v:'anthropic',l:'Anthropic'},{v:'ollama',l:'Ollama (Local)'},{v:'custom',l:'Custom (OpenAI-compatible)'}];
+  const defaultUrls={openai:'https://api.openai.com/v1',anthropic:'https://api.anthropic.com/v1',ollama:'',custom:''};
+  const ollamaPlaceholder='http://your-ollama-host:11434';
+  const defaultModels={openai:'gpt-4o-mini',anthropic:'claude-sonnet-4-20250514',ollama:'llama3:8b',custom:''};
+  let h=tabsHtml+`<div class="settings-grid">
+  <section class="settings-section"><h3><span class="material-icons-round" style="font-size:18px;vertical-align:middle;margin-right:6px">smart_toy</span>AI Configuration</h3>
+  <p style="font-size:12px;color:var(--txd);margin-bottom:12px">Configure your AI provider. All AI calls use YOUR API key — no data sent to LifeFlow servers.</p>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:10px 14px;border-radius:var(--rs);background:${status.configured?'var(--ok-bg,rgba(76,175,80,.1))':'var(--warn-bg,rgba(255,152,0,.1))'}">
+    <span class="material-icons-round" style="font-size:18px;color:${status.configured?'var(--ok,#4caf50)':'var(--warn,#ff9800)'}">${status.configured?'check_circle':'warning'}</span>
+    <span style="font-size:12px;font-weight:500">${status.configured?`Connected: ${esc(status.provider)} / ${esc(status.model)}`:'AI not configured — set provider and API key below'}</span>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--txd);display:block;margin-bottom:4px">Provider</label>
+    <select id="ai-provider" class="inp" style="font-size:13px">${providers.map(p=>`<option value="${p.v}"${settings.ai_provider===p.v?' selected':''}>${p.l}</option>`).join('')}</select></div>
+    <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--txd);display:block;margin-bottom:4px">Base URL</label>
+    <input type="text" id="ai-base-url" class="inp" value="${escA(settings.ai_base_url||defaultUrls[settings.ai_provider||'openai']||'')}" placeholder="https://api.openai.com/v1" style="font-size:13px"></div>
+    <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--txd);display:block;margin-bottom:4px">Model</label>
+    <input type="text" id="ai-model" class="inp" value="${escA(settings.ai_model||defaultModels[settings.ai_provider||'openai']||'')}" placeholder="gpt-4o-mini" style="font-size:13px"></div>
+    <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--txd);display:block;margin-bottom:4px">API Key ${settings.has_api_key?'<span style="color:var(--ok,#4caf50);font-weight:400;text-transform:none">(saved)</span>':''}</label>
+    <div style="display:flex;gap:6px"><input type="password" id="ai-api-key" class="inp" placeholder="${settings.has_api_key?'••••••••••••':'Enter your API key'}" style="font-size:13px;flex:1">
+    ${settings.has_api_key?'<button class="btn-c" id="ai-key-del" title="Remove key" style="color:var(--dn);padding:6px"><span class="material-icons-round" style="font-size:16px">delete</span></button>':''}</div></div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn-s" id="ai-save" style="font-size:12px;padding:8px 16px"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">save</span>Save Settings</button>
+      <button class="btn-c" id="ai-test" style="font-size:12px;padding:8px 14px"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">speed</span>Test Connection</button>
+    </div>
+    <div id="ai-test-result" style="font-size:12px;display:none;padding:8px 12px;border-radius:var(--rs);margin-top:4px"></div>
+  </div></section>
+
+  <section class="settings-section"><h3>Privacy & Transparency</h3>
+  <p style="font-size:12px;color:var(--txd);margin-bottom:12px">Control what data is sent to AI and how interactions are logged.</p>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--txd);display:block;margin-bottom:4px">Transparency Mode</label>
+    <select id="ai-transparency" class="inp" style="font-size:13px">
+      <option value="always"${(settings.ai_transparency_mode||'always')==='always'?' selected':''}>Always show pre-flight (recommended)</option>
+      <option value="trust"${settings.ai_transparency_mode==='trust'?' selected':''}>Trust mode — skip confirmations</option>
+      <option value="off"${settings.ai_transparency_mode==='off'?' selected':''}>Off — no pre-flight prompts</option>
+    </select></div>
+    <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--txd);display:block;margin-bottom:4px">Data Minimization</label>
+    <select id="ai-minimization" class="inp" style="font-size:13px">
+      <option value="strict"${settings.ai_data_minimization==='strict'?' selected':''}>Strict — titles only, no notes or descriptions</option>
+      <option value="standard"${(settings.ai_data_minimization||'standard')==='standard'?' selected':''}>Standard — titles + short descriptions</option>
+      <option value="full"${settings.ai_data_minimization==='full'?' selected':''}>Full — include all task details</option>
+    </select></div>
+  </div></section>
+
+  <section class="settings-section"><h3>AI Capabilities</h3>
+  <p style="font-size:12px;color:var(--txd);margin-bottom:10px">Features available with your current provider.</p>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+    ${[{k:'functionCalling',l:'Function Calling',i:'functions'},{k:'streaming',l:'Streaming',i:'stream'},{k:'embeddings',l:'Embeddings',i:'hub'},{k:'maxTokens',l:'Max Tokens',i:'data_array'}].map(cap=>{
+      const val=status.capabilities?.[cap.k];
+      const supported=typeof val==='boolean'?val:!!val;
+      return `<div style="padding:8px 10px;border-radius:var(--rs);background:var(--sf);display:flex;align-items:center;gap:8px">
+        <span class="material-icons-round" style="font-size:16px;color:${supported?'var(--ok,#4caf50)':'var(--txd)'}">${supported?'check_circle':'cancel'}</span>
+        <div><div style="font-size:12px;font-weight:500">${cap.l}</div>
+        ${cap.k==='maxTokens'?`<div style="font-size:10px;color:var(--txd)">${(val||0).toLocaleString()} tokens</div>`:`<div style="font-size:10px;color:var(--txd)">${supported?'Supported':'Not available'}</div>`}</div>
+      </div>`;
+    }).join('')}
+  </div></section>
+
+  ${stats?`<section class="settings-section"><h3>Usage Stats</h3>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+    <div style="text-align:center;padding:12px;background:var(--sf);border-radius:var(--rs)"><div style="font-size:20px;font-weight:700">${stats.total_calls||0}</div><div style="font-size:10px;color:var(--txd)">Total Calls</div></div>
+    <div style="text-align:center;padding:12px;background:var(--sf);border-radius:var(--rs)"><div style="font-size:20px;font-weight:700">${((stats.total_tokens||0)/1000).toFixed(1)}k</div><div style="font-size:10px;color:var(--txd)">Tokens Used</div></div>
+    <div style="text-align:center;padding:12px;background:var(--sf);border-radius:var(--rs)"><div style="font-size:20px;font-weight:700">${stats.total_calls?Math.round((stats.accepted_count||0)/stats.total_calls*100):0}%</div><div style="font-size:10px;color:var(--txd)">Accepted</div></div>
+  </div>
+  ${stats.byFeature?.length?`<div style="font-size:11px"><strong>By Feature:</strong> ${stats.byFeature.map(f=>`${f.feature} (${f.count})`).join(', ')}</div>`:''}</section>`:''}
+
+  <section class="settings-section"><h3>AI Features Overview</h3>
+  <p style="font-size:12px;color:var(--txd);margin-bottom:10px">Available AI-powered features throughout LifeFlow.</p>
+  <div style="display:flex;flex-direction:column;gap:6px;font-size:12px">
+    ${[
+      {i:'edit_note',l:'Smart Capture',d:'AI-enhanced natural language task input'},
+      {i:'route',l:'Smart Routing',d:'Auto-classify tasks into goals and tags'},
+      {i:'account_tree',l:'Goal Decomposition',d:'Break goals into structured task plans'},
+      {i:'today',l:'Daily Planner',d:'AI-optimized daily task scheduling'},
+      {i:'play_arrow',l:'Next Task',d:'One-tap "what should I do now?" decision'},
+      {i:'rate_review',l:'Review Copilot',d:'AI-generated weekly review insights'},
+      {i:'auto_awesome',l:'Year in Review',d:'Spotify Wrapped-style annual summary'},
+      {i:'psychology',l:'Cognitive Load',d:'Monitor and manage mental load'},
+      {i:'notifications_active',l:'Accountability',d:'Gentle nudges based on your plan'},
+      {i:'spa',l:'Habit Coach',d:'Evidence-based habit formation advice'},
+      {i:'donut_large',l:'Life Balance',d:'Cross-area balance analysis and suggestions'},
+      {i:'auto_fix_high',l:'Automation Builder',d:'Create automations from plain English'},
+      {i:'search',l:'Semantic Search',d:'Find related tasks by meaning, not just keywords'},
+    ].map(f=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--rs);background:var(--sf)">
+      <span class="material-icons-round" style="font-size:16px;color:var(--brand)">${f.i}</span>
+      <div style="flex:1"><span style="font-weight:500">${f.l}</span> — <span style="color:var(--txd)">${f.d}</span></div>
+      <span class="material-icons-round" style="font-size:14px;color:${status.configured?'var(--ok,#4caf50)':'var(--txd)'}">${status.configured?'check_circle':'lock'}</span>
+    </div>`).join('')}
+  </div></section>
+  </div>`;
+  c.innerHTML=h;
+  wireSettingsTabs();
+
+  // Wire provider change → update defaults
+  const provSel=$('ai-provider');
+  provSel?.addEventListener('change',()=>{
+    const p=provSel.value;
+    const urlInp=$('ai-base-url');
+    const modInp=$('ai-model');
+    if(urlInp&&(!urlInp.value||Object.values(defaultUrls).includes(urlInp.value)))urlInp.value=defaultUrls[p]||'';
+    if(modInp&&(!modInp.value||Object.values(defaultModels).includes(modInp.value)))modInp.value=defaultModels[p]||'';
+  });
+
+  // Save settings
+  $('ai-save')?.addEventListener('click',async()=>{
+    const body={
+      ai_provider:$('ai-provider')?.value,
+      ai_base_url:$('ai-base-url')?.value,
+      ai_model:$('ai-model')?.value,
+      ai_transparency_mode:$('ai-transparency')?.value,
+      ai_data_minimization:$('ai-minimization')?.value,
+    };
+    // Save API key if entered
+    const keyInp=$('ai-api-key');
+    if(keyInp?.value){
+      try{await api.post('/api/ai/key',{api_key:keyInp.value})}catch(e){showToast(e.message||'Failed to save key','error');return}
+    }
+    try{
+      await api.post('/api/ai/settings',body);
+      showToast('AI settings saved','ok');
+      renderSettings();
+    }catch(e){showToast(e.message||'Failed to save','error')}
+  });
+
+  // Delete key
+  $('ai-key-del')?.addEventListener('click',async()=>{
+    if(!confirm('Remove your AI API key?'))return;
+    try{await api.del('/api/ai/key');showToast('API key removed','ok');renderSettings()}catch(e){showToast('Failed','error')}
+  });
+
+  // Test connection
+  $('ai-test')?.addEventListener('click',async()=>{
+    const rd=$('ai-test-result');
+    if(!rd)return;
+    rd.style.display='block';
+    rd.innerHTML='<span class="material-icons-round" style="font-size:14px;vertical-align:middle;animation:spin 1s linear infinite">sync</span> Testing...';
+    rd.style.background='var(--sf)';
+    try{
+      // Save settings first so test uses latest config
+      const body={ai_provider:$('ai-provider')?.value,ai_base_url:$('ai-base-url')?.value,ai_model:$('ai-model')?.value};
+      const keyInp=$('ai-api-key');
+      if(keyInp?.value)await api.post('/api/ai/key',{api_key:keyInp.value});
+      await api.post('/api/ai/settings',body);
+      const r=await api.post('/api/ai/test',{});
+      if(r.ok){
+        rd.innerHTML=`<span class="material-icons-round" style="font-size:14px;vertical-align:middle;color:var(--ok,#4caf50)">check_circle</span> Connected! Latency: ${r.latency}ms — ${esc(r.model)}`;
+        rd.style.background='var(--ok-bg,rgba(76,175,80,.1))';
+      }else{
+        rd.innerHTML=`<span class="material-icons-round" style="font-size:14px;vertical-align:middle;color:var(--dn)">error</span> Failed: ${esc(r.error||'Unknown error')}`;
+        rd.style.background='var(--dn-bg,rgba(244,67,54,.1))';
+      }
+    }catch(e){
+      rd.innerHTML=`<span class="material-icons-round" style="font-size:14px;vertical-align:middle;color:var(--dn)">error</span> ${esc(e.message||'Connection failed')}`;
+      rd.style.background='var(--dn-bg,rgba(244,67,54,.1))';
+    }
+  });
+}
+
 async function renderCustomFieldsSettings(c, tabsHtml, wireSettingsTabs){
   const fields=await api.get('/api/custom-fields');
   const TYPES=[{v:'text',l:'Text'},{v:'number',l:'Number'},{v:'date',l:'Date'},{v:'select',l:'Select'}];
@@ -3796,9 +4607,10 @@ async function renderSettings(){
     {id:'templates',label:'Templates',icon:'content_copy',g:4},
     {id:'automations',label:'Automations',icon:'auto_fix_high',g:4},
     {id:'customfields',label:'Custom Fields',icon:'edit_note',g:4},
-    {id:'badges',label:'Badges',icon:'emoji_events',g:5},
-    {id:'data',label:'Data',icon:'storage',g:6},
-    {id:'shortcuts',label:'Shortcuts',icon:'keyboard',g:6}
+    {id:'ai',label:'AI',icon:'smart_toy',g:5},
+    {id:'badges',label:'Badges',icon:'emoji_events',g:6},
+    {id:'data',label:'Data',icon:'storage',g:7},
+    {id:'shortcuts',label:'Shortcuts',icon:'keyboard',g:7}
   ];
   if(!window._settingsTab)window._settingsTab='general';
   let tabsHtml=`<input type="text" class="settings-search" id="settings-filter" placeholder="Search settings..." value="${esc(window._settingsFilter||'')}">`;
@@ -3818,7 +4630,7 @@ async function renderSettings(){
     if(_sf){
       _sf.addEventListener('input',()=>{
         const q=_sf.value.toLowerCase().trim();window._settingsFilter=q;
-        const tabDefs=[{id:'general',label:'General'},{id:'taskdefaults',label:'Task Defaults'},{id:'appearance',label:'Appearance Theme'},{id:'areas',label:'Life Areas'},{id:'listconfig',label:'Lists Grocery Categories'},{id:'tags',label:'Tags'},{id:'templates',label:'Templates'},{id:'automations',label:'Automations Rules'},{id:'badges',label:'Badges Achievements'},{id:'data',label:'Data Export Import Reset'},{id:'shortcuts',label:'Shortcuts Keyboard'}];
+        const tabDefs=[{id:'general',label:'General'},{id:'taskdefaults',label:'Task Defaults'},{id:'appearance',label:'Appearance Theme'},{id:'areas',label:'Life Areas'},{id:'listconfig',label:'Lists Grocery Categories'},{id:'tags',label:'Tags'},{id:'templates',label:'Templates'},{id:'automations',label:'Automations Rules'},{id:'customfields',label:'Custom Fields'},{id:'ai',label:'AI Artificial Intelligence Provider Model'},{id:'badges',label:'Badges Achievements'},{id:'data',label:'Data Export Import Reset'},{id:'shortcuts',label:'Shortcuts Keyboard'}];
         c.querySelectorAll('.settings-tab').forEach(btn=>{
           const def=tabDefs.find(d=>d.id===btn.dataset.stab);
           btn.style.display=(!q||def&&def.label.toLowerCase().includes(q))?'':'none';
@@ -3849,6 +4661,10 @@ async function renderSettings(){
   }
   if(window._settingsTab==='customfields'){
     await renderCustomFieldsSettings(c, tabsHtml, wireSettingsTabs);
+    return;
+  }
+  if(window._settingsTab==='ai'){
+    await renderAiSettings(c, tabsHtml, wireSettingsTabs);
     return;
   }
   if(window._settingsTab==='areas'){
@@ -4939,7 +5755,7 @@ async function renderHabits(){
           <div class="habit-week" id="hw-${hab.id}"></div>
           <button class="habit-check ${hab.completed?'done':''}" data-hid="${hab.id}" style="--hc:${escA(hab.color||'#6C63FF')}"><span class="material-icons-round">check</span></button>
         </div>
-        <div style="display:flex;gap:4px;margin-top:6px;align-items:center;overflow:hidden">${hab.area_name?`<span style="font-size:10px;color:var(--txd);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hab.area_icon||'')} ${esc(hab.area_name)}</span><span style="flex:1"></span>`:''}<button class="btn-c" style="font-size:10px;padding:2px 8px;flex-shrink:0" data-edit="${hab.id}">Edit</button><button class="btn-c" style="font-size:10px;padding:2px 8px;color:var(--dn);flex-shrink:0" data-del="${hab.id}">Delete</button></div>
+        <div style="display:flex;gap:4px;margin-top:6px;align-items:center;overflow:hidden">${hab.area_name?`<span style="font-size:10px;color:var(--txd);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hab.area_icon||'')} ${esc(hab.area_name)}</span><span style="flex:1"></span>`:''}<button class="btn-c" style="font-size:10px;padding:2px 8px;flex-shrink:0" data-edit="${hab.id}">Edit</button><button class="btn-c" style="font-size:10px;padding:2px 8px;color:var(--dn);flex-shrink:0" data-del="${hab.id}">Delete</button><button class="btn-c ai-hab-coach" style="font-size:10px;padding:2px 8px;color:var(--brand);flex-shrink:0" data-hid="${hab.id}" title="AI Habit Coach"><span class="material-icons-round" style="font-size:12px;vertical-align:middle">smart_toy</span></button></div>
       </div>`;
     }
     h+=`</div>`;
@@ -5042,6 +5858,20 @@ async function renderHabits(){
       showToast('Habit updated');renderHabits();
     });
   }));
+  // AI Habit Coach
+  mc.querySelectorAll('.ai-hab-coach').forEach(btn=>btn.addEventListener('click',async()=>{
+    btn.disabled=true;
+    try{
+      const r=await api.post('/api/ai/habit-coach',{habit_id:Number(btn.dataset.hid)});
+      const d=r.data||r;
+      let msg='';
+      if(d.stackSuggestion)msg+=d.stackSuggestion+' ';
+      if(d.tipsForSuccess?.length)msg+=d.tipsForSuccess[0]+' ';
+      if(d.difficultyPrediction)msg+=`(Difficulty: ${d.difficultyPrediction})`;
+      showToast(msg||'AI coaching tip generated',null,8000);
+    }catch(e){showToast(e.message||'AI unavailable','error')}
+    finally{btn.disabled=false}
+  }));
 }
 
 // ─── SAVED FILTER VIEW ───
@@ -5128,7 +5958,6 @@ async function renderPlanner(){
   const isToday=plannerDate===_toDateStr(new Date());
   let data={scheduled:[],unscheduled:[]};
   try{data=await api.get('/api/planner/'+plannerDate)}catch(e){}
-  // Also get my-day tasks without time blocks for the unscheduled pool
   let myDayTasks=[];
   try{myDayTasks=(await api.get('/api/tasks/my-day')).filter(t=>!t.time_block_start&&t.status!=='done')}catch(e){}
   const allUnscheduled=[...data.unscheduled,...myDayTasks.filter(t=>!data.unscheduled.find(u=>u.id===t.id))];
@@ -5142,73 +5971,68 @@ async function renderPlanner(){
     </div>
   </div>`;
   h+=`<div class="planner-wrap">`;
-  // Timeline
-  h+=`<div class="planner-timeline">`;
-  for(let hr=6;hr<=22;hr++){
-    const label=hr===0?'12 AM':hr<12?(hr+' AM'):hr===12?'12 PM':((hr-12)+' PM');
-    const hKey=String(hr).padStart(2,'0');
-    const slotTasks=data.scheduled.filter(t=>{
-      if(!t.time_block_start)return false;
-      const sh=parseInt(t.time_block_start.split(':')[0]);
-      return sh===hr;
-    });
-    h+=`<div class="planner-hour" data-hour="${hKey}">
-      <div class="planner-hour-label">${label}</div>
-      <div class="planner-hour-tasks" data-hour="${hKey}">`;
-    slotTasks.forEach(t=>{
-      h+=`<div class="planner-task ${t.status==='done'?'done':''}" draggable="true" data-id="${t.id}" style="border-left-color:${escA(t.goal_color||'var(--brand)')};background:${escA(t.goal_color||'var(--brand)')}15">
-        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title)}</span>
-        <span style="font-size:10px;color:var(--txd)">${t.time_block_start}${t.time_block_end?'–'+t.time_block_end:''}</span>
-        <span class="material-icons-round" style="font-size:12px;cursor:pointer;color:var(--txd)" data-unblock="${t.id}" title="Remove time block">close</span>
-      </div>`;
-    });
-    h+=`</div></div>`;
-  }
-  h+=`</div>`;
-  // Sidebar: unscheduled tasks
+  h+=_tlBuildGrid(data.scheduled,{showNowLine:isToday});
   h+=`<div class="planner-sidebar"><div class="planner-unscheduled"><h4>Unscheduled (${allUnscheduled.length})</h4>`;
   if(!allUnscheduled.length)h+=`<div style="text-align:center;padding:12px;color:var(--txd);font-size:12px">No tasks for this day</div>`;
   allUnscheduled.forEach(t=>{
-    h+=`<div class="planner-task" draggable="true" data-id="${t.id}" style="border-left-color:${escA(t.goal_color||'var(--brand)')};background:${escA(t.goal_color||'var(--brand)')}15;margin-bottom:4px">
+    h+=`<div class="planner-task-unsched" draggable="true" data-id="${t.id}" style="border-left-color:${escA(t.goal_color||'var(--brand)')};background:${escA(t.goal_color||'var(--brand)')}15">
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title)}</span>
     </div>`;
   });
-  h+=`</div></div>`;
-  h+=`</div>`;
+  h+=`</div></div></div>`;
   mc.innerHTML=h;
 
-  // Nav events
   $('pl-prev')?.addEventListener('click',()=>{const nd=_parseDate(plannerDate);nd.setDate(nd.getDate()-1);plannerDate=_toDateStr(nd);render()});
   $('pl-next')?.addEventListener('click',()=>{const nd=_parseDate(plannerDate);nd.setDate(nd.getDate()+1);plannerDate=_toDateStr(nd);render()});
   $('pl-today')?.addEventListener('click',()=>{plannerDate=_toDateStr(new Date());render()});
+  _tlWireEvents(mc,plannerDate,renderPlanner);
+}
 
-  // Drag & drop: tasks to time slots
-  mc.querySelectorAll('.planner-task[draggable]').forEach(el=>{
-    el.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',el.dataset.id);el.classList.add('planner-task-drag')});
-    el.addEventListener('dragend',()=>el.classList.remove('planner-task-drag'));
+// ─── UPCOMING VIEW ───
+async function renderUpcoming(){
+  const mc=$('ct');
+  const days=30;
+  let data={overdue:[],upcoming:[],undated:[]};
+  try{data=await api.get('/api/tasks/upcoming?days='+days)}catch(e){}
+  let h=`<h2 style="margin:0 0 4px;font-size:18px"><span class="material-icons-round" style="font-size:20px;vertical-align:middle;margin-right:6px;color:var(--brand)">upcoming</span>Upcoming</h2>`;
+  h+=`<div style="font-size:13px;color:var(--txd);margin-bottom:14px">Next ${days} days · ${data.overdue.length+data.upcoming.length} tasks</div>`;
+
+  // Overdue
+  if(data.overdue.length){
+    h+=`<div class="sl" style="color:var(--err)"><span class="material-icons-round" style="font-size:14px;vertical-align:middle">warning</span> Overdue <span class="c">${data.overdue.length}</span></div>`;
+    data.overdue.forEach(tk=>h+=tcHtml(tk,true));
+  }
+
+  // Group upcoming by date
+  const groups={};
+  data.upcoming.forEach(tk=>{
+    const d=tk.due_date||'undated';
+    if(!groups[d])groups[d]=[];
+    groups[d].push(tk);
   });
-  mc.querySelectorAll('.planner-hour-tasks').forEach(slot=>{
-    slot.addEventListener('dragover',e=>{e.preventDefault();slot.classList.add('dragover')});
-    slot.addEventListener('dragleave',()=>slot.classList.remove('dragover'));
-    slot.addEventListener('drop',async e=>{
-      e.preventDefault();slot.classList.remove('dragover');
-      const taskId=Number(e.dataTransfer.getData('text/plain'));if(!taskId)return;
-      const hour=slot.dataset.hour;
-      const endHr=String(Number(hour)+1).padStart(2,'0');
-      await api.put('/api/tasks/'+taskId,{due_date:plannerDate,time_block_start:hour+':00',time_block_end:endHr+':00'});
-      renderPlanner();
-    });
+
+  const today=_toDateStr(new Date());
+  const tomorrow=_toDateStr(new Date(Date.now()+86400000));
+  Object.keys(groups).sort().forEach(date=>{
+    const tks=groups[date];
+    let label=date;
+    if(date===today)label='Today';
+    else if(date===tomorrow)label='Tomorrow';
+    else{
+      const d=_parseDate(date);
+      label=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+    }
+    h+=`<div class="sl">${esc(label)} <span class="c">${tks.length}</span></div>`;
+    tks.forEach(tk=>h+=tcHtml(tk,true));
   });
-  // Click to open task detail
-  mc.querySelectorAll('.planner-task[data-id]').forEach(el=>{
-    el.addEventListener('click',e=>{if(e.target.closest('[data-unblock]'))return;openDP(Number(el.dataset.id))});
-  });
-  // Remove time block
-  mc.querySelectorAll('[data-unblock]').forEach(el=>el.addEventListener('click',async e=>{
-    e.stopPropagation();
-    await api.put('/api/tasks/'+Number(el.dataset.unblock),{time_block_start:null,time_block_end:null});
-    renderPlanner();
-  }));
+
+  // Undated
+  if(data.undated.length){
+    h+=`<div class="sl" style="color:var(--txd)"><span class="material-icons-round" style="font-size:14px;vertical-align:middle">event_busy</span> No Date <span class="c">${data.undated.length}</span></div>`;
+    data.undated.forEach(tk=>h+=tcHtml(tk,true));
+  }
+
+  mc.innerHTML=h;attachTE();
 }
 
 // ─── DAILY REVIEW ───
@@ -5592,7 +6416,10 @@ async function renderWeeklyReview(){
     <textarea class="review-textarea" id="rv-next" rows="3">${existing?JSON.parse(existing.next_week_priorities||'[]').join('\n'):''}</textarea>
     <div style="margin-top:16px;display:flex;justify-content:space-between">
       <button class="btn-c rv-prev" style="font-size:13px;padding:8px 20px">← Back</button>
-      <button id="rv-save" class="btn-s" style="padding:8px 20px;font-size:13px">${existing?'Update Review':'Save Review'}</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn-c" id="ai-review" style="font-size:12px;padding:8px 14px;border-color:var(--brand)"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:3px;color:var(--brand)">smart_toy</span>AI Insights</button>
+        <button id="rv-save" class="btn-s" style="padding:8px 20px;font-size:13px">${existing?'Update Review':'Save Review'}</button>
+      </div>
     </div></div>`;
   }
 
@@ -5612,10 +6439,11 @@ async function renderWeeklyReview(){
 
   c.innerHTML=h;
 
-  // Wire step navigation
-  c.querySelectorAll('.rv-step-pip').forEach(el=>el.addEventListener('click',()=>{window._rvStep=Number(el.dataset.rvstep);renderWeeklyReview()}));
-  c.querySelectorAll('.rv-next').forEach(el=>el.addEventListener('click',()=>{window._rvStep=Math.min(3,step+1);renderWeeklyReview()}));
-  c.querySelectorAll('.rv-prev').forEach(el=>el.addEventListener('click',()=>{window._rvStep=Math.max(1,step-1);renderWeeklyReview()}));
+  // Wire step navigation — use renderReports() when inside reports view to preserve tab bar
+  const _rvRender=currentView==='reports'?renderReports:renderWeeklyReview;
+  c.querySelectorAll('.rv-step-pip').forEach(el=>el.addEventListener('click',()=>{window._rvStep=Number(el.dataset.rvstep);_rvRender()}));
+  c.querySelectorAll('.rv-next').forEach(el=>el.addEventListener('click',()=>{window._rvStep=Math.min(3,step+1);_rvRender()}));
+  c.querySelectorAll('.rv-prev').forEach(el=>el.addEventListener('click',()=>{window._rvStep=Math.max(1,step-1);_rvRender()}));
   c.querySelector('.rv-go-inbox')?.addEventListener('click',()=>{currentView='inbox';render()});
 
   // Star rating
@@ -5633,7 +6461,18 @@ async function renderWeeklyReview(){
     const refl=$('rv-refl').value;
     const next=$('rv-next').value.split('\n').map(s=>s.trim()).filter(Boolean);
     await api.post('/api/reviews',{week_start:data.weekStart,top_accomplishments:acc,reflection:refl,next_week_priorities:next,rating:selectedRating||null});
-    showToast('Review saved');renderWeeklyReview();
+    showToast('Review saved');_rvRender();
+  });
+
+  // AI Review Copilot
+  $('ai-review')?.addEventListener('click',async()=>{
+    const btn=$('ai-review');
+    if(btn){btn.disabled=true;btn.innerHTML='<span class="material-icons-round" style="font-size:14px;vertical-align:middle;animation:spin 1s linear infinite">sync</span> Analyzing...';}
+    try{
+      const r=await api.post('/api/ai/review-week',{});
+      showAiReviewModal(r);
+    }catch(e){showToast(e.message||'AI unavailable','error')}
+    finally{if(btn){btn.disabled=false;btn.innerHTML='<span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:3px;color:var(--brand)">smart_toy</span>AI Insights';}}
   });
 }
 
@@ -5711,78 +6550,523 @@ async function renderTimeAnalytics(target){
 }
 
 // ─── AUTOMATION RULES VIEW ───
+let _autoConsts=null;  // cached constants from /api/rules/constants
+async function _getAutoConsts(){
+  if(!_autoConsts)_autoConsts=await api.get('/api/rules/constants');
+  return _autoConsts;
+}
 async function renderRules(){
   const c=$('ct');const rules=await api.get('/api/rules');
-  let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+  const consts=await _getAutoConsts();
+  let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
     <span style="font-size:13px;color:var(--txd)">${rules.length} rule${rules.length!==1?'s':''}</span>
-    <button id="new-rule-btn" style="padding:4px 12px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:12px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:3px">add</span>New Rule</button></div>`;
-  if(!rules.length)h+=emptyS('auto_fix_high','No automation rules','Create rules to automate your workflow — e.g. auto-add overdue tasks to My Day',
-    `<button class="btn-s" data-action="click-new-rule"><span class="material-icons-round" style="font-size:14px">add</span>Create Rule</button>`);
-  const triggerLabels={task_completed:'When task completed',task_updated:'When task updated',overdue:'When task overdue'};
-  const actionLabels={add_to_myday:'Add to My Day',set_priority:'Set priority',add_tag:'Add tag',create_followup:'Create follow-up task'};
+    <div style="display:flex;gap:6px">
+      <button id="auto-templates-btn" class="btn-s" style="font-size:11px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:2px">auto_awesome</span>Templates</button>
+      <button id="auto-log-btn" class="btn-s" style="font-size:11px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:2px">history</span>Log</button>
+      <button id="ai-build-rule" class="btn-s" style="font-size:11px;border-color:var(--brand);background:transparent;color:var(--brand)"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:2px">smart_toy</span>AI Build</button>
+      <button id="new-rule-btn" style="padding:4px 12px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:12px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:3px">add</span>New Rule</button>
+    </div></div>`;
+  // Suggestions banner
+  try{const sugg=await api.get('/api/rules/suggestions');if(sugg.length>0){
+    h+=`<div class="auto-suggestions" style="margin-bottom:14px;padding:10px;border:1px solid var(--brand);border-radius:var(--rs);background:color-mix(in srgb,var(--brand) 8%,var(--bg))">
+      <div style="font-size:11px;font-weight:600;margin-bottom:6px;color:var(--brand)"><span class="material-icons-round" style="font-size:14px;vertical-align:middle">tips_and_updates</span> Suggestions</div>`;
+    sugg.forEach(s=>{h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:12px">
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx)">${esc(s.reason||s.template_id)}</span>
+      <button class="btn-s auto-dismiss-sugg" data-id="${s.id}" style="font-size:10px">Dismiss</button></div>`;});
+    h+=`</div>`;
+  }}catch{}
+  if(!rules.length)h+=emptyS('auto_fix_high','No automation rules','Create rules to automate your workflow — e.g. auto-add overdue tasks to My Day, create follow-up tasks, and more.',
+    `<button class="btn-s" data-action="click-new-rule"><span class="material-icons-round" style="font-size:14px">add</span>Create Rule</button>
+     <button class="btn-s" id="empty-templates-btn" style="margin-left:6px"><span class="material-icons-round" style="font-size:14px">auto_awesome</span>Browse Templates</button>`);
   rules.forEach(r=>{
-    const tl=triggerLabels[r.trigger_type]||r.trigger_type;
-    const al=actionLabels[r.action_type]||r.action_type;
-    h+=`<div class="rule-card">
-      <button class="rule-toggle ${r.enabled?'on':'off'}" data-id="${r.id}" data-enabled="${r.enabled}"></button>
-      <div style="flex:1;min-width:0;overflow:hidden"><div class="rule-name">${esc(r.name)}</div><div class="rule-meta">${tl} → ${al}</div></div>
-      <button class="material-icons-round rule-del" data-id="${r.id}" style="background:none;border:none;cursor:pointer;color:var(--txd);font-size:16px">delete</button>
+    const tl=(consts.trigger_labels||{})[r.trigger_type]||r.trigger_type;
+    // Build actions summary
+    let actionsArr;
+    try{actionsArr=r.actions?JSON.parse(r.actions):null;}catch{actionsArr=null;}
+    let actionSummary='';
+    if(actionsArr&&actionsArr.length>0){
+      actionSummary=actionsArr.map(a=>(consts.action_labels||{})[a.type]||a.type).join(' → ');
+    }else{
+      actionSummary=(consts.action_labels||{})[r.action_type]||r.action_type;
+    }
+    // Conditions summary
+    let condSummary='';
+    try{
+      const conds=r.conditions?JSON.parse(r.conditions):null;
+      if(conds&&conds.rules&&conds.rules.length){
+        condSummary=`<div style="font-size:10px;color:var(--txd);margin-top:2px">${conds.rules.length} condition${conds.rules.length>1?'s':''} (${conds.logic||'AND'})</div>`;
+      }
+    }catch{}
+    // Stats
+    const stats=[];
+    if(r.fire_count>0)stats.push(`${r.fire_count} run${r.fire_count!==1?'s':''}`);
+    if(r.last_fired_at)stats.push(`last: ${fmtDue(r.last_fired_at.slice(0,10))}`);
+    h+=`<div class="rule-card" data-rule-id="${r.id}">
+      <button class="rule-toggle ${r.enabled?'on':'off'}" data-id="${r.id}" data-enabled="${r.enabled}" title="${r.enabled?'Disable':'Enable'}"></button>
+      <div style="flex:1;min-width:0;overflow:hidden;cursor:pointer" class="rule-edit-area" data-id="${r.id}">
+        <div class="rule-name">${esc(r.name)}</div>
+        <div class="rule-meta">${esc(tl)} → ${esc(actionSummary)}</div>
+        ${condSummary}
+        ${r.description?`<div style="font-size:10px;color:var(--txd);margin-top:2px">${esc(r.description)}</div>`:''}
+        ${stats.length?`<div style="font-size:10px;color:var(--txd);margin-top:2px">${stats.join(' · ')}</div>`:''}
+      </div>
+      <div style="display:flex;gap:2px;align-items:center">
+        <button class="material-icons-round rule-test" data-id="${r.id}" style="background:none;border:none;cursor:pointer;color:var(--txd);font-size:16px" title="Test rule">play_arrow</button>
+        <button class="material-icons-round rule-del" data-id="${r.id}" style="background:none;border:none;cursor:pointer;color:var(--txd);font-size:16px" title="Delete">delete</button>
+      </div>
     </div>`;
   });
   c.innerHTML=h;wireActions(c);
-  c.querySelector('#new-rule-btn')?.addEventListener('click',showRuleModal);
+  c.querySelector('#new-rule-btn')?.addEventListener('click',()=>showRuleModal());
+  c.querySelector('#auto-templates-btn')?.addEventListener('click',showTemplateGallery);
+  c.querySelector('#auto-log-btn')?.addEventListener('click',showAutomationLog);
+  c.querySelector('#ai-build-rule')?.addEventListener('click',()=>{
+    const desc=prompt('Describe the automation you want in plain English:\n(e.g., "When I complete a task tagged #work, add it to my weekly report")');
+    if(!desc)return;
+    const btn=c.querySelector('#ai-build-rule');
+    if(btn){btn.disabled=true;btn.innerHTML='<span class="material-icons-round" style="font-size:13px;vertical-align:middle;animation:spin 1s linear infinite">sync</span>';}
+    api.post('/api/ai/build-automation',{description:desc}).then(r=>{
+      const d=r.data||r;
+      if(d.trigger_type){
+        showToast(`AI created rule: "${esc(d.name||desc)}" — review and save it`,'ok',6000);
+        showRuleModal({name:d.name||'',description:d.description||'',trigger_type:d.trigger_type,trigger_config:JSON.stringify(d.trigger_config||{}),conditions:JSON.stringify(d.conditions||[]),actions:JSON.stringify(d.actions||[]),enabled:1});
+      }else showToast('Could not build automation','error');
+    }).catch(e=>showToast(e.message||'AI unavailable','error'))
+    .finally(()=>{if(btn){btn.disabled=false;btn.innerHTML='<span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:2px">smart_toy</span>AI Build';}});
+  });
+  c.querySelector('#empty-templates-btn')?.addEventListener('click',showTemplateGallery);
   c.querySelectorAll('.rule-toggle').forEach(btn=>btn.addEventListener('click',async()=>{
     const id=Number(btn.dataset.id);const cur=btn.dataset.enabled==='1';
     await api.put('/api/rules/'+id,{enabled:cur?0:1});renderRules();
+  }));
+  c.querySelectorAll('.rule-edit-area').forEach(el=>el.addEventListener('click',async()=>{
+    const id=Number(el.dataset.id);const rule=rules.find(r=>r.id===id);if(rule)showRuleModal(rule);
+  }));
+  c.querySelectorAll('.rule-test').forEach(btn=>btn.addEventListener('click',async()=>{
+    const id=Number(btn.dataset.id);
+    try{const res=await api.post('/api/rules/'+id+'/test',{});
+      showToast(`Test: ${res.count} task${res.count!==1?'s':''} would match`);
+    }catch(e){showToast('Test failed: '+e.message);}
   }));
   c.querySelectorAll('.rule-del').forEach(btn=>btn.addEventListener('click',async()=>{
     if(!confirm('Delete this rule?'))return;
     await api.delete('/api/rules/'+btn.dataset.id);showToast('Rule deleted');renderRules();
   }));
+  c.querySelectorAll('.auto-dismiss-sugg').forEach(btn=>btn.addEventListener('click',async()=>{
+    await api.post('/api/rules/suggestions/'+btn.dataset.id+'/dismiss',{});renderRules();
+  }));
 }
-function showRuleModal(){
+
+// ─── RULE BUILDER MODAL ───
+async function showRuleModal(editRule){
+  const consts=await _getAutoConsts();
+  const isEdit=!!editRule;
+  let existingActions=null,existingConditions=null;
+  if(isEdit){
+    try{existingActions=editRule.actions?JSON.parse(editRule.actions):null;}catch{}
+    try{existingConditions=editRule.conditions?JSON.parse(editRule.conditions):null;}catch{}
+  }
   const m=document.createElement('div');m.className='triage-modal';
-  m.setAttribute('role','dialog');m.setAttribute('aria-modal','true');m.setAttribute('aria-label','New Automation Rule');
+  m.setAttribute('role','dialog');m.setAttribute('aria-modal','true');m.setAttribute('aria-label',isEdit?'Edit Automation Rule':'New Automation Rule');
   const _close=()=>{if(m._removeTrap)m._removeTrap();m.remove();_popFocus();_unlockBody()};
-  m.innerHTML=`<div class="triage-box" style="width:400px"><h3 style="margin:0 0 12px;font-size:14px">New Automation Rule</h3>
-    <input type="text" id="rule-name" placeholder="Rule name" style="margin-bottom:8px">
-    <label style="font-size:11px;color:var(--txd)">When...</label>
-    <select id="rule-trigger" style="margin-bottom:8px">
-      <option value="task_completed">Task is completed</option>
-      <option value="task_updated">Task is updated</option>
-    </select>
-    <label style="font-size:11px;color:var(--txd)">Then...</label>
-    <select id="rule-action" style="margin-bottom:8px">
-      <option value="add_to_myday">Add to My Day</option>
-      <option value="set_priority">Set priority</option>
-      <option value="add_tag">Add a tag</option>
-      <option value="create_followup">Create follow-up task</option>
-    </select>
-    <div id="rule-action-config"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+
+  // Group triggers
+  const triggerGroups=[
+    {label:'Task',types:['task_completed','task_created','task_updated','task_overdue','task_due_today','task_due_soon','task_stale']},
+    {label:'Goal',types:['goal_progress','goal_all_tasks_done']},
+    {label:'Habit',types:['habit_logged','habit_streak','habit_missed']},
+    {label:'Focus',types:['focus_completed','focus_streak']},
+    {label:'Schedule',types:['schedule_daily','schedule_weekly','schedule_monthly']},
+    {label:'Review',types:['daily_review_saved','weekly_review_saved']},
+  ];
+
+  let triggerOpts='';
+  triggerGroups.forEach(g=>{
+    triggerOpts+=`<optgroup label="${g.label}">`;
+    g.types.forEach(t=>{
+      if(consts.trigger_types.includes(t)){
+        triggerOpts+=`<option value="${t}"${isEdit&&editRule.trigger_type===t?' selected':''}>${consts.trigger_labels[t]||t}</option>`;
+      }
+    });
+    triggerOpts+=`</optgroup>`;
+  });
+
+  m.innerHTML=`<div class="triage-box" style="width:520px;max-height:85vh;overflow-y:auto">
+    <h3 style="margin:0 0 12px;font-size:14px">${isEdit?'Edit':'New'} Automation Rule</h3>
+    <input type="text" id="rule-name" placeholder="Rule name" value="${isEdit?escA(editRule.name):''}" style="margin-bottom:6px">
+    <input type="text" id="rule-desc" placeholder="Description (optional)" value="${isEdit?escA(editRule.description||''):''}" style="margin-bottom:10px;font-size:11px">
+
+    <label style="font-size:11px;color:var(--txd);font-weight:600">When...</label>
+    <select id="rule-trigger" style="margin-bottom:6px">${triggerOpts}</select>
+    <div id="rule-trigger-config" style="margin-bottom:10px"></div>
+
+    <div id="rule-conditions-section" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <label style="font-size:11px;color:var(--txd);font-weight:600">Only if... (conditions)</label>
+        <button id="add-condition-btn" class="btn-s" style="font-size:10px"><span class="material-icons-round" style="font-size:12px">add</span>Add</button>
+      </div>
+      <select id="cond-logic" style="width:70px;font-size:10px;margin:4px 0"><option value="AND"${existingConditions?.logic==='OR'?'':' selected'}>ALL</option><option value="OR"${existingConditions?.logic==='OR'?' selected':''}>ANY</option></select>
+      <div id="conditions-list"></div>
+    </div>
+
+    <label style="font-size:11px;color:var(--txd);font-weight:600">Then do...</label>
+    <div id="actions-list" style="margin-bottom:6px"></div>
+    <button id="add-action-btn" class="btn-s" style="font-size:10px;margin-bottom:10px"><span class="material-icons-round" style="font-size:12px">add</span>Add Action</button>
+
+    <div id="rule-preview" style="padding:8px;background:var(--sf);border-radius:var(--rs);font-size:11px;color:var(--txd);margin-bottom:10px"></div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end">
       <button id="rule-cancel" style="padding:6px 14px;background:none;border:1px solid var(--brd);border-radius:var(--rs);cursor:pointer;color:var(--tx)">Cancel</button>
-      <button id="rule-save" style="padding:6px 14px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer">Create</button>
+      <button id="rule-save" style="padding:6px 14px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer">${isEdit?'Save':'Create'}</button>
     </div></div>`;
   document.body.appendChild(m);
-  const updateConfig=()=>{
-    const act=$('rule-action').value;const cfg=$('rule-action-config');
-    if(act==='set_priority')cfg.innerHTML='<select id="rule-pri"><option value="1">Normal</option><option value="2">High</option><option value="3">Critical</option></select>';
-    else if(act==='create_followup')cfg.innerHTML='<input type="text" id="rule-followup" placeholder="Follow-up task title">';
-    else cfg.innerHTML='';
-  };
-  $('rule-action').addEventListener('change',updateConfig);updateConfig();
+
+  // ─── Trigger Config ───
+  function renderTriggerConfig(){
+    const tt=$('rule-trigger').value;const box=$('rule-trigger-config');
+    let tc={};if(isEdit){try{tc=JSON.parse(editRule.trigger_config||'{}');}catch{}}
+    let html='';
+    if(tt.startsWith('task_')||tt==='goal_progress'||tt==='goal_all_tasks_done'){
+      html+=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">`;
+      // Area filter
+      html+=`<select id="tc-area" style="font-size:11px;flex:1"><option value="">Any area</option>`;
+      (consts.areas||[]).forEach(a=>{html+=`<option value="${a.id}"${tc.area_id==a.id?' selected':''}>${esc(a.name)}</option>`;});
+      html+=`</select>`;
+      // Goal filter
+      html+=`<select id="tc-goal" style="font-size:11px;flex:1"><option value="">Any goal</option>`;
+      (consts.goals||[]).forEach(g=>{html+=`<option value="${g.id}"${tc.goal_id==g.id?' selected':''}>${esc(g.title)}</option>`;});
+      html+=`</select>`;
+      // Priority filter
+      html+=`<select id="tc-priority" style="font-size:11px;flex:1"><option value="">Any priority</option>
+        <option value="0"${tc.priority==='0'||tc.priority===0?' selected':''}>None</option>
+        <option value="1"${tc.priority==='1'||tc.priority===1?' selected':''}>Normal</option>
+        <option value="2"${tc.priority==='2'||tc.priority===2?' selected':''}>High</option>
+        <option value="3"${tc.priority==='3'||tc.priority===3?' selected':''}>Critical</option></select>`;
+      html+=`</div>`;
+      // Tag filter
+      html+=`<div style="margin-top:4px"><select id="tc-tag" style="font-size:11px"><option value="">Any tag</option>`;
+      (consts.tags||[]).forEach(t=>{html+=`<option value="${t.name}"${tc.tag===t.name?' selected':''}>${esc(t.name)}</option>`;});
+      html+=`</select></div>`;
+    }
+    if(tt==='goal_progress'){
+      html+=`<div style="margin-top:4px"><label style="font-size:10px;color:var(--txd)">Progress threshold (%)</label>
+        <input type="number" id="tc-threshold" min="1" max="100" value="${tc.threshold||75}" style="width:60px;font-size:11px"></div>`;
+    }
+    if(tt.startsWith('schedule_')){
+      html+=`<div style="margin-top:4px">`;
+      html+=`<label style="font-size:10px;color:var(--txd)">Time (HH:MM)</label>
+        <input type="time" id="tc-time" value="${tc.time||'09:00'}" style="font-size:11px">`;
+      if(tt==='schedule_weekly'){
+        html+=`<label style="font-size:10px;color:var(--txd);margin-left:8px">Day</label>
+          <select id="tc-day" style="font-size:11px">`;
+        ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach((d,i)=>{html+=`<option value="${i+1}"${tc.day_of_week==i+1?' selected':''}>${d}</option>`;});
+        html+=`</select>`;
+      }
+      if(tt==='schedule_monthly'){
+        html+=`<label style="font-size:10px;color:var(--txd);margin-left:8px">Day of month</label>
+          <input type="number" id="tc-dom" min="1" max="28" value="${tc.day_of_month||1}" style="width:50px;font-size:11px">`;
+      }
+      html+=`</div>`;
+    }
+    if(tt==='habit_logged'||tt==='habit_streak'||tt==='habit_missed'){
+      html+=`<div style="margin-top:4px"><select id="tc-habit" style="font-size:11px"><option value="">Any habit</option>`;
+      (consts.habits||[]).forEach(h=>{html+=`<option value="${h.id}"${tc.habit_id==h.id?' selected':''}>${esc(h.name)}</option>`;});
+      html+=`</select></div>`;
+      if(tt==='habit_streak'){
+        html+=`<div style="margin-top:4px"><label style="font-size:10px;color:var(--txd)">Streak threshold</label>
+          <input type="number" id="tc-streak" min="1" value="${tc.streak_threshold||7}" style="width:50px;font-size:11px"></div>`;
+      }
+    }
+    box.innerHTML=html;
+  }
+
+  // ─── Conditions Builder ───
+  let conditions=existingConditions?[...existingConditions.rules||[]]:[]; 
+  function renderConditions(){
+    const list=$('conditions-list');
+    if(!conditions.length){list.innerHTML='<div style="font-size:10px;color:var(--txd);padding:4px">No conditions — rule applies to all matching events</div>';return;}
+    let html='';
+    conditions.forEach((cond,i)=>{
+      html+=`<div class="cond-row" style="display:flex;gap:4px;align-items:center;margin-bottom:4px">
+        <select class="cond-field" data-i="${i}" style="font-size:10px;flex:1">
+          <option value="priority"${cond.field==='priority'?' selected':''}>Priority</option>
+          <option value="status"${cond.field==='status'?' selected':''}>Status</option>
+          <option value="area_id"${cond.field==='area_id'?' selected':''}>Area</option>
+          <option value="goal_id"${cond.field==='goal_id'?' selected':''}>Goal</option>
+          <option value="has_tag"${cond.field==='has_tag'?' selected':''}>Has tag</option>
+          <option value="title_contains"${cond.field==='title_contains'?' selected':''}>Title contains</option>
+          <option value="due_date"${cond.field==='due_date'?' selected':''}>Due date</option>
+          <option value="estimated_minutes"${cond.field==='estimated_minutes'?' selected':''}>Est. minutes</option>
+          <option value="days_overdue"${cond.field==='days_overdue'?' selected':''}>Days overdue</option>
+        </select>
+        <select class="cond-op" data-i="${i}" style="font-size:10px;width:60px">
+          <option value="eq"${cond.op==='eq'?' selected':''}>=</option>
+          <option value="neq"${cond.op==='neq'?' selected':''}>≠</option>
+          <option value="gt"${cond.op==='gt'?' selected':''}>&gt;</option>
+          <option value="lt"${cond.op==='lt'?' selected':''}>&lt;</option>
+          <option value="gte"${cond.op==='gte'?' selected':''}>≥</option>
+          <option value="lte"${cond.op==='lte'?' selected':''}>≤</option>
+          <option value="contains"${cond.op==='contains'?' selected':''}>contains</option>
+          <option value="in"${cond.op==='in'?' selected':''}>in</option>
+        </select>
+        <input type="text" class="cond-val" data-i="${i}" value="${escA(String(cond.value||''))}" style="font-size:10px;flex:1" placeholder="value">
+        <button class="material-icons-round cond-del" data-i="${i}" style="background:none;border:none;cursor:pointer;color:var(--txd);font-size:14px">close</button>
+      </div>`;
+    });
+    list.innerHTML=html;
+    list.querySelectorAll('.cond-field,.cond-op').forEach(sel=>sel.addEventListener('change',syncConditions));
+    list.querySelectorAll('.cond-val').forEach(inp=>inp.addEventListener('input',syncConditions));
+    list.querySelectorAll('.cond-del').forEach(btn=>btn.addEventListener('click',()=>{conditions.splice(Number(btn.dataset.i),1);renderConditions();updatePreview();}));
+  }
+  function syncConditions(){
+    document.querySelectorAll('.cond-row').forEach((row,i)=>{
+      conditions[i]={
+        field:row.querySelector('.cond-field').value,
+        op:row.querySelector('.cond-op').value,
+        value:row.querySelector('.cond-val').value
+      };
+    });
+    updatePreview();
+  }
+  $('add-condition-btn').addEventListener('click',()=>{conditions.push({field:'priority',op:'gte',value:'2'});renderConditions();updatePreview();});
+
+  // ─── Actions Builder ───
+  let actions=existingActions||[{type:isEdit?editRule.action_type:'add_to_myday',config:isEdit?(()=>{try{return JSON.parse(editRule.action_config||'{}');}catch{return{};}})():{}}];
+  function renderActions(){
+    const list=$('actions-list');let html='';
+    actions.forEach((act,i)=>{
+      html+=`<div class="action-row" style="border:1px solid var(--brd);border-radius:var(--rs);padding:6px;margin-bottom:4px">
+        <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px">
+          <span style="font-size:10px;color:var(--txd);font-weight:600">${i+1}.</span>
+          <select class="action-type" data-i="${i}" style="font-size:11px;flex:1">`;
+      // Group action options
+      const actionGroups=[
+        {label:'Task',types:['add_to_myday','remove_from_myday','set_priority','set_status','set_due_date','add_tag','move_to_goal','create_followup','add_subtasks','apply_template']},
+        {label:'Habit',types:['log_habit','create_habit_task']},
+        {label:'Notify',types:['send_notification','send_toast']},
+        {label:'Organize',types:['move_to_inbox','archive_goal','create_review_prompt']},
+      ];
+      actionGroups.forEach(g=>{
+        html+=`<optgroup label="${g.label}">`;
+        g.types.forEach(t=>{
+          if(consts.action_types.includes(t))html+=`<option value="${t}"${act.type===t?' selected':''}>${consts.action_labels[t]||t}</option>`;
+        });
+        html+=`</optgroup>`;
+      });
+      html+=`</select>`;
+      if(actions.length>1)html+=`<button class="material-icons-round action-del" data-i="${i}" style="background:none;border:none;cursor:pointer;color:var(--txd);font-size:14px">close</button>`;
+      html+=`</div><div class="action-config" data-i="${i}"></div></div>`;
+    });
+    list.innerHTML=html;
+    // Render config for each action
+    list.querySelectorAll('.action-type').forEach(sel=>{
+      sel.addEventListener('change',()=>{
+        const i=Number(sel.dataset.i);actions[i].type=sel.value;actions[i].config={};renderActionConfig(i);updatePreview();
+      });
+    });
+    list.querySelectorAll('.action-del').forEach(btn=>btn.addEventListener('click',()=>{actions.splice(Number(btn.dataset.i),1);renderActions();updatePreview();}));
+    actions.forEach((_,i)=>renderActionConfig(i));
+  }
+  function renderActionConfig(i){
+    const act=actions[i];const cfg=act.config||{};
+    const box=document.querySelectorAll('.action-config[data-i="'+i+'"]')[0];if(!box)return;
+    let html='';
+    switch(act.type){
+      case'set_priority':html=`<select class="ac-val" data-i="${i}" data-key="priority" style="font-size:11px">
+        <option value="0"${cfg.priority===0?' selected':''}>None</option><option value="1"${cfg.priority===1?' selected':''}>Normal</option>
+        <option value="2"${cfg.priority===2?' selected':''}>High</option><option value="3"${cfg.priority===3?' selected':''}>Critical</option></select>`;break;
+      case'set_status':html=`<select class="ac-val" data-i="${i}" data-key="status" style="font-size:11px">
+        <option value="todo"${cfg.status==='todo'?' selected':''}>Todo</option><option value="doing"${cfg.status==='doing'?' selected':''}>Doing</option>
+        <option value="done"${cfg.status==='done'?' selected':''}>Done</option></select>`;break;
+      case'set_due_date':html=`<select class="ac-val" data-i="${i}" data-key="relative" style="font-size:11px">
+        <option value="today"${cfg.relative==='today'?' selected':''}>Today</option><option value="tomorrow"${cfg.relative==='tomorrow'?' selected':''}>Tomorrow</option>
+        <option value="+3days"${cfg.relative==='+3days'?' selected':''}>In 3 days</option><option value="+7days"${cfg.relative==='+7days'?' selected':''}>In 7 days</option></select>`;break;
+      case'add_tag':html=`<select class="ac-val" data-i="${i}" data-key="tag_name" style="font-size:11px"><option value="">Select tag</option>`;
+        (consts.tags||[]).forEach(t=>{html+=`<option value="${esc(t.name)}"${cfg.tag_name===t.name?' selected':''}>${esc(t.name)}</option>`;});
+        html+=`</select>`;break;
+      case'move_to_goal':html=`<select class="ac-val" data-i="${i}" data-key="goal_id" style="font-size:11px"><option value="">Select goal</option>`;
+        (consts.goals||[]).forEach(g=>{html+=`<option value="${g.id}"${cfg.goal_id==g.id?' selected':''}>${esc(g.title)}</option>`;});
+        html+=`</select>`;break;
+      case'create_followup':html=`<input type="text" class="ac-val" data-i="${i}" data-key="title" placeholder="Follow-up title (use {{task.title}} for interpolation)" value="${escA(cfg.title||'')}" style="font-size:11px;width:100%">`;break;
+      case'add_subtasks':html=`<textarea class="ac-val" data-i="${i}" data-key="subtasks" placeholder="One subtask per line" style="font-size:11px;width:100%;height:50px">${esc(cfg.subtasks||'')}</textarea>`;break;
+      case'apply_template':html=`<select class="ac-val" data-i="${i}" data-key="template_id" style="font-size:11px"><option value="">Select template</option>`;
+        (consts.templates||[]).forEach(t=>{html+=`<option value="${t.id}"${cfg.template_id==t.id?' selected':''}>${esc(t.name)}</option>`;});
+        html+=`</select>`;break;
+      case'log_habit':html=`<select class="ac-val" data-i="${i}" data-key="habit_id" style="font-size:11px"><option value="">Select habit</option>`;
+        (consts.habits||[]).forEach(h=>{html+=`<option value="${h.id}"${cfg.habit_id==h.id?' selected':''}>${esc(h.name)}</option>`;});
+        html+=`</select>`;break;
+      case'create_habit_task':html=`<select class="ac-val" data-i="${i}" data-key="habit_id" style="font-size:11px"><option value="">Select habit</option>`;
+        (consts.habits||[]).forEach(h=>{html+=`<option value="${h.id}"${cfg.habit_id==h.id?' selected':''}>${esc(h.name)}</option>`;});
+        html+=`</select><select class="ac-val" data-i="${i}" data-key="goal_id" style="font-size:11px;margin-top:4px"><option value="">Select goal</option>`;
+        (consts.goals||[]).forEach(g=>{html+=`<option value="${g.id}"${cfg.goal_id==g.id?' selected':''}>${esc(g.title)}</option>`;});
+        html+=`</select>`;break;
+      case'send_notification':case'send_toast':
+        html=`<input type="text" class="ac-val" data-i="${i}" data-key="message" placeholder="Message (use {{task.title}} etc)" value="${escA(cfg.message||'')}" style="font-size:11px;width:100%">`;break;
+      case'create_review_prompt':
+        html=`<input type="text" class="ac-val" data-i="${i}" data-key="note" placeholder="Review note text" value="${escA(cfg.note||'')}" style="font-size:11px;width:100%">`;break;
+    }
+    box.innerHTML=html;
+    box.querySelectorAll('.ac-val').forEach(el=>{
+      el.addEventListener('change',()=>syncActionConfigs());
+      el.addEventListener('input',()=>syncActionConfigs());
+    });
+  }
+  function syncActionConfigs(){
+    document.querySelectorAll('.action-row').forEach((row,i)=>{
+      if(!actions[i])return;
+      const vals=row.querySelectorAll('.ac-val');
+      const cfg={};
+      vals.forEach(v=>{
+        const key=v.dataset.key;let val=v.value;
+        if(v.tagName==='SELECT'&&!isNaN(Number(val))&&val!=='')val=Number(val);
+        if(key)cfg[key]=val;
+      });
+      actions[i].config=cfg;
+    });
+    updatePreview();
+  }
+  $('add-action-btn').addEventListener('click',()=>{
+    if(actions.length>=10){showToast('Max 10 actions');return;}
+    actions.push({type:'send_toast',config:{message:''}});renderActions();updatePreview();
+  });
+
+  // ─── Natural Language Preview ───
+  function updatePreview(){
+    const tt=$('rule-trigger').value;const tl=(consts.trigger_labels||{})[tt]||tt;
+    let text=tl;
+    // Add condition summary
+    if(conditions.length){
+      const logic=$('cond-logic').value;
+      const condTexts=conditions.map(c=>`${c.field} ${c.op} ${c.value}`);
+      text+=`, ${logic==='OR'?'if any':'only if'}: ${condTexts.join(logic==='OR'?' or ':' and ')}`;
+    }
+    text+=' → ';
+    text+=actions.map(a=>{
+      const al=(consts.action_labels||{})[a.type]||a.type;
+      const cfg=a.config||{};
+      if(a.type==='set_priority')return al+' to '+['None','Normal','High','Critical'][cfg.priority||0];
+      if(a.type==='create_followup'&&cfg.title)return al+': "'+cfg.title+'"';
+      if(a.type==='send_toast'&&cfg.message)return al+': "'+cfg.message+'"';
+      return al;
+    }).join(', then ');
+    $('rule-preview').textContent=text;
+  }
+
+  // ─── Initial render ───
+  $('rule-trigger').addEventListener('change',()=>{renderTriggerConfig();updatePreview();});
+  renderTriggerConfig();renderConditions();renderActions();updatePreview();
+  $('cond-logic').addEventListener('change',updatePreview);
+
+  // ─── Save ───
   $('rule-cancel').addEventListener('click',_close);
   m.addEventListener('click',e=>{if(e.target===m)_close()});
   $('rule-save').addEventListener('click',async()=>{
-    const name=$('rule-name').value.trim();if(!name){showToast('Name required');return}
+    const name=$('rule-name').value.trim();if(!name){showToast('Name required');return;}
     const trigger_type=$('rule-trigger').value;
-    const action_type=$('rule-action').value;
-    let action_config={};
-    if(action_type==='set_priority')action_config={priority:Number(document.getElementById('rule-pri')?.value||1)};
-    if(action_type==='create_followup')action_config={title:document.getElementById('rule-followup')?.value||'Follow-up'};
-    await api.post('/api/rules',{name,trigger_type,trigger_config:{},action_type,action_config});
-    _close();showToast('Rule created');renderRules();
+    const description=$('rule-desc').value.trim();
+    // Build trigger config from UI
+    const trigger_config={};
+    const tcArea=document.getElementById('tc-area');if(tcArea&&tcArea.value)trigger_config.area_id=Number(tcArea.value);
+    const tcGoal=document.getElementById('tc-goal');if(tcGoal&&tcGoal.value)trigger_config.goal_id=Number(tcGoal.value);
+    const tcPri=document.getElementById('tc-priority');if(tcPri&&tcPri.value!=='')trigger_config.priority=Number(tcPri.value);
+    const tcTag=document.getElementById('tc-tag');if(tcTag&&tcTag.value)trigger_config.tag=tcTag.value;
+    const tcHabit=document.getElementById('tc-habit');if(tcHabit&&tcHabit.value)trigger_config.habit_id=Number(tcHabit.value);
+    const tcTime=document.getElementById('tc-time');if(tcTime)trigger_config.time=tcTime.value;
+    const tcDay=document.getElementById('tc-day');if(tcDay)trigger_config.day_of_week=Number(tcDay.value);
+    const tcDom=document.getElementById('tc-dom');if(tcDom)trigger_config.day_of_month=Number(tcDom.value);
+    const tcThresh=document.getElementById('tc-threshold');if(tcThresh)trigger_config.threshold=Number(tcThresh.value);
+    const tcStreak=document.getElementById('tc-streak');if(tcStreak)trigger_config.streak_threshold=Number(tcStreak.value);
+    // Build conditions
+    syncConditions();
+    const condObj=conditions.length?{logic:$('cond-logic').value,rules:conditions}:null;
+    // Build actions
+    syncActionConfigs();
+    const body={name,trigger_type,trigger_config,description,conditions:condObj,actions};
+    try{
+      if(isEdit){await api.put('/api/rules/'+editRule.id,body);showToast('Rule updated');}
+      else{await api.post('/api/rules',body);showToast('Rule created');}
+      _close();_autoConsts=null;renderRules();
+    }catch(e){showToast('Error: '+e.message);}
   });
+}
+
+// ─── TEMPLATE GALLERY MODAL ───
+async function showTemplateGallery(){
+  const templates=await api.get('/api/rules/templates');
+  const consts=await _getAutoConsts();
+  const m=document.createElement('div');m.className='triage-modal';
+  m.setAttribute('role','dialog');m.setAttribute('aria-modal','true');m.setAttribute('aria-label','Automation Templates');
+  const _close=()=>{if(m._removeTrap)m._removeTrap();m.remove();_popFocus();_unlockBody()};
+  const catMap={};
+  templates.forEach(t=>{const c=t.category||'Other';if(!catMap[c])catMap[c]=[];catMap[c].push(t);});
+  let html=`<div class="triage-box" style="width:560px;max-height:85vh;overflow-y:auto">
+    <h3 style="margin:0 0 12px;font-size:14px">Automation Templates</h3>
+    <p style="font-size:11px;color:var(--txd);margin:0 0 12px">Pre-built rules you can install with one click. Customize after installing.</p>`;
+  for(const[cat,tmpls]of Object.entries(catMap)){
+    html+=`<div class="rule-meta" style="font-size:11px;font-weight:600;margin:10px 0 6px">${esc(cat)}</div>`;
+    tmpls.forEach(t=>{
+      const tl=(consts.trigger_labels||{})[t.trigger_type]||t.trigger_type;
+      let actArr;try{actArr=JSON.parse(t.actions||'[]');}catch{actArr=[];}
+      const actSummary=actArr.map(a=>(consts.action_labels||{})[a.type]||a.type).join(', ');
+      html+=`<div class="rule-card" style="cursor:default">
+        <div style="flex:1;min-width:0">
+          <div class="rule-name">${esc(t.name)}</div>
+          <div class="rule-meta">${esc(tl)} → ${esc(actSummary)}</div>
+          ${t.description?`<div style="font-size:10px;color:var(--txd);margin-top:2px">${esc(t.description)}</div>`:''}
+        </div>
+        <button class="btn-s tmpl-install" data-id="${t.id}" style="font-size:11px;white-space:nowrap">Install</button>
+      </div>`;
+    });
+  }
+  html+=`<div style="display:flex;justify-content:flex-end;margin-top:12px">
+    <button id="tmpl-close" style="padding:6px 14px;background:none;border:1px solid var(--brd);border-radius:var(--rs);cursor:pointer;color:var(--tx)">Close</button></div></div>`;
+  m.innerHTML=html;
+  document.body.appendChild(m);
+  $('tmpl-close')?.addEventListener('click',_close);
+  m.addEventListener('click',e=>{if(e.target===m)_close()});
+  m.querySelectorAll('.tmpl-install').forEach(btn=>btn.addEventListener('click',async()=>{
+    try{await api.post('/api/rules/templates/'+btn.dataset.id+'/install',{});showToast('Template installed');_close();renderRules();}
+    catch(e){showToast('Install failed: '+e.message);}
+  }));
+}
+
+// ─── AUTOMATION LOG MODAL ───
+async function showAutomationLog(){
+  const m=document.createElement('div');m.className='triage-modal';
+  m.setAttribute('role','dialog');m.setAttribute('aria-modal','true');m.setAttribute('aria-label','Automation Log');
+  const _close=()=>{if(m._removeTrap)m._removeTrap();m.remove();_popFocus();_unlockBody()};
+  let offset=0;const limit=20;
+  async function loadPage(){
+    const res=await api.get('/api/rules/log?limit='+limit+'&offset='+offset);
+    let html=`<div class="triage-box" style="width:560px;max-height:85vh;overflow-y:auto">
+      <h3 style="margin:0 0 12px;font-size:14px">Automation Log <span style="font-size:11px;color:var(--txd)">(${res.total} entries)</span></h3>`;
+    if(!res.logs.length)html+=`<div style="font-size:12px;color:var(--txd);padding:20px;text-align:center">No automation executions yet</div>`;
+    res.logs.forEach(l=>{
+      const status=l.status==='success'?'✓':'✗';
+      const color=l.status==='success'?'var(--green,#4caf50)':'var(--red,#f44336)';
+      html+=`<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--brd);font-size:11px">
+        <span style="color:${color};font-weight:bold;min-width:14px">${status}</span>
+        <div style="flex:1;min-width:0">
+          <div class="rule-name" style="font-weight:500">${esc(l.rule_name||'Rule #'+l.rule_id)}</div>
+          <div style="color:var(--txd)">${esc(l.trigger_type)} → ${esc(l.action_type)}${l.error?` — <span style="color:var(--red,#f44336)">${esc(l.error)}</span>`:''}</div>
+        </div>
+        <span style="color:var(--txd);white-space:nowrap;font-size:10px">${fmtDue(l.created_at?.slice(0,10)||'')}</span>
+      </div>`;
+    });
+    // Pagination
+    html+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+      <div style="display:flex;gap:6px">`;
+    if(offset>0)html+=`<button class="btn-s" id="log-prev">← Prev</button>`;
+    if(offset+limit<res.total)html+=`<button class="btn-s" id="log-next">Next →</button>`;
+    html+=`</div><button id="log-close" style="padding:6px 14px;background:none;border:1px solid var(--brd);border-radius:var(--rs);cursor:pointer;color:var(--tx)">Close</button></div></div>`;
+    m.innerHTML=html;
+    document.getElementById('log-close')?.addEventListener('click',_close);
+    document.getElementById('log-prev')?.addEventListener('click',()=>{offset=Math.max(0,offset-limit);loadPage();});
+    document.getElementById('log-next')?.addEventListener('click',()=>{offset+=limit;loadPage();});
+    m.addEventListener('click',e=>{if(e.target===m)_close()});
+  }
+  document.body.appendChild(m);
+  await loadPage();
 }
 
 // ─── GLOBAL UNDO SYSTEM ───

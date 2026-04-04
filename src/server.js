@@ -15,6 +15,7 @@ const createAuditLogger = require('./services/audit');
 const createRequestLogger = require('./middleware/request-logger');
 const createScheduler = require('./scheduler');
 const logger = require('./logger');
+const { AutomationEngine } = require('./services/automation-engine');
 
 const app = express();
 const PORT = config.port;
@@ -26,7 +27,12 @@ if (config.trustProxy) {
 
 const { db, rebuildSearchIndex } = initDatabase(config.dbDir);
 const helpers = createHelpers(db);
-const deps = { db, dbDir: config.dbDir, rebuildSearchIndex, ...helpers };
+
+// ─── Automation Engine ───
+const automationEngine = new AutomationEngine(db, logger, helpers);
+app.locals.automationEngine = automationEngine;
+
+const deps = { db, dbDir: config.dbDir, rebuildSearchIndex, automationEngine, ...helpers };
 
 // ─── Audit logger ───
 const audit = createAuditLogger(db);
@@ -242,6 +248,7 @@ if (require.main === module) {
 
   // ─── Background Scheduler ───
   const scheduler = createScheduler(db, logger);
+  scheduler.setAutomationEngine(automationEngine);
   scheduler.registerBuiltinJobs();
   scheduler.start();
 
