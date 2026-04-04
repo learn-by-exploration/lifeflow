@@ -314,7 +314,6 @@ function initDatabase(dbDir) {
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_user_status ON tasks(user_id, status)'); } catch(e) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_user_due ON tasks(user_id, due_date) WHERE due_date IS NOT NULL'); } catch(e) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)'); } catch(e) {}
-  try { db.exec('CREATE INDEX IF NOT EXISTS idx_focus_sessions_user ON focus_sessions(user_id, started_at)'); } catch(e) {}
 
   // ─── FTS5 Virtual Table for Global Search ───
   // Migrate: if search_index lacks user_id column, drop and recreate
@@ -407,6 +406,8 @@ function initDatabase(dbDir) {
   for (const tbl of userIdTables) {
     try { db.exec(`CREATE INDEX idx_${tbl}_user ON ${tbl}(user_id)`); } catch(e) { /* already exists */ }
   }
+  // Compound user index for focus_sessions (must be after user_id column is added)
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_focus_sessions_user ON focus_sessions(user_id, started_at)'); } catch(e) {}
 
   // ─── Daily Reviews table ───
   db.exec(`CREATE TABLE IF NOT EXISTS daily_reviews (
@@ -421,6 +422,86 @@ function initDatabase(dbDir) {
 
   // ─── Multi-user assignment column ───
   try { db.exec('ALTER TABLE tasks ADD COLUMN assigned_to_user_id INTEGER REFERENCES users(id)'); } catch(e) { /* already exists */ }
+
+  // ─── API Tokens table ───
+  db.exec(`CREATE TABLE IF NOT EXISTS api_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    token_hash TEXT NOT NULL,
+    last_used_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`);
+
+  // ─── Push Subscriptions table ───
+  db.exec(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    endpoint TEXT NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, endpoint)
+  )`);
+
+  // ─── Push Notification Log (deduplication) ───
+  db.exec(`CREATE TABLE IF NOT EXISTS push_notification_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    task_id INTEGER,
+    type TEXT NOT NULL,
+    sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+  )`);
+
+  // ─── Webhooks table ───
+  db.exec(`CREATE TABLE IF NOT EXISTS webhooks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    url TEXT NOT NULL,
+    events TEXT NOT NULL DEFAULT '[]',
+    secret TEXT NOT NULL,
+    active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`);
+
+  // ─── Custom Fields tables ───
+  db.exec(`CREATE TABLE IF NOT EXISTS custom_field_defs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    field_type TEXT NOT NULL CHECK(field_type IN ('text','number','date','select')),
+    options TEXT DEFAULT NULL,
+    position INTEGER DEFAULT 0,
+    required INTEGER DEFAULT 0,
+    show_in_card INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, name)
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS task_custom_values (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL,
+    field_id INTEGER NOT NULL,
+    value TEXT,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (field_id) REFERENCES custom_field_defs(id) ON DELETE CASCADE,
+    UNIQUE(task_id, field_id)
+  )`);
+
+  // ─── Login Attempts / Account Lockout table ───
+  db.exec(`CREATE TABLE IF NOT EXISTS login_attempts (
+    email TEXT PRIMARY KEY NOT NULL,
+    attempts INTEGER DEFAULT 0,
+    first_attempt_at DATETIME,
+    locked_until DATETIME
+  )`);
 
   // ─── Migrate settings to composite PK (user_id, key) for multi-user ───
   const settingsInfo = db.prepare("PRAGMA table_info(settings)").all();
@@ -1026,86 +1107,6 @@ function initDatabase(dbDir) {
   } catch (e) {
     logger.error({ err: e }, 'Startup integrity check failed');
   }
-
-  // ─── API Tokens table ───
-  db.exec(`CREATE TABLE IF NOT EXISTS api_tokens (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    token_hash TEXT NOT NULL,
-    last_used_at DATETIME,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    expires_at DATETIME,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-  )`);
-
-  // ─── Push Subscriptions table ───
-  db.exec(`CREATE TABLE IF NOT EXISTS push_subscriptions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    endpoint TEXT NOT NULL,
-    p256dh TEXT NOT NULL,
-    auth TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE(user_id, endpoint)
-  )`);
-
-  // ─── Push Notification Log (deduplication) ───
-  db.exec(`CREATE TABLE IF NOT EXISTS push_notification_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    task_id INTEGER,
-    type TEXT NOT NULL,
-    sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
-  )`);
-
-  // ─── Webhooks table ───
-  db.exec(`CREATE TABLE IF NOT EXISTS webhooks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    url TEXT NOT NULL,
-    events TEXT NOT NULL DEFAULT '[]',
-    secret TEXT NOT NULL,
-    active INTEGER DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-  )`);
-
-  // ─── Custom Fields tables ───
-  db.exec(`CREATE TABLE IF NOT EXISTS custom_field_defs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    field_type TEXT NOT NULL CHECK(field_type IN ('text','number','date','select')),
-    options TEXT DEFAULT NULL,
-    position INTEGER DEFAULT 0,
-    required INTEGER DEFAULT 0,
-    show_in_card INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE(user_id, name)
-  )`);
-  db.exec(`CREATE TABLE IF NOT EXISTS task_custom_values (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_id INTEGER NOT NULL,
-    field_id INTEGER NOT NULL,
-    value TEXT,
-    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-    FOREIGN KEY (field_id) REFERENCES custom_field_defs(id) ON DELETE CASCADE,
-    UNIQUE(task_id, field_id)
-  )`);
-
-  // ─── Login Attempts / Account Lockout table ───
-  db.exec(`CREATE TABLE IF NOT EXISTS login_attempts (
-    email TEXT PRIMARY KEY NOT NULL,
-    attempts INTEGER DEFAULT 0,
-    first_attempt_at DATETIME,
-    locked_until DATETIME
-  )`);
 
   // ─── Run SQL migrations ───
   const runMigrations = require('./migrate');
