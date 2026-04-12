@@ -33,6 +33,7 @@ function initDatabase(dbDir) {
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
+  db.pragma('busy_timeout = 5000');
   // Force WAL checkpoint on open to ensure main DB file is up-to-date
   try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch {}
 
