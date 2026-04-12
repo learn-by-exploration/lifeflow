@@ -3155,28 +3155,54 @@ if('Notification' in window&&Notification.permission==='granted'){
 })();
 
 // ─── NOTIFICATION BELL ───
+function getDismissedReminders(){
+  const today=new Date().toISOString().slice(0,10);
+  const storedDate=localStorage.getItem('lf-dismissed-date');
+  if(storedDate!==today){localStorage.setItem('lf-dismissed-reminders','[]');localStorage.setItem('lf-dismissed-date',today);return[]}
+  try{return JSON.parse(localStorage.getItem('lf-dismissed-reminders')||'[]')}catch{return[]}
+}
+function dismissReminder(taskId){
+  const dismissed=getDismissedReminders();
+  if(!dismissed.includes(taskId)){dismissed.push(taskId);localStorage.setItem('lf-dismissed-reminders',JSON.stringify(dismissed))}
+}
+function clearAllReminders(taskIds){
+  const dismissed=getDismissedReminders();
+  const merged=[...new Set([...dismissed,...taskIds])];
+  localStorage.setItem('lf-dismissed-reminders',JSON.stringify(merged));
+}
 async function loadBellReminders(){
   try{
     const r=await api.get('/api/reminders');
+    const dismissed=getDismissedReminders();
+    const filterDismissed=arr=>arr.filter(t=>!dismissed.includes(t.id));
+    const overdue=filterDismissed(r.overdue||[]);
+    const today=filterDismissed(r.today||[]);
+    const upcoming=filterDismissed(r.upcoming||[]);
+    const total=overdue.length+today.length+upcoming.length;
     const badge=$('bell-badge');
-    badge.textContent=r.total;badge.dataset.c=r.total;
+    badge.textContent=total;badge.dataset.c=total;
     const dd=$('bell-dd');
-    let h='';
-    if(!r.total){h='<div class="bell-empty"><span class="material-icons-round" style="font-size:32px;opacity:.3;display:block;margin-bottom:6px">check_circle</span>All clear! No upcoming deadlines</div>';dd.innerHTML=h;return}
-    if(r.overdue.length){h+=`<div class="bell-sec" style="color:var(--err)">Overdue (${r.overdue.length})</div>`;
-      r.overdue.forEach(t=>h+=bellItem(t,'od'))}
-    if(r.today.length){h+=`<div class="bell-sec" style="color:var(--warn)">Due Today (${r.today.length})</div>`;
-      r.today.forEach(t=>h+=bellItem(t,'today'))}
-    if(r.upcoming.length){h+=`<div class="bell-sec">Coming Up (${r.upcoming.length})</div>`;
-      r.upcoming.forEach(t=>h+=bellItem(t,'soon'))}
+    let h='<div class="bell-header"><span>Reminders</span>';
+    if(total)h+='<button class="bell-clear-all" id="bell-clear-all">Clear all</button>';
+    h+='</div>';
+    if(!total){h+='<div class="bell-empty"><span class="material-icons-round" style="font-size:32px;opacity:.3;display:block;margin-bottom:6px">check_circle</span>All clear! No upcoming deadlines</div>';dd.innerHTML=h;return}
+    if(overdue.length){h+=`<div class="bell-sec" style="color:var(--err)">Overdue (${overdue.length})</div>`;
+      overdue.forEach(t=>h+=bellItem(t,'od'))}
+    if(today.length){h+=`<div class="bell-sec" style="color:var(--warn)">Due Today (${today.length})</div>`;
+      today.forEach(t=>h+=bellItem(t,'today'))}
+    if(upcoming.length){h+=`<div class="bell-sec">Coming Up (${upcoming.length})</div>`;
+      upcoming.forEach(t=>h+=bellItem(t,'soon'))}
     dd.innerHTML=h;
-    dd.querySelectorAll('.bell-item').forEach(it=>it.addEventListener('click',()=>{dd.classList.remove('open');openDP(Number(it.dataset.id))}));
+    dd.querySelectorAll('.bell-item').forEach(it=>it.addEventListener('click',e=>{if(e.target.closest('.bell-item-dismiss'))return;dd.classList.remove('open');openDP(Number(it.dataset.id))}));
+    dd.querySelectorAll('.bell-item-dismiss').forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();dismissReminder(Number(btn.dataset.id));loadBellReminders()}));
+    const clearBtn=$('bell-clear-all');
+    if(clearBtn)clearBtn.addEventListener('click',e=>{e.stopPropagation();const allIds=[...overdue,...today,...upcoming].map(t=>t.id);clearAllReminders(allIds);loadBellReminders()});
   }catch{}
 }
 function bellItem(t,type){
   const icon=type==='od'?'error':'event';
   const color=type==='od'?'var(--err)':type==='today'?'var(--warn)':'var(--txd)';
-  return`<div class="bell-item" data-id="${t.id}"><span class="material-icons-round" style="font-size:16px;color:${color}">${icon}</span><span>${esc(t.title)}</span><span class="bell-due">${fmtDue(t.due_date)}</span></div>`;
+  return`<div class="bell-item" data-id="${t.id}"><span class="material-icons-round" style="font-size:16px;color:${color}">${icon}</span><span>${esc(t.title)}</span><span class="bell-due">${fmtDue(t.due_date)}</span><button class="bell-item-dismiss" data-id="${t.id}" aria-label="Dismiss" title="Dismiss">&times;</button></div>`;
 }
 $('bell-btn').addEventListener('click',e=>{e.stopPropagation();$('bell-dd').classList.toggle('open');loadBellReminders()});
 document.addEventListener('click',e=>{if(!e.target.closest('#bell-wrap'))$('bell-dd').classList.remove('open')});
@@ -5315,8 +5341,9 @@ async function renderListDetail(){
           sItems.forEach(i=>{
             h+=`<div class="li-item${i.checked?' checked':''}" data-iid="${i.id}">
               <button class="li-check${i.checked?' done':''}" data-iid="${i.id}"><span class="material-icons-round">${i.checked?'check_box':'check_box_outline_blank'}</span></button>
-              <span class="li-title">${esc(i.title)}</span>
+              <span class="li-title" data-iid="${i.id}">${esc(i.title)}</span>
               ${i.quantity?`<span class="li-qty">${esc(i.quantity)}</span>`:''}
+              <button class="li-edit-btn" data-iid="${i.id}" title="Edit item"><span class="material-icons-round">edit</span></button>
               <button class="li-del" data-iid="${i.id}"><span class="material-icons-round">close</span></button>
             </div>`;
           });
@@ -5339,7 +5366,8 @@ async function renderListDetail(){
           sItems.forEach(i=>{
             h+=`<div class="li-item${i.checked?' checked':''}" data-iid="${i.id}">
               <button class="li-check${i.checked?' done':''}" data-iid="${i.id}"><span class="material-icons-round">${i.checked?'check_box':'check_box_outline_blank'}</span></button>
-              <span class="li-title">${esc(i.title)}</span>
+              <span class="li-title" data-iid="${i.id}">${esc(i.title)}</span>
+              <button class="li-edit-btn" data-iid="${i.id}" title="Edit item"><span class="material-icons-round">edit</span></button>
               <button class="li-del" data-iid="${i.id}"><span class="material-icons-round">close</span></button>
             </div>`;
           });
@@ -5350,8 +5378,9 @@ async function renderListDetail(){
       visibleItems.forEach(i=>{
         h+=`<div class="li-item${i.checked?' checked':''}" data-iid="${i.id}">
           <button class="li-check${i.checked?' done':''}" data-iid="${i.id}"><span class="material-icons-round">${i.checked?'check_box':'check_box_outline_blank'}</span></button>
-          <span class="li-title">${esc(i.title)}</span>
+          <span class="li-title" data-iid="${i.id}">${esc(i.title)}</span>
           ${_renderItemMeta(i)}
+          <button class="li-edit-btn" data-iid="${i.id}" title="Edit item"><span class="material-icons-round">edit</span></button>
           <button class="li-del" data-iid="${i.id}"><span class="material-icons-round">close</span></button>
         </div>`;
       });
@@ -5490,6 +5519,86 @@ async function renderListDetail(){
     const iid=Number(btn.dataset.iid);
     await api.del('/api/lists/'+list.id+'/items/'+iid);
     await loadUserLists();render();
+  }));
+  // ─── Inline title edit on double-click ───
+  c.querySelectorAll('.li-title[data-iid]').forEach(span=>span.addEventListener('dblclick',e=>{
+    e.stopPropagation();
+    const iid=Number(span.dataset.iid);
+    const item=items.find(x=>x.id===iid);
+    if(!item||span.querySelector('input'))return;
+    const orig=item.title;
+    const inp=document.createElement('input');
+    inp.type='text';inp.className='li-edit-input';inp.value=orig;
+    span.textContent='';span.appendChild(inp);inp.focus();inp.select();
+    let saved=false;
+    async function save(){
+      if(saved)return;saved=true;
+      const val=inp.value.trim();
+      if(!val||val===orig){span.textContent=orig;return}
+      span.textContent=val; // optimistic
+      try{await api.put('/api/lists/'+list.id+'/items/'+iid,{title:val})}catch{span.textContent=orig}
+    }
+    inp.addEventListener('blur',save);
+    inp.addEventListener('keydown',ev=>{
+      if(ev.key==='Enter'){ev.preventDefault();inp.blur()}
+      if(ev.key==='Escape'){saved=true;span.textContent=orig}
+    });
+  }));
+  // ─── Metadata editor (pencil icon) ───
+  c.querySelectorAll('.li-edit-btn').forEach(btn=>btn.addEventListener('click',e=>{
+    e.stopPropagation();
+    const iid=Number(btn.dataset.iid);
+    const item=items.find(x=>x.id===iid);
+    if(!item)return;
+    const row=btn.closest('.li-item');
+    // Toggle: close if already open
+    const existing=row.nextElementSibling;
+    if(existing&&existing.classList.contains('li-meta-expand')){existing.remove();return}
+    // Close any other open editors
+    c.querySelectorAll('.li-meta-expand').forEach(el=>el.remove());
+    const meta=item.metadata?JSON.parse(item.metadata):{};
+    const ed=document.createElement('div');
+    ed.className='li-meta-expand';
+    ed.innerHTML=`
+      <label>Title<input type="text" class="me-title" value="${escA(item.title)}" maxlength="200"></label>
+      <label>Quantity<input type="text" class="me-qty" value="${escA(item.quantity||'')}"></label>
+      <label>Category<input type="text" class="me-cat" value="${escA(item.category||'')}"></label>
+      <label>Note<textarea class="me-note">${esc(item.note||'')}</textarea></label>
+      <label>Price<input type="number" class="me-price" value="${meta.price||''}" step="0.01" min="0"></label>
+      <label>URL<input type="url" class="me-url" value="${escA(meta.url||'')}"></label>
+      <label>Rating (1-5)<input type="number" class="me-rating" value="${meta.rating||''}" min="1" max="5"></label>
+      <div class="li-meta-actions">
+        <button class="btn-cancel">Cancel</button>
+        <button class="btn-save">Save</button>
+      </div>`;
+    row.after(ed);
+    ed.querySelector('.btn-cancel').addEventListener('click',()=>ed.remove());
+    ed.addEventListener('keydown',ev=>{if(ev.key==='Escape')ed.remove()});
+    ed.querySelector('.btn-save').addEventListener('click',async()=>{
+      const title=ed.querySelector('.me-title').value.trim();
+      if(!title){showToast('Title is required');return}
+      const payload={
+        title,
+        quantity:ed.querySelector('.me-qty').value.trim()||null,
+        category:ed.querySelector('.me-cat').value.trim()||null,
+        note:ed.querySelector('.me-note').value||null
+      };
+      const price=ed.querySelector('.me-price').value;
+      const url=ed.querySelector('.me-url').value.trim();
+      const rating=ed.querySelector('.me-rating').value;
+      const newMeta={};
+      if(price)newMeta.price=Number(price);
+      if(url)newMeta.url=url;
+      if(rating)newMeta.rating=Number(rating);
+      if(Object.keys(newMeta).length)payload.metadata=newMeta;
+      else payload.metadata=null;
+      try{
+        await api.put('/api/lists/'+list.id+'/items/'+iid,payload);
+        await loadUserLists();render();
+        showToast('Item updated');
+      }catch{showToast('Failed to update item')}
+    });
+    ed.querySelector('.me-title').focus();
   }));
   // Add item
   async function addItem(){
@@ -5825,7 +5934,15 @@ async function renderHabits(){
   // Delete
   mc.querySelectorAll('[data-del]').forEach(btn=>btn.addEventListener('click',async()=>{
     if(!confirm('Delete this habit?'))return;
-    await api.del('/api/habits/'+Number(btn.dataset.del));showToast('Habit deleted');renderHabits();
+    const hid=Number(btn.dataset.del);
+    const hab=habits.find(x=>x.id===hid);
+    await api.del('/api/habits/'+hid);
+    renderHabits();
+    showToast('Habit deleted'+(hab?' — "'+hab.name+'"':''),async()=>{
+      if(!hab)return;
+      await api.post('/api/habits',{name:hab.name,icon:hab.icon,color:hab.color,target:hab.target,frequency:hab.frequency,area_id:hab.area_id||null});
+      renderHabits();
+    });
   }));
   // Edit (inline toggle - reuse form)
   mc.querySelectorAll('[data-edit]').forEach(btn=>btn.addEventListener('click',async()=>{
@@ -5871,6 +5988,186 @@ async function renderHabits(){
       showToast(msg||'AI coaching tip generated',null,8000);
     }catch(e){showToast(e.message||'AI unavailable','error')}
     finally{btn.disabled=false}
+  }));
+  // Card click opens habit detail modal
+  mc.querySelectorAll('.habit-card').forEach(card=>card.addEventListener('click',(e)=>{
+    if(e.target.closest('.habit-check')||e.target.closest('[data-edit]')||e.target.closest('[data-del]')||e.target.closest('.ai-hab-coach'))return;
+    const hid=Number(card.dataset.hid);
+    const hab=habits.find(x=>x.id===hid);
+    if(hab)openHabitDetail(hab);
+  }));
+}
+
+// ─── HABIT DETAIL MODAL ───
+let _hdmHabit=null;
+let _hdmTab='heatmap';
+
+async function openHabitDetail(habit){
+  _hdmHabit=habit;
+  _hdmTab='heatmap';
+  const modal=$('hdm');
+  // Header
+  $('hdm-title-row').innerHTML=`<span class="hdm-icon">${esc(habit.icon||'⭐')}</span><span class="hdm-name">${esc(habit.name)}</span><span class="hdm-badge" style="background:${escA(habit.color||'#6C63FF')}">${esc(habit.frequency||'daily')}</span>`;
+  // Tabs
+  _renderHDMTabs();
+  // Body content
+  await _renderHDMBody();
+  // Open
+  modal.classList.add('open');
+  // Close handlers
+  const closeBtn=$('hdm-close');
+  const closeFn=()=>{modal.classList.remove('open');_hdmHabit=null;};
+  closeBtn.onclick=closeFn;
+  // Escape key
+  const escHandler=(e)=>{if(e.key==='Escape'&&modal.classList.contains('open')){closeFn();document.removeEventListener('keydown',escHandler);}};
+  document.addEventListener('keydown',escHandler);
+}
+
+function _renderHDMTabs(){
+  const tabs=['heatmap','stats','edit','history'];
+  const labels={heatmap:'Heatmap',stats:'Stats',edit:'Edit',history:'History'};
+  const icons={heatmap:'grid_on',stats:'insights',edit:'edit',history:'history'};
+  $('hdm-tabs').innerHTML=tabs.map(t=>
+    `<button class="hdm-tab${_hdmTab===t?' active':''}" data-tab="${t}"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">${icons[t]}</span>${labels[t]}</button>`
+  ).join('');
+  $('hdm-tabs').querySelectorAll('.hdm-tab').forEach(btn=>btn.addEventListener('click',async()=>{
+    _hdmTab=btn.dataset.tab;
+    _renderHDMTabs();
+    await _renderHDMBody();
+  }));
+}
+
+async function _renderHDMBody(){
+  const body=$('hdm-body');
+  const habit=_hdmHabit;
+  if(!habit){body.innerHTML='';return;}
+  if(_hdmTab==='heatmap')await _renderHDMHeatmap(body,habit);
+  else if(_hdmTab==='stats')await _renderHDMStats(body,habit);
+  else if(_hdmTab==='edit')_renderHDMEdit(body,habit);
+  else if(_hdmTab==='history')await _renderHDMHistory(body,habit);
+}
+
+async function _renderHDMHeatmap(body,habit){
+  let heatmapData=[];
+  try{heatmapData=await api.get('/api/habits/'+habit.id+'/heatmap')}catch(e){}
+  const logMap={};
+  heatmapData.forEach(e=>{logMap[e.date]=e.count;});
+  const today=new Date();
+  let h=`<div style="margin-bottom:12px;font-size:12px;color:var(--txd)">Last 90 days</div>`;
+  h+=`<div class="habit-heatmap-grid">`;
+  for(let i=89;i>=0;i--){
+    const d=new Date(today);d.setDate(d.getDate()-i);
+    const ds=_toDateStr(d);
+    const count=logMap[ds]||0;
+    const lvl=count===0?'':count>=habit.target*2?'l4':count>=habit.target?'l3':count>=Math.ceil(habit.target/2)?'l2':'l1';
+    const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    h+=`<div class="heatmap-cell ${lvl}" data-date="${ds}" title="${dayNames[d.getDay()]} ${ds}: ${count}x" style="${lvl?'--hm-l1:'+escA(habit.color||'#22C55E')+'40;--hm-l2:'+escA(habit.color||'#22C55E')+'80;--hm-l3:'+escA(habit.color||'#22C55E')+'BF;--hm-l4:'+escA(habit.color||'#22C55E')+'':''}"></div>`;
+  }
+  h+=`</div>`;
+  h+=`<div style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:10px;color:var(--txd)"><span>Less</span>`;
+  h+=`<div style="display:flex;gap:3px">`;
+  h+=`<div style="width:12px;height:12px;border-radius:2px;background:var(--bg-h)"></div>`;
+  for(const l of['40','80','BF','']){
+    h+=`<div style="width:12px;height:12px;border-radius:2px;background:${escA(habit.color||'#22C55E')}${l}"></div>`;
+  }
+  h+=`</div><span>More</span></div>`;
+  body.innerHTML=h;
+}
+
+async function _renderHDMStats(body,habit){
+  let habits=[];
+  try{habits=await api.get('/api/habits')}catch(e){}
+  const h=habits.find(x=>x.id===habit.id)||habit;
+  let heatmapData=[];
+  try{heatmapData=await api.get('/api/habits/'+habit.id+'/heatmap')}catch(e){}
+  const totalCompletions=h.total_completions||heatmapData.reduce((s,e)=>s+e.count,0);
+  const streak=h.streak||0;
+  // Calculate best day of week
+  const dayTotals=[0,0,0,0,0,0,0];
+  heatmapData.forEach(e=>{const d=new Date(e.date+'T12:00:00');dayTotals[d.getDay()]+=e.count;});
+  const dayNames=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const bestDayIdx=dayTotals.indexOf(Math.max(...dayTotals));
+  const worstDayIdx=dayTotals.indexOf(Math.min(...dayTotals));
+  const completionRate=heatmapData.length>0?Math.round(heatmapData.filter(e=>e.count>=habit.target).length/90*100):0;
+  let html=`<div class="habit-stats">
+    <div class="habit-stat-card"><div class="stat-val" style="color:${escA(habit.color||'#22C55E')}">${streak}</div><div class="stat-lbl">Current Streak</div></div>
+    <div class="habit-stat-card"><div class="stat-val">${totalCompletions}</div><div class="stat-lbl">Total Completions</div></div>
+    <div class="habit-stat-card"><div class="stat-val">${completionRate}%</div><div class="stat-lbl">Completion Rate (90d)</div></div>
+    <div class="habit-stat-card"><div class="stat-val">${dayNames[bestDayIdx]?dayNames[bestDayIdx].slice(0,3):'-'}</div><div class="stat-lbl">Best Day</div></div>
+  </div>`;
+  html+=`<div style="margin-top:16px;padding:12px;background:var(--bg-c);border:1px solid var(--brd);border-radius:var(--r);font-size:12px;color:var(--tx2)"><strong>Worst Day:</strong> ${dayNames[worstDayIdx]||'-'} &middot; <strong>Target:</strong> ${habit.target}x/${habit.frequency||'daily'}</div>`;
+  body.innerHTML=html;
+}
+
+function _renderHDMEdit(body,habit){
+  const areaOpts=areas.map(a=>`<option value="${a.id}"${habit.area_id===a.id?' selected':''}>${esc(a.icon||'')} ${esc(a.name)}</option>`).join('');
+  let h=`<div style="display:flex;flex-direction:column;gap:12px">
+    <div><label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Icon</label>
+    <input type="text" id="hdm-edit-icon" value="${escA(habit.icon||'⭐')}" style="width:48px;padding:8px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-c);color:var(--tx);font-size:18px;text-align:center;font-family:inherit"></div>
+    <div><label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Habit Name</label>
+    <input type="text" id="hdm-edit-name" value="${escA(habit.name)}" maxlength="100" style="width:100%;padding:8px 12px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-c);color:var(--tx);font-size:13px;font-family:inherit"></div>
+    <div><label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Color</label>
+    <div style="display:flex;align-items:center;gap:8px"><div style="width:36px;height:36px;border-radius:var(--rs);overflow:hidden;border:1px solid var(--brd);position:relative"><input type="color" id="hdm-edit-color" value="${escA(habit.color||'#6C63FF')}" style="position:absolute;inset:-4px;width:calc(100% + 8px);height:calc(100% + 8px);border:none;cursor:pointer;background:none"></div><span id="hdm-color-hex" style="font-size:11px;color:var(--txd)">${esc(habit.color||'#6C63FF')}</span></div></div>
+    <div><label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Frequency</label>
+    <select id="hdm-edit-freq" style="width:100%;padding:8px 10px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-c);color:var(--tx);font-size:13px;font-family:inherit"><option value="daily"${habit.frequency==='daily'?' selected':''}>Daily</option><option value="weekly"${habit.frequency==='weekly'?' selected':''}>Weekly</option><option value="monthly"${habit.frequency==='monthly'?' selected':''}>Monthly</option><option value="yearly"${habit.frequency==='yearly'?' selected':''}>Yearly</option></select></div>
+    <div><label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Target</label>
+    <input type="number" id="hdm-edit-target" value="${habit.target||1}" min="1" max="99" style="width:100px;padding:8px 10px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-c);color:var(--tx);font-size:13px;font-family:inherit"></div>
+    <div><label style="font-size:11px;color:var(--tx2);display:block;margin-bottom:4px">Area</label>
+    <select id="hdm-edit-area" style="width:100%;padding:8px 10px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg-c);color:var(--tx);font-size:13px;font-family:inherit"><option value="">None</option>${areaOpts}</select></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:12px;border-top:1px solid var(--brd)">
+      <button class="btn-s" id="hdm-edit-save">Save Changes</button>
+    </div>
+  </div>`;
+  body.innerHTML=h;
+  $('hdm-edit-color')?.addEventListener('input',(e)=>{const hex=$('hdm-color-hex');if(hex)hex.textContent=e.target.value;});
+  $('hdm-edit-save')?.addEventListener('click',async()=>{
+    const name=$('hdm-edit-name').value.trim();
+    if(!name){showToast('Please enter a habit name');return;}
+    const editBody={
+      name,
+      icon:$('hdm-edit-icon').value,
+      color:$('hdm-edit-color').value,
+      frequency:$('hdm-edit-freq').value,
+      target:Number($('hdm-edit-target').value)||1,
+      area_id:$('hdm-edit-area').value?Number($('hdm-edit-area').value):null
+    };
+    try{
+      const updated=await api.put('/api/habits/'+habit.id,editBody);
+      _hdmHabit={...habit,...updated};
+      $('hdm-title-row').innerHTML=`<span class="hdm-icon">${esc(_hdmHabit.icon||'⭐')}</span><span class="hdm-name">${esc(_hdmHabit.name)}</span><span class="hdm-badge" style="background:${escA(_hdmHabit.color||'#6C63FF')}">${esc(_hdmHabit.frequency||'daily')}</span>`;
+      showToast('Habit updated');
+      renderHabits();
+    }catch(e){showToast(e.message||'Error saving habit')}
+  });
+}
+
+async function _renderHDMHistory(body,habit){
+  let logs=[];
+  try{logs=await api.get('/api/habits/'+habit.id+'/heatmap')}catch(e){}
+  logs.sort((a,b)=>b.date.localeCompare(a.date));
+  const recent=logs.slice(0,30);
+  if(!recent.length){body.innerHTML=`<div style="text-align:center;padding:20px;color:var(--txd)">No log entries yet</div>`;return;}
+  let h='';
+  for(const entry of recent){
+    const d=new Date(entry.date+'T12:00:00');
+    const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const label=`${dayNames[d.getDay()]}, ${monthNames[d.getMonth()]} ${d.getDate()}`;
+    h+=`<div class="habit-history-item" data-date="${escA(entry.date)}">
+      <span class="hhi-date">${esc(label)}</span>
+      <span class="hhi-count">${entry.count}x</span>
+      <span class="hhi-undo" data-undo="${escA(entry.date)}" title="Undo this entry">undo</span>
+    </div>`;
+  }
+  body.innerHTML=h;
+  body.querySelectorAll('.hhi-undo').forEach(btn=>btn.addEventListener('click',async()=>{
+    const date=btn.dataset.undo;
+    try{
+      await api.del('/api/habits/'+habit.id+'/log',{date});
+      showToast('Log entry undone');
+      await _renderHDMHistory(body,habit);
+      renderHabits();
+    }catch(e){showToast(e.message||'Error undoing log')}
   }));
 }
 

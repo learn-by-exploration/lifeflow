@@ -252,6 +252,9 @@ module.exports = function(deps) {
       try { db.prepare('DELETE FROM webhooks WHERE user_id=?').run(req.userId); } catch(e) {}
       try { db.prepare('DELETE FROM api_tokens WHERE user_id=?').run(req.userId); } catch(e) {}
       try { db.prepare('DELETE FROM push_subscriptions WHERE user_id=?').run(req.userId); } catch(e) {}
+      try { db.prepare('DELETE FROM daily_reviews WHERE user_id=?').run(req.userId); } catch(e) {}
+      try { db.prepare('DELETE FROM user_xp WHERE user_id=?').run(req.userId); } catch(e) {}
+      try { db.prepare('DELETE FROM custom_statuses WHERE goal_id IN (SELECT id FROM goals WHERE user_id=?)').run(req.userId); } catch(e) {}
       // goal_milestones cascade from goals delete
 
       // Map old IDs to new IDs
@@ -400,9 +403,21 @@ module.exports = function(deps) {
 
       // Automation rules
       if (Array.isArray(req.body.automation_rules)) {
-        const insRule = db.prepare('INSERT INTO automation_rules (name, trigger_type, trigger_config, action_type, action_config, enabled, user_id) VALUES (?,?,?,?,?,?,?)');
+        const insRule = db.prepare('INSERT INTO automation_rules (name, trigger_type, trigger_config, action_type, action_config, conditions, actions, description, template_id, enabled, fire_count, last_fired_at, user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)');
         req.body.automation_rules.forEach(r => {
-          insRule.run(r.name, r.trigger_type, r.trigger_config || '{}', r.action_type, r.action_config || '{}', r.enabled !== undefined ? r.enabled : 1, req.userId);
+          // Validate webhook URLs in action_config if present
+          const actionCfg = typeof r.action_config === 'string' ? r.action_config : JSON.stringify(r.action_config || '{}');
+          let parsedCfg;
+          try { parsedCfg = typeof r.action_config === 'string' ? JSON.parse(r.action_config) : (r.action_config || {}); } catch { parsedCfg = {}; }
+          if (parsedCfg.webhook_url) {
+            if (!parsedCfg.webhook_url.startsWith('https://') || isPrivateUrl(parsedCfg.webhook_url)) {
+              throw Object.assign(new Error('Webhook URL must be HTTPS and not point to private/internal networks'), { status: 400 });
+            }
+          }
+          const triggerCfg = typeof r.trigger_config === 'string' ? r.trigger_config : JSON.stringify(r.trigger_config || '{}');
+          const conditions = typeof r.conditions === 'string' ? r.conditions : JSON.stringify(r.conditions || null);
+          const actions = typeof r.actions === 'string' ? r.actions : JSON.stringify(r.actions || null);
+          insRule.run(r.name, r.trigger_type, triggerCfg, r.action_type || null, actionCfg, conditions === 'null' ? null : conditions, actions === 'null' ? null : actions, r.description || null, r.template_id || null, r.enabled !== undefined ? r.enabled : 1, 0, null, req.userId);
         });
       }
 
@@ -468,6 +483,31 @@ module.exports = function(deps) {
         });
       }
 
+      // Daily reviews
+      if (Array.isArray(req.body.daily_reviews)) {
+        const insReview = db.prepare('INSERT INTO daily_reviews (date, note, completed_count, user_id) VALUES (?,?,?,?)');
+        req.body.daily_reviews.forEach(r => {
+          insReview.run(r.date, r.note || '', r.completed_count || 0, req.userId);
+        });
+      }
+
+      // User XP
+      if (Array.isArray(req.body.user_xp)) {
+        const insXp = db.prepare('INSERT INTO user_xp (amount, reason, created_at, user_id) VALUES (?,?,?,?)');
+        req.body.user_xp.forEach(x => {
+          insXp.run(x.amount, x.reason, x.created_at || new Date().toISOString(), req.userId);
+        });
+      }
+
+      // Custom statuses
+      if (Array.isArray(req.body.custom_statuses)) {
+        const insStatus = db.prepare('INSERT INTO custom_statuses (goal_id, name, color, position, is_done) VALUES (?,?,?,?,?)');
+        req.body.custom_statuses.forEach(s => {
+          const newGoalId = goalMap[s.goal_id];
+          if (newGoalId) insStatus.run(newGoalId, s.name, s.color || '#6B7280', s.position || 0, s.is_done || 0);
+        });
+      }
+
       // Webhooks
       if (Array.isArray(req.body.webhooks)) {
         const insWebhook = db.prepare('INSERT INTO webhooks (name, url, events, secret, active, user_id, created_at) VALUES (?,?,?,?,?,?,?)');
@@ -498,7 +538,8 @@ module.exports = function(deps) {
       res.json({ ok: true, message: 'Import successful' });
     } catch (e) {
       logger.error({ err: e }, 'Data import failed');
-      res.status(500).json({ error: 'Import failed' });
+      const status = e.status || 500;
+      res.status(status).json({ error: e.message || 'Import failed' });
     }
   });
 

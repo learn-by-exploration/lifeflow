@@ -33,6 +33,6 @@ export const api = {
   get: (u) => _fetch('GET', u),
   post: (u, d) => _fetch('POST', u, d),
   put: (u, d) => _fetch('PUT', u, d),
-  del: (u) => _fetch('DELETE', u),
+  del: (u, d) => _fetch('DELETE', u, d),
   patch: (u, d) => _fetch('PATCH', u, d),
 };
