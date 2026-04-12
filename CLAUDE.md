@@ -9,6 +9,10 @@ Personal task planner with 4-level hierarchy: Life Area → Goal → Task → Su
 Multi-user Express.js backend + vanilla JS SPA frontend. SQLite via better-sqlite3.
 Includes authentication, habits, lists, focus timer, templates, automations, custom fields, and service worker.
 
+> **Shared standards** (git workflow, security rules, testing strategy, backend service architecture,
+> error handling, anti-patterns, documentation requirements) are in the parent repo's `CLAUDE.md`.
+> All standards defined there apply here. This file covers LifeFlow-specific structure and conventions only.
+
 ## Quick Start
 
 ```bash
