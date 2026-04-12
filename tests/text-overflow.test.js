@@ -328,7 +328,7 @@ describe('Text overflow protection', () => {
       assertCSSProps('.toast .t-msg', ['text-overflow:ellipsis'], 'toast message');
     });
     it('has white-space:nowrap', () => {
-      assertCSSProps('.toast .t-msg', ['white-space:nowrap'], 'toast message');
+      assertCSSProps('.toast .t-msg', ['white-space:normal'], 'toast message');
     });
   });
 

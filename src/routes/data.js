@@ -7,6 +7,36 @@ module.exports = function(deps) {
   const { db, enrichTasks, dbDir, audit } = deps;
   const router = Router();
 
+  // SSRF protection for imported webhook URLs.
+  function isPrivateUrl(urlString) {
+    try {
+      const parsed = new URL(urlString);
+      const hostname = parsed.hostname.replace(/^\[|\]$/g, '');
+      if (hostname === 'localhost' || hostname.endsWith('.local')) return true;
+      if (hostname === '0.0.0.0' || hostname === '::1' || hostname === '::') return true;
+
+      const ipv4Match = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+      if (ipv4Match) {
+        const [, a, b] = ipv4Match.map(Number);
+        if (a === 127) return true;
+        if (a === 10) return true;
+        if (a === 172 && b >= 16 && b <= 31) return true;
+        if (a === 192 && b === 168) return true;
+        if (a === 169 && b === 254) return true;
+        if (a === 0) return true;
+      }
+
+      if (/^::ffff:\d+\.\d+\.\d+\.\d+$/i.test(hostname)) {
+        const mapped = hostname.replace(/^::ffff:/i, '');
+        return isPrivateUrl(`http://${mapped}`);
+      }
+
+      return false;
+    } catch {
+      return true;
+    }
+  }
+
   // ─── Auto Backup ───
   const backupDir = path.join(dbDir, 'backups');
   if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
@@ -79,6 +109,11 @@ module.exports = function(deps) {
       ? db.prepare(`SELECT * FROM custom_statuses WHERE goal_id IN (${goalIds.map(() => '?').join(',')}) ORDER BY position`).all(...goalIds)
       : [];
 
+    // Integrations
+    const webhooks = db.prepare('SELECT * FROM webhooks WHERE user_id=?').all(userId);
+    const api_tokens = db.prepare('SELECT id, user_id, name, token_hash, last_used_at, created_at, expires_at FROM api_tokens WHERE user_id=?').all(userId);
+    const push_subscriptions = db.prepare('SELECT * FROM push_subscriptions WHERE user_id=?').all(userId);
+
     // Include all user accounts (id, email, password_hash, display_name) for full restore capability
     // Password hashes are bcrypt — safe to store (same as what's in the SQLite file)
     const users = db.prepare('SELECT id, email, password_hash, display_name, created_at FROM users').all();
@@ -94,6 +129,7 @@ module.exports = function(deps) {
       custom_field_defs, automation_rules, saved_filters, task_templates,
       weekly_reviews, daily_reviews, inbox, badges, settings,
       user_xp, task_attachments, custom_statuses,
+      webhooks, api_tokens, push_subscriptions,
     };
   }
 
@@ -167,6 +203,27 @@ module.exports = function(deps) {
     for (const a of areas) { if (!a.name || !a.id) return res.status(400).json({ error: 'Each area must have id and name' }); }
     for (const g of goals) { if (!g.title || !g.id || !g.area_id) return res.status(400).json({ error: 'Each goal must have id, title, and area_id' }); }
     for (const t of tasks) { if (!t.title || !t.goal_id) return res.status(400).json({ error: 'Each task must have title and goal_id' }); }
+
+    if (Array.isArray(req.body.webhooks)) {
+      for (const [i, w] of req.body.webhooks.entries()) {
+        if (!w || typeof w.name !== 'string' || !w.name.trim()) {
+          return res.status(400).json({ error: `Invalid webhook at index ${i}: name is required` });
+        }
+        if (!w.url || typeof w.url !== 'string') {
+          return res.status(400).json({ error: `Invalid webhook at index ${i}: URL is required` });
+        }
+        try { new URL(w.url); } catch {
+          return res.status(400).json({ error: `Invalid webhook at index ${i}: URL is invalid` });
+        }
+        if (!w.url.startsWith('https://')) {
+          return res.status(400).json({ error: `Invalid webhook at index ${i}: URL must use HTTPS` });
+        }
+        if (isPrivateUrl(w.url)) {
+          return res.status(400).json({ error: `Invalid webhook at index ${i}: URL must not point to private/internal networks` });
+        }
+      }
+    }
+
     const importTx = db.transaction(() => {
       // Clear existing data in dependency order
       db.prepare('DELETE FROM task_custom_values WHERE task_id IN (SELECT id FROM tasks WHERE user_id=?)').run(req.userId);
@@ -192,6 +249,9 @@ module.exports = function(deps) {
       db.prepare('DELETE FROM inbox WHERE user_id=?').run(req.userId);
       try { db.prepare('DELETE FROM badges WHERE user_id=?').run(req.userId); } catch(e) {}
       db.prepare('DELETE FROM settings WHERE user_id=?').run(req.userId);
+      try { db.prepare('DELETE FROM webhooks WHERE user_id=?').run(req.userId); } catch(e) {}
+      try { db.prepare('DELETE FROM api_tokens WHERE user_id=?').run(req.userId); } catch(e) {}
+      try { db.prepare('DELETE FROM push_subscriptions WHERE user_id=?').run(req.userId); } catch(e) {}
       // goal_milestones cascade from goals delete
 
       // Map old IDs to new IDs
@@ -405,6 +465,30 @@ module.exports = function(deps) {
         req.body.goal_milestones.forEach(m => {
           const newGoalId = goalMap[m.goal_id];
           if (newGoalId) insMilestone.run(newGoalId, m.title, m.done || 0, m.position || 0, m.completed_at || null);
+        });
+      }
+
+      // Webhooks
+      if (Array.isArray(req.body.webhooks)) {
+        const insWebhook = db.prepare('INSERT INTO webhooks (name, url, events, secret, active, user_id, created_at) VALUES (?,?,?,?,?,?,?)');
+        req.body.webhooks.forEach(w => {
+          insWebhook.run(w.name, w.url, w.events || '[]', w.secret || '', w.active !== undefined ? w.active : 1, req.userId, w.created_at || new Date().toISOString());
+        });
+      }
+
+      // API tokens
+      if (Array.isArray(req.body.api_tokens)) {
+        const insToken = db.prepare('INSERT INTO api_tokens (name, token_hash, user_id, last_used_at, created_at, expires_at) VALUES (?,?,?,?,?,?)');
+        req.body.api_tokens.forEach(t => {
+          insToken.run(t.name, t.token_hash, req.userId, t.last_used_at || null, t.created_at || new Date().toISOString(), t.expires_at || null);
+        });
+      }
+
+      // Push subscriptions
+      if (Array.isArray(req.body.push_subscriptions)) {
+        const insPush = db.prepare('INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_id, created_at) VALUES (?,?,?,?,?)');
+        req.body.push_subscriptions.forEach(p => {
+          insPush.run(p.endpoint, p.p256dh, p.auth, req.userId, p.created_at || new Date().toISOString());
         });
       }
     });

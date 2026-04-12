@@ -29,7 +29,7 @@ describe('Input Design System — base classes', () => {
 
   describe('.inp (base input class)', () => {
     it('has border', () => assertCSSProps('.inp', ['border:1px solid var(--brd)'], 'base input'));
-    it('has padding', () => assertCSSProps('.inp', ['padding:9px 11px'], 'base input'));
+    it('has padding', () => assertCSSProps('.inp', ['padding:11px 13px'], 'base input'));
     it('has border-radius', () => assertCSSProps('.inp', ['border-radius:var(--rs)'], 'base input'));
     it('has background', () => assertCSSProps('.inp', ['background:var(--bg-c)'], 'base input'));
     it('has font-size', () => assertCSSProps('.inp', ['font-size:13px'], 'base input'));
@@ -58,7 +58,7 @@ describe('Input Design System — base classes', () => {
 
   describe('.sel (base select class)', () => {
     it('has border', () => assertCSSProps('.sel', ['border:1px solid var(--brd)'], 'base select'));
-    it('has padding', () => assertCSSProps('.sel', ['padding:9px 11px'], 'base select'));
+    it('has padding', () => assertCSSProps('.sel', ['padding:11px 13px'], 'base select'));
     it('has cursor pointer', () => assertCSSProps('.sel', ['cursor:pointer'], 'base select'));
     it('has transition', () => assertCSSProps('.sel', ['transition:border-color'], 'base select'));
   });

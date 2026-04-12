@@ -157,7 +157,7 @@ function _tlTaskHtml(t){
         <span class="material-icons-round" style="cursor:pointer;color:var(--txd)" data-unblock="${t.id}" title="Remove">close</span>
       </span>
     </div>
-    ${height>30?`<div style="font-size:9px;color:var(--txd);margin-top:2px">${dur}min${t.goal_title?' · '+esc(t.goal_title):''}</div>`:''}
+    ${height>30?`<div style="font-size:10px;color:var(--txd);margin-top:2px">${dur}min${t.goal_title?' · '+esc(t.goal_title):''}</div>`:''}
     <div class="pt-resize" data-id="${t.id}"></div>
   </div>`;
 }
@@ -747,7 +747,7 @@ async function renderToday(){
               <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escA(reasons)}">${esc(tk.title)}</span>
               ${tk.due_date?`<span style="font-size:11px;color:var(--txd)">${fmtDue(tk.due_date)}</span>`:''}
               <span style="font-size:10px;color:var(--brand);font-weight:600">${tk.score}pt</span>
-              <button class="btn-c add-myday-btn" data-id="${tk.id}" style="font-size:11px;padding:3px 8px" title="Add to My Day">
+              <button class="btn-c add-myday-btn" data-id="${tk.id}" style="font-size:11px;padding:6px 8px" title="Add to My Day">
                 <span class="material-icons-round" style="font-size:14px">add</span>My Day</button>
             </div>`;
           });
@@ -796,7 +796,7 @@ async function renderToday(){
     h+=`<div class="daily-review-banner" style="margin-top:14px;padding:12px 16px;border-radius:var(--rs);background:var(--bg-s);border:1px solid var(--brd);display:flex;align-items:center;gap:10px">
       <span class="material-icons-round" style="font-size:20px;color:var(--brand)">nights_stay</span>
       <span style="flex:1;font-size:13px">How was your day? You completed <strong>${doneCount}</strong> task${doneCount!==1?'s':''}.</span>
-      <button class="btn-c dr-open-btn" style="font-size:12px;padding:4px 12px">Reflect</button>
+      <button class="btn-c dr-open-btn" style="font-size:12px;padding:6px 12px">Reflect</button>
       <span class="material-icons-round dr-dismiss" style="font-size:14px;cursor:pointer;color:var(--txd)">close</span>
     </div>`;
   }
@@ -1052,10 +1052,10 @@ async function renderTable(ct){
   const priColors=['var(--txd)','var(--tx)','var(--warn)','var(--err)'];
   // Filters bar
   let h='<div class="tv-filters" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">';
-  h+=`<select class="tv-status-filter" style="padding:4px 8px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg2);color:var(--tx);font-size:12px">`;
+  h+=`<select class="tv-status-filter" style="padding:6px 10px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg2);color:var(--tx);font-size:12px">`;
   ['all','todo','doing','done'].forEach(s=>h+=`<option value="${s}"${_tvStatus===s?' selected':''}>${s==='all'?'All Statuses':s.charAt(0).toUpperCase()+s.slice(1)}</option>`);
   h+='</select>';
-  h+=`<select class="tv-group-filter" style="padding:4px 8px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg2);color:var(--tx);font-size:12px">`;
+  h+=`<select class="tv-group-filter" style="padding:6px 10px;border-radius:var(--rs);border:1px solid var(--brd);background:var(--bg2);color:var(--tx);font-size:12px">`;
   [['none','No Grouping'],['area','Group by Area'],['goal','Group by Goal'],['status','Group by Status'],['priority','Group by Priority']].forEach(([v,l])=>h+=`<option value="${v}"${_tvGroup===v?' selected':''}>${l}</option>`);
   h+='</select>';
   h+=`<span style="font-size:12px;color:var(--txd);margin-left:auto">${data.total} task${data.total!==1?'s':''}</span>`;
@@ -1063,7 +1063,7 @@ async function renderTable(ct){
   // Groups
   if(_tvGroup!=='none'&&data.groups&&data.groups.length){
     h+='<div class="tv-groups" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">';
-    data.groups.forEach(g=>h+=`<span style="font-size:11px;padding:3px 8px;border-radius:var(--rs);background:var(--bg2);color:var(--txd)">${esc(String(g.name))} (${g.count})</span>`);
+    data.groups.forEach(g=>h+=`<span style="font-size:11px;padding:4px 8px;border-radius:var(--rs);background:var(--bg2);color:var(--txd)">${esc(String(g.name))} (${g.count})</span>`);
     h+='</div>';
   }
   // Table
@@ -1110,8 +1110,8 @@ async function renderTable(ct){
     h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:12px;color:var(--txd)">`;
     h+=`<span>Showing ${_tvPage*limit+1}–${Math.min((_tvPage+1)*limit,data.total)} of ${data.total}</span>`;
     h+=`<div style="display:flex;gap:4px">`;
-    if(_tvPage>0)h+=`<button class="btn-c tv-prev" style="padding:4px 10px;font-size:12px">← Prev</button>`;
-    if(_tvPage<totalPages-1)h+=`<button class="btn-c tv-next" style="padding:4px 10px;font-size:12px">Next →</button>`;
+    if(_tvPage>0)h+=`<button class="btn-c tv-prev" style="padding:8px 10px;font-size:12px">← Prev</button>`;
+    if(_tvPage<totalPages-1)h+=`<button class="btn-c tv-next" style="padding:8px 10px;font-size:12px">Next →</button>`;
     h+='</div></div>';
   }
   ct.innerHTML=h;
@@ -1439,7 +1439,7 @@ async function renderCal(target){
     const isCurrentMonth=calY===new Date().getFullYear()&&calM===new Date().getMonth();
     let h=`<div class="ch">
       <button class="material-icons-round" id="cp">chevron_left</button><span class="ctt">${mn}</span><button class="material-icons-round" id="cn">chevron_right</button>
-      ${!isCurrentMonth?'<button id="cal-today" style="margin-left:8px;padding:4px 12px;border-radius:6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx);font-size:11px;cursor:pointer;font-family:inherit">Today</button>':''}
+      ${!isCurrentMonth?'<button id="cal-today" class="cal-view-btn">Today</button>':''}
       <span style="flex:1"></span>
       <div class="cal-view-bar">${modes.map(m=>`<button class="cal-view-btn${calMode===m.id?' active':''}" data-mode="${m.id}">${m.label}</button>`).join('')}</div>
     </div><div class="cg">`;
@@ -1449,7 +1449,7 @@ async function renderCal(target){
       const ds=_toDateStr(cur);const dt=bd[ds]||[];
       h+=`<div class="cc ${ds===todayStr?'today':''} ${cur.getMonth()!==calM?'om':''}" data-date="${ds}"><div class="cd">${cur.getDate()}</div>`;
       dt.slice(0,3).forEach(t=>h+=`<span class="ctd" data-id="${t.id}" style="background:${escA(t.goal_color||'var(--brand)')}">${esc(t.title.substring(0,18))}</span>`);
-      if(dt.length>3)h+=`<span style="font-size:9px;color:var(--txd)">+${dt.length-3}</span>`;
+      if(dt.length>3)h+=`<span style="font-size:10px;color:var(--txd)">+${dt.length-3}</span>`;
       h+=`</div>`;cur.setDate(cur.getDate()+1);}
     h+=`</div>`;c.innerHTML=h;
     $('cp').addEventListener('click',()=>{calM--;if(calM<0){calM=11;calY--}renderCal()});
@@ -1484,7 +1484,7 @@ async function renderCal(target){
   // Header
   let h=`<div class="ch">
     <button class="material-icons-round" id="cp">chevron_left</button><span class="ctt">${dateLabel}</span><button class="material-icons-round" id="cn">chevron_right</button>
-    <button id="cal-today" style="margin-left:8px;padding:4px 12px;border-radius:6px;border:1px solid var(--brd);background:var(--bg-c);color:var(--tx);font-size:11px;cursor:pointer;font-family:inherit">Today</button>
+    <button id="cal-today" class="cal-view-btn">Today</button>
     <span style="flex:1"></span>
     <div class="cal-view-bar">${modes.map(m=>`<button class="cal-view-btn${calMode===m.id?' active':''}" data-mode="${m.id}">${m.label}</button>`).join('')}</div>
   </div>`;
@@ -2120,7 +2120,7 @@ async function renderWeekly(){
   allT.filter(t=>t.status!=='done').forEach(t=>{if(t.due_date&&byDay[t.due_date]!==undefined)byDay[t.due_date].push(t)});
   const dayNames=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   let h=`<div class="wp">`;
-  h+=`<div class="wp-un" data-date=""><div class="wp-h">Unscheduled <span style="font-size:9px;color:var(--txd)">(${unscheduled.length})</span></div>`;
+  h+=`<div class="wp-un" data-date=""><div class="wp-h">Unscheduled <span style="font-size:10px;color:var(--txd)">(${unscheduled.length})</span></div>`;
   unscheduled.forEach(t=>h+=wpCard(t));
   h+=`</div>`;
   days.forEach((d,i)=>{
@@ -2147,7 +2147,7 @@ async function renderWeekly(){
       const id=Number(e.dataTransfer.getData('text/plain'));
       const newDate=col.dataset.date||null;
       await api.put('/api/tasks/'+id,{due_date:newDate});
-      await loadAreas();renderWeekly();
+      await loadAreas();await renderWeekly();
     });
   });
   // Touch drag support for mobile
@@ -2158,7 +2158,7 @@ function wpCard(t){
   if(t.priority===3)cls.push('p3');else if(t.priority===2)cls.push('p2');else if(t.priority===1)cls.push('p1');
   let meta='';
   if(t.priority>0)meta+=`<span style="color:${PC[t.priority]}">${PL[t.priority]}</span>`;
-  if(t.tags&&t.tags.length)t.tags.forEach(tg=>meta+=`<span class="tag" style="background:${escA(tg.color)};font-size:8px;padding:0 4px">${esc(tg.name)}</span>`);
+  if(t.tags&&t.tags.length)t.tags.forEach(tg=>meta+=`<span class="tag" style="background:${escA(tg.color)};font-size:10px;padding:2px 6px">${esc(tg.name)}</span>`);
   meta+=`<span style="color:var(--txd)">${esc(t.goal_title||'')}</span>`;
   return`<div class="${cls.join(' ')}" data-id="${t.id}" draggable="true"><div class="wp-tt">${esc(t.title)}</div><div class="wp-tm">${meta}</div></div>`;
 }
@@ -2243,8 +2243,8 @@ function renderDPBody(){
     <div class="dp-row"><div><label>Start Date</label><input type="date" id="dp-start" value="${t.start_date||''}"></div>
     <div><label>Due Date</label><div style="display:flex;gap:6px"><input type="date" id="dp-due" value="${t.due_date||''}" style="flex:1"><input type="time" id="dp-time" value="${t.due_time||''}" style="width:100px"></div></div></div>
     <div class="dp-row"><div><label>Priority</label><select id="dp-pri"><option value="0" ${t.priority===0?'selected':''}>None</option><option value="1" ${t.priority===1?'selected':''}>Normal</option><option value="2" ${t.priority===2?'selected':''}>High</option><option value="3" ${t.priority===3?'selected':''}>Critical</option></select></div>
-    <div class="dp-row"><div><label>Assigned To</label><select id="dp-asg-user"><option value="">Unassigned</option></select></div>
-    <div><label>Recurring</label><select id="dp-rec"><option value="">None</option><option value="daily" ${t.recurring==='daily'?'selected':''}>Daily</option><option value="weekdays" ${t.recurring==='weekdays'?'selected':''}>Weekdays</option><option value="weekly" ${t.recurring==='weekly'?'selected':''}>Weekly</option><option value="biweekly" ${t.recurring==='biweekly'?'selected':''}>Every 2 Weeks</option><option value="monthly" ${t.recurring==='monthly'?'selected':''}>Monthly</option><option value="yearly" ${t.recurring==='yearly'?'selected':''}>Yearly</option><option value="custom" ${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)?'selected':''}>Custom…</option></select><div id="dp-rec-custom" style="display:${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)&&t.recurring!=='every-2-weeks'?'flex':'none'};gap:6px;margin-top:4px;align-items:center"><span style="font-size:11px">Every</span><input type="number" id="dp-rec-n" min="1" max="365" style="width:60px" value="${(t.recurring?.match(/^every-(\d+)/)||[])[1]||'3'}"><select id="dp-rec-unit" style="width:80px"><option value="days" ${t.recurring?.endsWith('-days')?'selected':''}>Days</option><option value="weeks" ${t.recurring?.endsWith('-weeks')?'selected':''}>Weeks</option></select></div><div id="dp-rec-preview" style="display:${t.recurring?'block':'none'};margin-top:6px;padding:6px 8px;background:var(--bg-c);border-radius:4px;font-size:10px;color:var(--tx2)"><span class="material-icons-round" style="font-size:12px;vertical-align:middle">repeat</span> <span id="dp-rec-txt">${esc(t.recurring||'')} </span></div></div></div>
+    <div><label>Assigned To</label><select id="dp-asg-user"><option value="">Unassigned</option></select></div></div>
+    <div><label>Recurring</label><select id="dp-rec"><option value="">None</option><option value="daily" ${t.recurring==='daily'?'selected':''}>Daily</option><option value="weekdays" ${t.recurring==='weekdays'?'selected':''}>Weekdays</option><option value="weekly" ${t.recurring==='weekly'?'selected':''}>Weekly</option><option value="biweekly" ${t.recurring==='biweekly'?'selected':''}>Every 2 Weeks</option><option value="monthly" ${t.recurring==='monthly'?'selected':''}>Monthly</option><option value="yearly" ${t.recurring==='yearly'?'selected':''}>Yearly</option><option value="custom" ${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)?'selected':''}>Custom…</option></select><div id="dp-rec-custom" style="display:${t.recurring&&/^every-\d+-(days|weeks)$/.test(t.recurring)&&t.recurring!=='every-2-weeks'?'flex':'none'};gap:6px;margin-top:4px;align-items:center"><span style="font-size:11px">Every</span><input type="number" id="dp-rec-n" min="1" max="365" style="width:60px" value="${(t.recurring?.match(/^every-(\d+)/)||[])[1]||'3'}"><select id="dp-rec-unit" style="width:80px"><option value="days" ${t.recurring?.endsWith('-days')?'selected':''}>Days</option><option value="weeks" ${t.recurring?.endsWith('-weeks')?'selected':''}>Weeks</option></select></div><div id="dp-rec-preview" style="display:${t.recurring?'block':'none'};margin-top:6px;padding:6px 8px;background:var(--bg-c);border-radius:4px;font-size:10px;color:var(--tx2)"><span class="material-icons-round" style="font-size:12px;vertical-align:middle">repeat</span> <span id="dp-rec-txt">${esc(t.recurring||'')} </span></div></div>
     <div><label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:10px"><input type="checkbox" id="dp-md" ${t.my_day?'checked':''} style="width:auto;margin:0">Add to My Day</label></div>
     <div class="dp-row"><div><label>Estimated (min)</label><input type="number" id="dp-est" min="0" value="${t.estimated_minutes||''}" placeholder="e.g. 30"></div>
     <div><label>Actual (min)</label><input type="number" id="dp-act" min="0" value="${t.actual_minutes||''}" placeholder="0"></div></div>
@@ -6168,7 +6168,7 @@ async function renderInbox(){
     c.innerHTML+=`<div style="text-align:center;margin-top:16px"><button class="ib-add-btn" style="padding:8px 20px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:13px"><span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:4px">add</span>Quick Capture</button></div>`;
     c.querySelector('.ib-add-btn').addEventListener('click',inboxQuickAdd);return}
   let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span style="font-size:13px;color:var(--txd)">${items.length} item${items.length!==1?'s':''} to triage</span>
-    <button class="ib-add-btn" style="padding:4px 12px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:12px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:3px">add</span>Capture</button></div>`;
+    <button class="ib-add-btn" style="padding:8px 12px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:12px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:3px">add</span>Capture</button></div>`;
   items.forEach(it=>{
     h+=`<div class="inbox-item" data-id="${it.id}"><div style="flex:1;min-width:0;overflow:hidden">
       <div class="inbox-title">${esc(it.title)}</div>
@@ -6274,7 +6274,7 @@ async function renderNotes(){
   }
   let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
     <span style="font-size:13px;color:var(--txd)">${notes.length} note${notes.length!==1?'s':''}</span>
-    <button id="new-note-btn" style="padding:4px 12px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:12px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:3px">add</span>New Note</button></div>`;
+    <button id="new-note-btn" style="padding:8px 12px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:12px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:3px">add</span>New Note</button></div>`;
   if(!notes.length){h+=emptyS('note','No notes yet','Create a note to capture ideas and reference material')}
   notes.forEach(n=>{
     const goalLabel=n.goal_id?allGoals.find(g=>g.id===n.goal_id)?.title||'':'';
@@ -6564,7 +6564,7 @@ async function renderRules(){
       <button id="auto-templates-btn" class="btn-s" style="font-size:11px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:2px">auto_awesome</span>Templates</button>
       <button id="auto-log-btn" class="btn-s" style="font-size:11px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:2px">history</span>Log</button>
       <button id="ai-build-rule" class="btn-s" style="font-size:11px;border-color:var(--brand);background:transparent;color:var(--brand)"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:2px">smart_toy</span>AI Build</button>
-      <button id="new-rule-btn" style="padding:4px 12px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:12px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:3px">add</span>New Rule</button>
+      <button id="new-rule-btn" style="padding:8px 12px;background:var(--brand);color:#fff;border:none;border-radius:var(--rs);cursor:pointer;font-size:12px"><span class="material-icons-round" style="font-size:13px;vertical-align:middle;margin-right:3px">add</span>New Rule</button>
     </div></div>`;
   // Suggestions banner
   try{const sugg=await api.get('/api/rules/suggestions');if(sugg.length>0){

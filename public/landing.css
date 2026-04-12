@@ -9,7 +9,7 @@ a:hover{text-decoration:underline}
 .ln-brand{font-weight:700;font-size:18px;display:flex;align-items:center;gap:8px}
 .ln-logo{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:linear-gradient(135deg,#6366F1,#818CF8);border-radius:6px;color:#fff;font-weight:700;font-size:14px}
 .ln-links{display:flex;gap:24px;align-items:center;font-size:14px}
-.ln-cta{background:#6366F1;color:#fff!important;padding:6px 16px;border-radius:6px;font-weight:500}
+.ln-cta{background:#6366F1;color:#fff!important;padding:10px 16px;border-radius:6px;font-weight:500;min-height:36px;display:inline-flex;align-items:center}
 .ln-cta:hover{background:#818CF8;text-decoration:none}
 
 /* Hero */
@@ -18,7 +18,7 @@ a:hover{text-decoration:underline}
 .ln-hero em{font-style:normal;color:#818CF8}
 .ln-sub{font-size:18px;color:#B0BEC5;margin-bottom:32px;max-width:560px;margin-left:auto;margin-right:auto}
 .ln-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.ln-btn{display:inline-block;padding:12px 28px;border-radius:8px;font-weight:600;font-size:15px;transition:all 0.2s}
+.ln-btn{display:inline-flex;align-items:center;justify-content:center;padding:12px 28px;border-radius:8px;font-weight:600;font-size:15px;transition:all 0.2s;min-height:44px}
 .ln-btn.primary{background:#6366F1;color:#fff}
 .ln-btn.primary:hover{background:#818CF8;text-decoration:none}
 .ln-btn.secondary{border:1px solid #334155;color:#CBD5E1}
