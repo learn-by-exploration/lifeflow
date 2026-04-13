@@ -17,7 +17,7 @@ const updateArea = z.object({
 
 const createGoal = z.object({
   title: z.string().trim().min(1, 'Title required').max(200, 'Title too long (max 200 characters)'),
-  description: z.string().max(2000, 'Description too long (max 2000 characters)').optional().default(''),
+  description: z.string().max(2000, 'Description too long (max 2000 characters)').nullable().optional().default(''),
   color: hexColor.optional().default('#6C63FF'),
   due_date: z.string().nullable().optional().default(null),
 });
@@ -36,7 +36,7 @@ const createMilestone = z.object({
 
 const updateMilestone = z.object({
   title: z.string().trim().min(1).max(200).optional(),
-  done: z.boolean().optional(),
+  done: z.union([z.boolean(), z.literal(0), z.literal(1)]).optional(),
 });
 
 module.exports = { createArea, updateArea, createGoal, updateGoal, createMilestone, updateMilestone };

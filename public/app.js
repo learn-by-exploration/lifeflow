@@ -286,7 +286,7 @@ function buildSwatches(containerId, hiddenId, active){
 let areas=[],goals=[],tasks=[],allTags=[];
 let currentView='myday',activeAreaId=null,activeGoalId=null,goalTab='list';
 // Restore last view from localStorage
-{const lv=localStorage.getItem('lf-lastView');if(lv&&['myday','all','board','calendar','overdue','dashboard','weekly','matrix','logbook','tags','focushistory','templates','settings','habits','planner','taskplanner','inbox','review','notes','timeanalytics','rules','tasks','focus'].includes(lv))currentView=lv}
+{const lv=localStorage.getItem('lf-lastView');if(lv&&['myday','all','board','calendar','overdue','dashboard','weekly','matrix','logbook','tags','focushistory','templates','settings','habits','planner','taskplanner','inbox','review','notes','timeanalytics','rules','tasks','focus','goals','areas','search'].includes(lv))currentView=lv}
 let calY,calM;{const n=new Date();calY=n.getFullYear();calM=n.getMonth()}
 let calMode=localStorage.getItem('lf-calMode')||'month';
 let editingId=null;
@@ -572,6 +572,9 @@ async function render(){
   else if(currentView==='notes')await renderNotes();
   else if(currentView==='timeanalytics')await renderTimeAnalytics();
   else if(currentView==='rules')await renderRules();
+  else if(currentView==='goals')await renderGoalsView($('ct'));
+  else if(currentView==='areas')await renderAreasView($('ct'));
+  else if(currentView==='search')await renderSearchView($('ct'));
   else if(currentView==='reports')await renderReports();
   else if(currentView==='help')renderHelp();
   else if(currentView==='changelog')renderChangelog();
@@ -615,6 +618,9 @@ function updateBC(){
   else if(currentView==='notes'){pt.textContent='Notes';bc.innerHTML=''}
   else if(currentView==='timeanalytics'){pt.textContent='Time Analytics';bc.innerHTML=''}
   else if(currentView==='rules'){pt.textContent='Automations';bc.innerHTML=''}
+  else if(currentView==='goals'){pt.textContent='Goals';bc.innerHTML=''}
+  else if(currentView==='areas'){pt.textContent='Life Areas';bc.innerHTML=''}
+  else if(currentView==='search'){pt.textContent='Search';bc.innerHTML=''}
   else if(currentView==='reports'){pt.textContent='Reports';bc.innerHTML=''}
   else if(currentView==='help'){pt.textContent='Help & Guide';bc.innerHTML=''}
   else if(currentView==='changelog'){pt.textContent='Changelog';bc.innerHTML=''}

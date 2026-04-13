@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const crypto = require('crypto');
-const { isValidColor } = require('../middleware/validate');
+const { isValidColor, validate } = require('../middleware/validate');
+const { createList, updateList, applyTemplate } = require('../schemas/lists.schema');
 module.exports = function(deps) {
   const { db, rebuildSearchIndex, getNextPosition } = deps;
   const router = Router();
@@ -73,7 +74,7 @@ module.exports = function(deps) {
     res.json(LIST_TEMPLATES);
   });
 
-  router.post('/api/lists/from-template', (req, res) => {
+  router.post('/api/lists/from-template', validate(applyTemplate), (req, res) => {
     const { template_id } = req.body;
     const tpl = LIST_TEMPLATES.find(t => t.id === template_id);
     if (!tpl) return res.status(404).json({ error: 'Template not found' });
@@ -96,7 +97,7 @@ module.exports = function(deps) {
     res.json(lists);
   });
 
-  router.post('/api/lists', (req, res) => {
+  router.post('/api/lists', validate(createList), (req, res) => {
     const { name, type, icon, color, area_id, parent_id, view_mode, board_columns } = req.body;
     if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'name is required' });
     if (name.length > 100) return res.status(400).json({ error: 'name must be 100 chars or less' });
@@ -135,7 +136,7 @@ module.exports = function(deps) {
     res.json(sublists);
   });
 
-  router.put('/api/lists/:id', (req, res) => {
+  router.put('/api/lists/:id', validate(updateList), (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
     const ex = db.prepare('SELECT * FROM lists WHERE id=? AND user_id=?').get(id, req.userId);

@@ -1,4 +1,6 @@
 const { Router } = require('express');
+const { validate } = require('../middleware/validate');
+const { createCustomField, updateCustomField } = require('../schemas/custom-fields.schema');
 
 module.exports = function(deps) {
   const { db } = deps;
@@ -13,7 +15,7 @@ module.exports = function(deps) {
     res.json(fields);
   });
 
-  router.post('/api/custom-fields', (req, res) => {
+  router.post('/api/custom-fields', validate(createCustomField), (req, res) => {
     const { name, field_type, options, position, required, show_in_card } = req.body;
     if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'name required' });
     if (name.trim().length > 100) return res.status(400).json({ error: 'name too long (max 100)' });
@@ -31,7 +33,7 @@ module.exports = function(deps) {
     }
   });
 
-  router.put('/api/custom-fields/:id', (req, res) => {
+  router.put('/api/custom-fields/:id', validate(updateCustomField), (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
     const ex = db.prepare('SELECT * FROM custom_field_defs WHERE id=? AND user_id=?').get(id, req.userId);

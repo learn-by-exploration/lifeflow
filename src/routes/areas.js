@@ -50,7 +50,7 @@ router.get('/api/areas/:areaId/goals', (req, res) => {
   if (!Number.isInteger(areaId)) return res.status(400).json({ error: 'Invalid ID' });
   res.json(areasSvc.listGoals(areaId, req.userId));
 });
-router.post('/api/areas/:areaId/goals', (req, res) => {
+router.post('/api/areas/:areaId/goals', validate(createGoal), (req, res) => {
   const areaId = Number(req.params.areaId);
   if (!Number.isInteger(areaId)) return res.status(400).json({ error: 'Invalid ID' });
   const { title, description, color, due_date } = req.body;
@@ -80,7 +80,7 @@ router.get('/api/goals/:id/milestones', validate(idParam, 'params'), (req, res) 
 router.post('/api/goals/:id/milestones', validate(idParam, 'params'), validate(createMilestone), (req, res) => {
   res.status(201).json(areasSvc.createMilestone(req.params.id, req.userId, req.body.title));
 });
-router.put('/api/milestones/:id', validate(idParam, 'params'), (req, res) => {
+router.put('/api/milestones/:id', validate(idParam, 'params'), validate(updateMilestone), (req, res) => {
   const { title, done } = req.body;
   res.json(areasSvc.updateMilestone(req.params.id, req.userId, { title, done }));
 });

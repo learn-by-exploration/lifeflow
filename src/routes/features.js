@@ -1,5 +1,6 @@
 const { Router } = require('express');
-const { isValidColor } = require('../middleware/validate');
+const { isValidColor, validate } = require('../middleware/validate');
+const { createTemplate, updateTemplate } = require('../schemas/features.schema');
 const { toDateStr, addDays } = require('../utils/date');
 module.exports = function(deps) {
   const { db, enrichTask, enrichTasks, getNextPosition, automationEngine } = deps;
@@ -62,7 +63,7 @@ router.get('/api/templates', (req, res) => {
   res.json(rows.map(r => { try { return { ...r, tasks: JSON.parse(r.tasks) }; } catch { return { ...r, tasks: [] }; } }));
 });
 
-router.post('/api/templates', (req, res) => {
+router.post('/api/templates', validate(createTemplate), (req, res) => {
   const { name, description, icon, tasks } = req.body;
   if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'Name required' });
   if (!Array.isArray(tasks) || !tasks.length) return res.status(400).json({ error: 'Tasks array required' });
@@ -71,7 +72,7 @@ router.post('/api/templates', (req, res) => {
   res.json({ id: r.lastInsertRowid, name: name.trim(), description, icon: icon || '📋', tasks: safeTasks });
 });
 
-router.put('/api/templates/:id', (req, res) => {
+router.put('/api/templates/:id', validate(updateTemplate), (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const ex = db.prepare('SELECT * FROM task_templates WHERE id=? AND user_id=?').get(id, req.userId);
