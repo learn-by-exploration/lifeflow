@@ -4,6 +4,7 @@ const RecurringService = require('../services/recurring.service');
 const { validateRecurring } = require('../schemas/tasks.schema');
 const pushService = require('../services/push.service');
 const logger = require('../logger');
+const { toDateStr, addDays } = require('../utils/date');
 module.exports = function(deps) {
   const { db, rebuildSearchIndex, enrichTask, enrichTasks, getNextPosition, nextDueDate, executeRules, verifyGoalOwnership, automationEngine, audit } = deps;
   const router = Router();
@@ -180,7 +181,7 @@ router.get('/api/tasks/search', (req, res) => {
 
 // ─── Suggested tasks (before :id to avoid param capture) ───
 router.get('/api/tasks/suggested', (req, res) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toDateStr();
   const tasks = enrichTasks(db.prepare(`
     SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
@@ -284,7 +285,7 @@ router.get('/api/tasks/table', (req, res) => {
 
 // ─── My Day Suggestions (must be before :id) ───
 router.get('/api/tasks/suggestions', (req, res) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toDateStr();
   const candidates = db.prepare(`
     SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
@@ -313,8 +314,8 @@ router.get('/api/tasks/suggestions', (req, res) => {
 // ─── Upcoming View (must be before :id) ───
 router.get('/api/tasks/upcoming', (req, res) => {
   const days = Math.min(Number(req.query.days) || 30, 90);
-  const today = new Date().toISOString().slice(0, 10);
-  const end = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+  const today = toDateStr();
+  const end = toDateStr(addDays(new Date(), days));
   const overdue = enrichTasks(db.prepare(`
     SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
@@ -334,6 +335,72 @@ router.get('/api/tasks/upcoming', (req, res) => {
     ORDER BY t.priority DESC, t.position LIMIT 50
   `).all(req.userId));
   res.json({ overdue, upcoming, undated });
+});
+
+router.get('/api/tasks/planner', (req, res) => {
+  const areas = db.prepare(`
+    SELECT id, name, icon, color, position
+    FROM life_areas
+    WHERE user_id=? AND archived=0
+    ORDER BY position, id
+  `).all(req.userId);
+  const goals = db.prepare(`
+    SELECT id, area_id, title, color, status, position, due_date
+    FROM goals
+    WHERE user_id=?
+    ORDER BY position, id
+  `).all(req.userId);
+  const tasks = enrichTasks(db.prepare(`
+    SELECT t.*, g.area_id, g.title as goal_title, g.color as goal_color
+    FROM tasks t
+    JOIN goals g ON g.id=t.goal_id
+    WHERE t.user_id=?
+    ORDER BY CASE t.status WHEN 'doing' THEN 0 WHEN 'todo' THEN 1 WHEN 'done' THEN 2 END, t.position, t.id
+  `).all(req.userId));
+
+  const goalMap = new Map(goals.map(goal => [goal.id, { ...goal, tasks: [] }]));
+  for (const task of tasks) {
+    const goal = goalMap.get(task.goal_id);
+    if (goal) goal.tasks.push(task);
+  }
+
+  const areaTree = areas.map(area => ({
+    ...area,
+    goals: goals.filter(goal => goal.area_id === area.id).map(goal => goalMap.get(goal.id)).filter(Boolean),
+  }));
+  const uncategorizedGoals = goals.filter(goal => !areas.find(area => area.id === goal.area_id)).map(goal => goalMap.get(goal.id)).filter(Boolean);
+  if (uncategorizedGoals.length) {
+    areaTree.push({ id: 0, name: 'Other', icon: 'folder', color: '#64748B', position: Number.MAX_SAFE_INTEGER, goals: uncategorizedGoals });
+  }
+  res.json({ areas: areaTree });
+});
+
+router.post('/api/tasks/batch-move', (req, res) => {
+  const { task_ids, target_goal_id } = req.body;
+  if (!Array.isArray(task_ids) || !task_ids.length) return res.status(400).json({ error: 'task_ids array required' });
+  if (task_ids.length > 100) return res.status(400).json({ error: 'Too many task_ids (max 100)' });
+  const targetGoalId = Number(target_goal_id);
+  if (!Number.isInteger(targetGoalId) || !verifyGoalOwnership(targetGoalId, req.userId)) {
+    return res.status(400).json({ error: 'Invalid target_goal_id' });
+  }
+
+  const tx = db.transaction(() => {
+    const selectTask = db.prepare('SELECT id FROM tasks WHERE id=? AND user_id=?');
+    const updateTask = db.prepare('UPDATE tasks SET goal_id=?, position=? WHERE id=? AND user_id=?');
+    const moved = [];
+    let nextPosition = getNextPosition('tasks', 'goal_id', targetGoalId);
+    for (const rawId of task_ids) {
+      const taskId = Number(rawId);
+      if (!Number.isInteger(taskId) || !selectTask.get(taskId, req.userId)) continue;
+      updateTask.run(targetGoalId, nextPosition++, taskId, req.userId);
+      moved.push(taskId);
+    }
+    return moved;
+  });
+
+  const moved = tx();
+  if (moved.length) rebuildSearchIndex();
+  res.json({ moved_count: moved.length, task_ids: moved, target_goal_id: targetGoalId });
 });
 
 router.get('/api/tasks/:id', (req, res) => {
@@ -593,14 +660,14 @@ router.post('/api/tasks/parse', (req, res) => {
   // Extract dates: today, tomorrow, day-after-tomorrow, next monday-sunday, in N days
   const today = new Date(); today.setHours(0,0,0,0);
   const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-  input = input.replace(/\b(today)\b/gi, () => { due_date = fmt(today); return ''; });
-  input = input.replace(/\bday\s*after\s*tomorrow\b/gi, () => { const d = new Date(today); d.setDate(d.getDate()+2); due_date = fmt(d); return ''; });
-  input = input.replace(/\b(tomorrow)\b/gi, () => { const d = new Date(today); d.setDate(d.getDate()+1); due_date = fmt(d); return ''; });
-  input = input.replace(/\bin\s+(\d+)\s*days?\b/gi, (_, n) => { const d = new Date(today); d.setDate(d.getDate()+Number(n)); due_date = fmt(d); return ''; });
+  input = input.replace(/\b(today)\b/gi, () => { due_date = toDateStr(today); return ''; });
+  input = input.replace(/\bday\s*after\s*tomorrow\b/gi, () => { const d = new Date(today); d.setDate(d.getDate()+2); due_date = toDateStr(d); return ''; });
+  input = input.replace(/\b(tomorrow)\b/gi, () => { const d = new Date(today); d.setDate(d.getDate()+1); due_date = toDateStr(d); return ''; });
+  input = input.replace(/\bin\s+(\d+)\s*days?\b/gi, (_, n) => { const d = new Date(today); d.setDate(d.getDate()+Number(n)); due_date = toDateStr(d); return ''; });
   input = input.replace(/\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi, (_, day) => {
     const targetDay = dayNames.indexOf(day.toLowerCase());
     const d = new Date(today); let diff = targetDay - d.getDay(); if (diff <= 0) diff += 7;
-    d.setDate(d.getDate() + diff); due_date = fmt(d); return '';
+    d.setDate(d.getDate() + diff); due_date = toDateStr(d); return '';
   });
   // Extract YYYY-MM-DD or MM/DD
   input = input.replace(/(\d{4})-(\d{2})-(\d{2})/g, (m) => { due_date = m; return ''; });
@@ -608,7 +675,6 @@ router.post('/api/tasks/parse', (req, res) => {
     const y = today.getFullYear(); due_date = `${y}-${String(mo).padStart(2,'0')}-${String(da).padStart(2,'0')}`; return '';
   });
   const title = input.replace(/\s+/g, ' ').trim();
-  function fmt(d) { return d.toISOString().slice(0, 10); }
   res.json({ title: title || text.trim(), priority, due_date, tags, my_day });
 });
 
@@ -773,6 +839,7 @@ router.post('/api/tasks/:id/move', (req, res) => {
   if (!ex) return res.status(404).json({ error: 'Not found' });
   if (!verifyGoalOwnership(Number(goal_id), req.userId)) return res.status(404).json({ error: 'Goal not found or not owned by you' });
   db.prepare('UPDATE tasks SET goal_id=? WHERE id=? AND user_id=?').run(Number(goal_id), id, req.userId);
+  rebuildSearchIndex();
   res.json(enrichTask(db.prepare('SELECT * FROM tasks WHERE id=? AND user_id=?').get(id, req.userId)));
 });
 

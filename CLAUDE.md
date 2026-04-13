@@ -215,12 +215,13 @@ See `docs/openapi.yaml` for full specification. Key modules:
 | `0` | Focus History | Stats bar, 14-day bar chart, top tasks, session list |
 | — | Area | Goals grid for a life area |
 | — | Goal | Tasks for a specific goal (list/board tabs) |
-| — | Reports | 7-tab view: Overview, Activity, Habits, Focus, Analytics, Reviews, Notes |
+| — | Reports | 7-tab view: Overview, Activity, Habits analytics, Focus, Analytics, Reviews, Notes |
 | — | Settings | 8 tabs: General, Appearance, Tags, Templates, Automations, Custom Fields, Data, Shortcuts |
 | — | Inbox | Quick capture inbox |
 | — | Lists | Custom checklists/grocery/etc |
 | — | Table | Sortable/filterable/groupable task table with pagination |
 | — | Gantt | SVG timeline with task bars, today marker, area grouping |
+| — | Task Planner | Hierarchical area → goal → task planner with batch move controls |
 | — | Triage | Morning briefing / task triage |
 | — | Habits | Habit tracker with daily logging |
 
@@ -255,9 +256,11 @@ See `docs/openapi.yaml` for full specification. Key modules:
 - Custom fields (text, number, date, select types) with per-task values
 - Table view with sortable columns, grouping, filtering, pagination
 - Gantt chart V2 (SVG timeline, task bars, dependency arrows via blocked_by, progress fill, today marker, area grouping)
+- Gantt bar rescheduling via drag and arrow keys
 - Multi-user task assignment (assigned_to_user_id)
 - Drag-and-drop reorder (list, board, weekly columns) + touch support
 - Multi-select with bulk complete/delete/set priority
+- Hierarchical task planner with area/goal grouping and batch move between goals
 - Inline subtask expansion with drag reorder
 - Starred/favorite tasks with quick-toggle icon
 - Start date for task date ranges (start_date + due_date)
@@ -273,12 +276,17 @@ See `docs/openapi.yaml` for full specification. Key modules:
 - Focus/Pomodoro timer (25/5/15 min, SVG ring, session tracking, history)
 - Auto-link focus session duration to task actual_minutes on completion
 - Habit tracker with daily logging and heatmaps
+- Habit analytics dashboard with streak, completion-rate, and sparkline summaries
 - Streak counter + GitHub-style 365-day contribution heatmap
 - Gamification XP system (6 XP reasons, auto-leveling, daily/weekly completion goals)
 - Web Push notifications (subscribe, test, overdue/reminder triggers)
 - Notification bell with overdue/today/upcoming reminders
 - Morning briefing / triage workflow
 - Weekly reviews
+
+### Organization
+- Pinned life areas persisted in settings for sidebar prioritization
+- Direct task quick-add from the area view with goal targeting
 
 ### Integrations
 - Outbound webhooks (HMAC-SHA256 signed, configurable events, fire-and-forget)

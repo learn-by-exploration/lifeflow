@@ -1,4 +1,5 @@
 'use strict';
+const { toDateStr } = require('../utils/date');
 /**
  * Advanced Automation Engine
  *
@@ -390,13 +391,13 @@ class AutomationEngine {
             if (m[2] === 'd') base.setDate(base.getDate() + n);
             else if (m[2] === 'w') base.setDate(base.getDate() + n * 7);
             else if (m[2] === 'm') base.setMonth(base.getMonth() + n);
-            newDue = base.toISOString().slice(0, 10);
+            newDue = toDateStr(base);
           }
         } else if (config.value === 'today') {
-          newDue = new Date().toISOString().slice(0, 10);
+          newDue = toDateStr();
         } else if (config.value === 'tomorrow') {
           const d = new Date(); d.setDate(d.getDate() + 1);
-          newDue = d.toISOString().slice(0, 10);
+          newDue = toDateStr(d);
         } else if (config.value && /^\d{4}-\d{2}-\d{2}$/.test(config.value)) {
           newDue = config.value;
         } else if (config.value) {
@@ -408,7 +409,7 @@ class AutomationEngine {
             if (m[2] === 'd') base.setDate(base.getDate() + n);
             else if (m[2] === 'w') base.setDate(base.getDate() + n * 7);
             else if (m[2] === 'm') base.setMonth(base.getMonth() + n);
-            newDue = base.toISOString().slice(0, 10);
+            newDue = toDateStr(base);
           }
         }
         if (newDue) {
@@ -451,12 +452,12 @@ class AutomationEngine {
             if (m[2] === 'd') d.setDate(d.getDate() + parseInt(m[1]));
             else if (m[2] === 'w') d.setDate(d.getDate() + parseInt(m[1]) * 7);
             else if (m[2] === 'm') d.setMonth(d.getMonth() + parseInt(m[1]));
-            dueDate = d.toISOString().slice(0, 10);
+            dueDate = toDateStr(d);
           } else if (config.due === 'today') {
-            dueDate = new Date().toISOString().slice(0, 10);
+            dueDate = toDateStr();
           } else if (config.due === 'tomorrow') {
             const d = new Date(); d.setDate(d.getDate() + 1);
-            dueDate = d.toISOString().slice(0, 10);
+            dueDate = toDateStr(d);
           }
         }
         db.prepare(
@@ -496,7 +497,7 @@ class AutomationEngine {
         if (!config.habit_id) return 'no_habit';
         const habit = db.prepare('SELECT id FROM habits WHERE id=? AND user_id=?').get(config.habit_id, userId);
         if (!habit) return 'habit_not_found';
-        const today = new Date().toISOString().slice(0, 10);
+        const today = toDateStr();
         db.prepare('INSERT OR REPLACE INTO habit_logs (habit_id, date, count) VALUES (?,?, COALESCE((SELECT count FROM habit_logs WHERE habit_id=? AND date=?),0)+1)')
           .run(config.habit_id, today, config.habit_id, today);
         return 'ok';
@@ -519,7 +520,7 @@ class AutomationEngine {
         if (!goalId) return 'no_goal';
         const title = config.title ? this._interpolate(config.title, context) : h.name;
         const pos = this.helpers.getNextPosition('tasks', 'goal_id', goalId);
-        const today = new Date().toISOString().slice(0, 10);
+        const today = toDateStr();
         db.prepare('INSERT INTO tasks (goal_id, title, priority, position, due_date, user_id, my_day) VALUES (?,?,?,?,?,?,1)')
           .run(goalId, title, config.priority || 1, pos, today, userId);
         return 'ok';
@@ -560,7 +561,7 @@ class AutomationEngine {
         const note = config.note_template
           ? this._interpolate(config.note_template, context)
           : (context.task ? `Completed: ${context.task.title}` : 'Automation note');
-        const today = new Date().toISOString().slice(0, 10);
+        const today = toDateStr();
         const existing = db.prepare('SELECT id, note FROM daily_reviews WHERE user_id=? AND date=?')
           .get(userId, today);
         if (existing) {
@@ -593,7 +594,7 @@ class AutomationEngine {
       } else {
         // Top-level vars
         if (varName === 'streak') val = context.streak;
-        else if (varName === 'date') val = new Date().toISOString().slice(0, 10);
+        else if (varName === 'date') val = toDateStr();
         else if (varName === 'percentage') val = context.percentage;
       }
       if (val === undefined || val === null) return match;
@@ -655,7 +656,7 @@ class AutomationEngine {
   shouldFireSchedule(rule, now) {
     const tc = this._parseJson(rule.trigger_config, {});
     const lastFire = rule.last_schedule_fire;
-    const today = now.toISOString().slice(0, 10);
+    const today = toDateStr(now);
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
 
@@ -687,7 +688,7 @@ class AutomationEngine {
   }
 
   markScheduleFired(ruleId) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = toDateStr();
     this.db.prepare('UPDATE automation_rules SET last_schedule_fire=? WHERE id=?').run(today, ruleId);
   }
 }

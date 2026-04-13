@@ -1,4 +1,5 @@
 const { Router } = require('express');
+const { toDateStr } = require('../utils/date');
 module.exports = function(deps) {
   const { db, getNextPosition } = deps;
   const router = Router();
@@ -184,7 +185,7 @@ router.post('/api/rules/:id/test', (req, res) => {
       task.tags = db.prepare('SELECT t.name FROM tags t JOIN task_tags tt ON t.id=tt.tag_id WHERE tt.task_id=?').all(task.id).map(r => r.name);
       const ctx = { userId: req.userId, task };
       if (rule.trigger_type === 'task_overdue') {
-        if (!task.due_date || task.due_date >= new Date().toISOString().slice(0, 10)) continue;
+        if (!task.due_date || task.due_date >= toDateStr()) continue;
         const daysOverdue = Math.floor((Date.now() - new Date(task.due_date + 'T00:00:00').getTime()) / (86400000));
         ctx.days_overdue = daysOverdue;
       }
@@ -322,10 +323,10 @@ router.get('/api/reviews/current', (req, res) => {
   const dayOfWeek = now.getDay();
   const monday = new Date(now);
   monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
-  const weekStart = monday.toISOString().split('T')[0];
+  const weekStart = toDateStr(monday);
   const weekEnd = new Date(monday);
   weekEnd.setDate(monday.getDate() + 7);
-  const weekEndStr = weekEnd.toISOString().split('T')[0];
+  const weekEndStr = toDateStr(weekEnd);
 
   const completed = db.prepare(`SELECT t.*, g.title as goal_title FROM tasks t LEFT JOIN goals g ON t.goal_id=g.id 
     WHERE t.status='done' AND t.completed_at >= ? AND t.completed_at < ? AND t.user_id=? ORDER BY t.completed_at DESC`).all(weekStart, weekEndStr, req.userId);
@@ -363,7 +364,7 @@ router.post('/api/reviews', (req, res) => {
   // Compute stats
   const weekEnd = new Date(week_start);
   weekEnd.setDate(weekEnd.getDate() + 7);
-  const weekEndStr = weekEnd.toISOString().split('T')[0];
+  const weekEndStr = toDateStr(weekEnd);
   const completed = db.prepare(`SELECT COUNT(*) as c FROM tasks WHERE status='done' AND completed_at >= ? AND completed_at < ? AND user_id=?`).get(week_start, weekEndStr, req.userId);
   const created = db.prepare(`SELECT COUNT(*) as c FROM tasks WHERE created_at >= ? AND created_at < ? AND user_id=?`).get(week_start, weekEndStr, req.userId);
   // Upsert

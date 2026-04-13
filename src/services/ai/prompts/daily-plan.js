@@ -3,6 +3,8 @@
  */
 'use strict';
 
+const { toDateStr } = require('../../../utils/date');
+
 const PLANNER_FUNCTION = {
   name: 'plan_day',
   description: 'Create an optimized daily task plan',
@@ -54,7 +56,7 @@ Principles:
 - Consider the user's past focus patterns if available
 - "doing" status tasks should be prioritized (already started)
 
-Today: ${new Date().toISOString().split('T')[0]}
+Today: ${toDateStr()}
 Day: ${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getDay()]}`;
 
   const contextParts = [];

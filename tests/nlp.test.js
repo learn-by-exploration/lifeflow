@@ -6,7 +6,7 @@ describe('NLP Quick Capture Parser', () => {
   beforeEach(() => cleanDb());
   after(() => teardown());
 
-  const fmt = (d) => d.toISOString().slice(0, 10);
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   function todayDate() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
 
   it('returns 400 when text is missing', async () => {

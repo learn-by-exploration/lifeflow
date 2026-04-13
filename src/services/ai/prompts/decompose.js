@@ -3,6 +3,8 @@
  */
 'use strict';
 
+const { toDateStr } = require('../../../utils/date');
+
 const DECOMPOSE_FUNCTION = {
   name: 'decompose_goal',
   description: 'Break a goal into milestones, tasks, and subtasks',
@@ -54,7 +56,7 @@ Rules:
 - Note dependencies between tasks where relevant
 - Consider the user's existing workload when suggesting timelines
 
-Today: ${new Date().toISOString().split('T')[0]}`;
+Today: ${toDateStr()}`;
 
   const contextParts = [];
   if (goal.description) contextParts.push(`Goal description: ${goal.description}`);

@@ -1,4 +1,5 @@
 const { Router } = require('express');
+const { toDateStr, addDays } = require('../utils/date');
 module.exports = function(deps) {
   const { db, enrichTasks, automationEngine } = deps;
   const router = Router();
@@ -32,6 +33,154 @@ router.get('/api/stats', (req, res) => {
     ORDER BY t.completed_at DESC LIMIT 10
   `).all(req.userId);
   res.json({ total, done, overdue, dueToday, thisWeek, byArea, byPriority, recentDone });
+});
+
+router.get('/api/stats/habits', (req, res) => {
+  const habits = db.prepare(`
+    SELECT h.id, h.name, h.icon, h.color, h.target, h.frequency, h.position,
+      la.name as area_name
+    FROM habits h
+    LEFT JOIN life_areas la ON la.id=h.area_id
+    WHERE h.user_id=? AND h.archived=0
+    ORDER BY h.position, h.id
+  `).all(req.userId);
+  if (!habits.length) {
+    return res.json({
+      overall: { totalHabits: 0, activeHabits: 0, avgCompletion30: 0, avgCompletion90: 0, totalLogs: 0 },
+      trends: [],
+      heatmap: [],
+      bestDay: null,
+      worstDay: null,
+      habits: []
+    });
+  }
+
+  const habitIds = habits.map(habit => habit.id);
+  const placeholders = habitIds.map(() => '?').join(',');
+  const logs = db.prepare(`
+    SELECT habit_id, date, count
+    FROM habit_logs
+    WHERE habit_id IN (${placeholders})
+      AND date >= date('now','-365 days')
+    ORDER BY date DESC
+  `).all(...habitIds);
+
+  const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const logMap = new Map();
+  const dailyTotals = new Map();
+  const dayOfWeekTotals = new Map(DAY_NAMES.map(day => [day, 0]));
+  for (const log of logs) {
+    const dateMap = logMap.get(log.habit_id) || new Map();
+    dateMap.set(log.date, log.count);
+    logMap.set(log.habit_id, dateMap);
+    dailyTotals.set(log.date, (dailyTotals.get(log.date) || 0) + Number(log.count || 0));
+    const dayName = DAY_NAMES[new Date(log.date + 'T00:00:00').getDay()];
+    dayOfWeekTotals.set(dayName, (dayOfWeekTotals.get(dayName) || 0) + Number(log.count || 0));
+  }
+
+  const calcStreaks = (habit, logsByDate) => {
+    const target = Math.max(1, Number(habit.target) || 1);
+    let streak = 0;
+    let bestStreak = 0;
+    let current = 0;
+    const startDate = new Date();
+    startDate.setHours(0, 0, 0, 0);
+    for (let offset = 365; offset >= 0; offset--) {
+      const day = new Date(startDate);
+      day.setDate(day.getDate() - offset);
+      const count = Number(logsByDate.get(toDateStr(day)) || 0);
+      if (count >= target) {
+        current += 1;
+        bestStreak = Math.max(bestStreak, current);
+      } else {
+        current = 0;
+      }
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayCount = Number(logsByDate.get(toDateStr(today)) || 0);
+    const cursor = new Date(today);
+    if (todayCount < target) cursor.setDate(cursor.getDate() - 1);
+    else streak = 1;
+    for (;;) { // eslint-disable-line no-constant-condition
+      const ds = toDateStr(cursor);
+      const count = Number(logsByDate.get(ds) || 0);
+      if (count >= target) {
+        if (streak === 0 || ds !== toDateStr(today)) streak += 1;
+        cursor.setDate(cursor.getDate() - 1);
+        continue;
+      }
+      break;
+    }
+    return { streak, bestStreak };
+  };
+
+  const habitAnalytics = habits.map(habit => {
+    const logsByDate = logMap.get(habit.id) || new Map();
+    const { streak, bestStreak } = calcStreaks(habit, logsByDate);
+    const last30 = Array.from({ length: 30 }, (_, index) => {
+      const day = addDays(new Date(), -(29 - index));
+      return { date: toDateStr(day), count: Number(logsByDate.get(toDateStr(day)) || 0) };
+    });
+    const completed30 = last30.filter(entry => entry.count >= Math.max(1, Number(habit.target) || 1)).length;
+    const last90 = Array.from({ length: 90 }, (_, index) => {
+      const day = addDays(new Date(), -(89 - index));
+      return Number(logsByDate.get(toDateStr(day)) || 0) >= Math.max(1, Number(habit.target) || 1) ? 1 : 0;
+    });
+    const completed90 = last90.reduce((sum, value) => sum + value, 0);
+    const totalLogs = Array.from(logsByDate.values()).reduce((sum, value) => sum + Number(value || 0), 0);
+    const weekdayBreakdown = DAY_NAMES.map(day => ({ day, total: 0 }));
+    for (const [date, count] of logsByDate.entries()) {
+      const dayName = DAY_NAMES[new Date(date + 'T00:00:00').getDay()];
+      const bucket = weekdayBreakdown.find(entry => entry.day === dayName);
+      if (bucket) bucket.total += Number(count || 0);
+    }
+    return {
+      id: habit.id,
+      name: habit.name,
+      icon: habit.icon,
+      color: habit.color,
+      target: habit.target,
+      frequency: habit.frequency,
+      area_name: habit.area_name,
+      streak,
+      best_streak: bestStreak,
+      completion_30: completed30,
+      completion_90: completed90,
+      completion_rate_30: Math.round((completed30 / 30) * 100),
+      completion_rate_90: Math.round((completed90 / 90) * 100),
+      total_logs: totalLogs,
+      sparkline_30: last30,
+      weekday_breakdown: weekdayBreakdown,
+    };
+  });
+
+  const trends = Array.from({ length: 90 }, (_, index) => {
+    const day = addDays(new Date(), -(89 - index));
+    const ds = toDateStr(day);
+    return { date: ds, total: dailyTotals.get(ds) || 0 };
+  });
+  const heatmap = Array.from({ length: 365 }, (_, index) => {
+    const day = addDays(new Date(), -(364 - index));
+    const ds = toDateStr(day);
+    return { date: ds, total: dailyTotals.get(ds) || 0 };
+  });
+  const sortedDays = Array.from(dayOfWeekTotals.entries()).sort((left, right) => right[1] - left[1]);
+
+  res.json({
+    overall: {
+      totalHabits: habits.length,
+      activeHabits: habitAnalytics.filter(habit => habit.total_logs > 0).length,
+      avgCompletion30: Math.round(habitAnalytics.reduce((sum, habit) => sum + habit.completion_rate_30, 0) / habitAnalytics.length),
+      avgCompletion90: Math.round(habitAnalytics.reduce((sum, habit) => sum + habit.completion_rate_90, 0) / habitAnalytics.length),
+      totalLogs: habitAnalytics.reduce((sum, habit) => sum + habit.total_logs, 0),
+    },
+    trends,
+    heatmap,
+    bestDay: sortedDays[0] ? { day: sortedDays[0][0], total: sortedDays[0][1] } : null,
+    worstDay: sortedDays[sortedDays.length - 1] ? { day: sortedDays[sortedDays.length - 1][0], total: sortedDays[sortedDays.length - 1][1] } : null,
+    habits: habitAnalytics.sort((left, right) => right.streak - left.streak || right.completion_rate_30 - left.completion_rate_30),
+  });
 });
 
 // ─── Focus Session Tracking ───
@@ -142,14 +291,14 @@ router.get('/api/focus/streak', (req, res) => {
   let streak = 0;
   for (let i = 0; i < 365; i++) {
     const d = new Date(today.getTime() - i * dayMs);
-    const ds = d.toISOString().slice(0,10);
+    const ds = toDateStr(d);
     if (heatmap.find(h => h.day === ds)) streak++;
     else break;
   }
   let bestStreak = 0, cur = 0;
   for (let i = 365; i >= 0; i--) {
     const d = new Date(today.getTime() - i * dayMs);
-    const ds = d.toISOString().slice(0,10);
+    const ds = toDateStr(d);
     if (heatmap.find(h => h.day === ds)) { cur++; if (cur > bestStreak) bestStreak = cur; }
     else cur = 0;
   }
@@ -299,7 +448,7 @@ router.get('/api/stats/streaks', (req, res) => {
   const dayMs = 86400000;
   for (let i = 0; i < 365; i++) {
     const d = new Date(today - i * dayMs);
-    const ds = d.toISOString().slice(0,10);
+    const ds = toDateStr(d);
     const cnt = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='done' AND date(completed_at)=? AND user_id=?").get(ds, req.userId).c;
     if (cnt > 0) streak++;
     else break;
@@ -308,7 +457,7 @@ router.get('/api/stats/streaks', (req, res) => {
     let best = 0, cur = 0;
     for (let i = 365; i >= 0; i--) {
       const d = new Date(today - i * dayMs);
-      const ds = d.toISOString().slice(0,10);
+      const ds = toDateStr(d);
       const found = heatmap.find(h => h.day === ds);
       if (found && found.count > 0) { cur++; if (cur > best) best = cur; }
       else cur = 0;
@@ -341,8 +490,8 @@ router.get('/api/stats/trends', (req, res) => {
     end.setDate(end.getDate() - i * 7);
     const start = new Date(end);
     start.setDate(start.getDate() - 7);
-    const startStr = start.toISOString().split('T')[0];
-    const endStr = end.toISOString().split('T')[0];
+    const startStr = toDateStr(start);
+    const endStr = toDateStr(end);
     const row = db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE status='done' AND completed_at >= ? AND completed_at < ? AND user_id=?`).get(startStr, endStr, req.userId);
     weeks.push({ week_start: startStr, week_end: endStr, completed: row.count });
   }
@@ -399,7 +548,7 @@ router.get('/api/stats/balance', (req, res) => {
     WHERE (t.created_at >= ? OR (t.due_date IS NOT NULL AND t.due_date >= ?)) AND la.user_id=?
     GROUP BY la.id
     ORDER BY task_count DESC
-  `).all(weekAgo.toISOString().slice(0,10), weekAgo.toISOString().slice(0,10), req.userId);
+  `).all(toDateStr(weekAgo), toDateStr(weekAgo), req.userId);
   const total = rows.reduce((s,r) => s + r.task_count, 0);
   const areas = rows.map(r => ({ ...r, pct: total ? Math.round(r.task_count / total * 100) : 0 }));
   const dominant = areas.find(a => a.pct > 60);

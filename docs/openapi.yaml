@@ -307,6 +307,55 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/Task' }
 
+  /api/tasks/planner:
+    get:
+      tags: [Tasks]
+      summary: Get hierarchical task planner data
+      description: Returns areas with nested goals and enriched tasks for the planner view.
+      responses:
+        '200':
+          description: Hierarchical planner tree
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  areas:
+                    type: array
+                    items:
+                      type: object
+
+  /api/tasks/batch-move:
+    post:
+      tags: [Tasks]
+      summary: Move multiple tasks to a target goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [task_ids, target_goal_id]
+              properties:
+                task_ids:
+                  type: array
+                  items: { type: integer }
+                target_goal_id:
+                  type: integer
+      responses:
+        '200':
+          description: Batch move result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  moved_count: { type: integer }
+                  task_ids:
+                    type: array
+                    items: { type: integer }
+                  target_goal_id: { type: integer }
+
   /api/tasks/batch:
     patch:
       tags: [Tasks]
@@ -1934,6 +1983,29 @@ paths:
                   tasks_today: { type: integer }
                   overdue: { type: integer }
 
+  /api/stats/habits:
+    get:
+      tags: [Stats]
+      summary: Get habit analytics summary
+      responses:
+        '200':
+          description: Habit analytics data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  overall: { type: object }
+                  trends:
+                    type: array
+                    items: { type: object }
+                  heatmap:
+                    type: array
+                    items: { type: object }
+                  habits:
+                    type: array
+                    items: { type: object }
+
   /api/stats/streaks:
     get:
       tags: [Stats]
@@ -2649,6 +2721,10 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  pinnedAreas:
+                    type: string
+                    description: JSON-encoded array of pinned life area IDs
     put:
       tags: [Settings]
       summary: Update settings
@@ -2658,6 +2734,10 @@ paths:
           application/json:
             schema:
               type: object
+              properties:
+                pinnedAreas:
+                  type: string
+                  description: JSON-encoded array of pinned life area IDs
       responses:
         '200':
           description: Updated settings

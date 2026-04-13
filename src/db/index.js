@@ -30,12 +30,55 @@ function initDatabase(dbDir) {
     }
   }
 
-  const db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-  db.pragma('busy_timeout = 5000');
-  // Force WAL checkpoint on open to ensure main DB file is up-to-date
-  try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch {}
+  // ─── Open DB with auto-repair on corruption ───
+  // Wraps the entire open+pragma+integrity sequence so ANY corruption error
+  // (even at the very first pragma) triggers delete-and-recreate.
+  let db;
+  const openAndVerify = () => {
+    const d = new Database(dbPath);
+    d.pragma('journal_mode = WAL');
+    d.pragma('foreign_keys = ON');
+    d.pragma('busy_timeout = 5000');
+    try { d.pragma('wal_checkpoint(TRUNCATE)'); } catch {}
+    // Run integrity check — throws or returns issues if corrupt
+    const ic = d.pragma('integrity_check');
+    const ok = ic.length === 1 && ic[0].integrity_check === 'ok';
+    if (!ok) {
+      const issues = ic.map(r => r.integrity_check).slice(0, 10);
+      logger.warn({ issues }, 'Database integrity check failed — attempting REINDEX');
+      try {
+        d.exec('REINDEX');
+        logger.info('REINDEX succeeded — indexes rebuilt');
+        try {
+          d.exec("INSERT INTO search_index(search_index) VALUES('rebuild')");
+          logger.info('FTS search index rebuilt');
+        } catch { /* FTS table may not exist yet */ }
+        return d;
+      } catch (reindexErr) {
+        logger.error({ err: reindexErr }, 'REINDEX failed — will delete corrupt DB');
+        try { d.close(); } catch {}
+        throw reindexErr; // fall through to delete+recreate
+      }
+    }
+    return d;
+  };
+
+  try {
+    db = openAndVerify();
+  } catch (openErr) {
+    // Any error during open/pragma/integrity means the DB is unusable.
+    // Delete all DB files and create a fresh one.
+    logger.error({ err: openErr }, 'Corrupt database detected — deleting for auto-restore');
+    try { if (db) db.close(); } catch {}
+    for (const f of [dbPath, walPath, shmPath]) {
+      try { fs.unlinkSync(f); } catch {}
+    }
+    db = new Database(dbPath);
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    db.pragma('busy_timeout = 5000');
+    logger.info('Fresh database created — will restore from backup');
+  }
 
   // ─── Auth tables ───
   db.exec(`

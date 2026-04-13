@@ -1,55 +1,51 @@
 const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { setup, cleanDb, teardown, agent, makeTask, today, daysFromNow } = require('./helpers');
+const fs = require('fs');
+const path = require('path');
+const { setup, cleanDb, teardown, agent, today } = require('./helpers');
+
+const PUBLIC = path.join(__dirname, '..', 'public');
+const appJs = fs.readFileSync(path.join(PUBLIC, 'app.js'), 'utf8');
+const indexHtml = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');
+const stylesCss = fs.readFileSync(path.join(PUBLIC, 'styles.css'), 'utf8');
 
 describe('Daily Reflection UI', () => {
-  let db;
-  before(() => { ({ db } = setup()); });
+  before(() => { setup(); });
   beforeEach(() => cleanDb());
   after(() => teardown());
 
-  it('daily reflection wizard displays 3 steps', async () => {
-    // Step 1: Yesterday's Review
-    // Step 2: Today's Planning
-    // Step 3: Priorities
-    const res = await agent().get('/api/daily-reviews');
-    assert.ok(Array.isArray(res.body));
+  it('daily reflection wizard exposes 3-step structure with progress bar', () => {
+    assert.ok(indexHtml.includes('id="dr-ov"'));
+    assert.ok(indexHtml.includes('data-step="1"'));
+    assert.ok(indexHtml.includes('data-step="2"'));
+    assert.ok(indexHtml.includes('data-step="3"'));
+    assert.ok(indexHtml.includes('id="dr-progress-bar"'));
+    assert.ok(stylesCss.includes('.dr-progress'));
   });
 
-  it('yesterdays review shows completed tasks', async () => {
-    const task = makeTask({ status: 'done', completed_at: today() });
-    assert.equal(task.status, 'done');
+  it('step-2 planning and step-3 priorities controls are rendered in app source', () => {
+    assert.ok(appJs.includes('id="dr-goal"'));
+    assert.ok(appJs.includes('id="dr-mins"'));
+    assert.ok(appJs.includes('id="dr-mood"'));
+    assert.ok(appJs.includes('id="dr-energy"'));
+    assert.ok(appJs.includes('id="dr-note"'));
+    assert.ok(appJs.includes('class="dr-rate'));
   });
 
-  it('today planning allows setting goals and time estimates', async () => {
-    const task = makeTask({ title: 'Today Goal', estimated_minutes: 120 });
-    assert.equal(task.estimated_minutes, 120);
+  it('daily review save path posts to supported API route', () => {
+    assert.ok(appJs.includes("api.post('/api/reviews/daily'"));
+    assert.ok(appJs.includes('date:_toDateStr(new Date())'));
   });
 
-  it('priorities step shows mood and energy selector', async () => {
-    // Test UI elements exist
-    const res = await agent().get('/api/');
-    assert.ok(res);
-  });
-
-  it('reflection wizard saves session data correctly', async () => {
-    const res = await agent().post('/api/daily-reviews').send({
-      note: 'Good day',
-      completed_count: 5,
-      rating: 4
+  it('daily review API accepts save and fetch for current date', async () => {
+    const date = today();
+    const save = await agent().post('/api/reviews/daily').send({
+      date,
+      note: 'Good day overall'
     });
-    assert.equal(res.status, 201);
-  });
-
-  it('progress indicator updates as steps advance', async () => {
-    // Step 1 = 33%, Step 2 = 66%, Step 3 = 100%
-    const res = await agent().get('/api/');
-    assert.ok(res);
-  });
-
-  it('accessibility: keyboard navigation between steps works', async () => {
-    // Tab/Enter to advance, Shift+Tab to go back
-    const res = await agent().get('/api/');
-    assert.ok(res);
+    assert.ok([200, 201].includes(save.status));
+    const get = await agent().get(`/api/reviews/daily/${date}`);
+    assert.equal(get.status, 200);
+    assert.equal(get.body.date, date);
   });
 });

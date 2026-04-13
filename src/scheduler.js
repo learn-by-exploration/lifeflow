@@ -6,6 +6,7 @@
 const RecurringService = require('./services/recurring.service');
 const pushService = require('./services/push.service');
 const createHelpers = require('./helpers');
+const { toDateStr, addDays } = require('./utils/date');
 
 function createScheduler(db, logger) {
   const jobs = [];
@@ -51,7 +52,7 @@ function createScheduler(db, logger) {
 
     // Recurring task spawn (every 60 minutes)
     register('recurring-spawn', 60 * 60 * 1000, async () => {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = toDateStr();
       const doneTasks = db.prepare(`
         SELECT t.*, t.user_id FROM tasks t
         WHERE t.recurring IS NOT NULL
@@ -140,7 +141,7 @@ function createScheduler(db, logger) {
     // ─── Automation: Check overdue tasks (every 1 hour) ───
     register('automation-overdue', 60 * 60 * 1000, async () => {
       if (!automationEngine) return;
-      const today = new Date().toISOString().slice(0, 10);
+      const today = toDateStr();
       const overdueTasks = db.prepare(`
         SELECT t.*, g.area_id FROM tasks t JOIN goals g ON t.goal_id=g.id
         WHERE t.status != 'done' AND t.due_date IS NOT NULL AND t.due_date < ? LIMIT 200
@@ -157,9 +158,9 @@ function createScheduler(db, logger) {
     // ─── Automation: Check due today/soon (every 1 hour) ───
     register('automation-due-check', 60 * 60 * 1000, async () => {
       if (!automationEngine) return;
-      const today = new Date().toISOString().slice(0, 10);
-      const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-      const threeDays = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+      const today = toDateStr();
+      const tomorrow = toDateStr(addDays(new Date(), 1));
+      const threeDays = toDateStr(addDays(new Date(), 3));
       // Due today
       const dueToday = db.prepare(`
         SELECT t.*, g.area_id FROM tasks t JOIN goals g ON t.goal_id=g.id
@@ -198,7 +199,7 @@ function createScheduler(db, logger) {
     // ─── Automation: Stale tasks (every 6 hours) ───
     register('automation-stale', 6 * 60 * 60 * 1000, async () => {
       if (!automationEngine) return;
-      const cutoff = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+      const cutoff = toDateStr(addDays(new Date(), -14));
       const staleTasks = db.prepare(`
         SELECT t.*, g.area_id FROM tasks t JOIN goals g ON t.goal_id=g.id
         WHERE t.status != 'done' AND date(t.created_at) < ? AND t.status = 'todo'
@@ -214,7 +215,7 @@ function createScheduler(db, logger) {
     // ─── Automation: Habit missed (daily check at first run after midnight) ───
     register('automation-habit-missed', 24 * 60 * 60 * 1000, async () => {
       if (!automationEngine) return;
-      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      const yesterday = toDateStr(addDays(new Date(), -1));
       const habits = db.prepare("SELECT h.* FROM habits h WHERE h.archived=0").all();
       for (const habit of habits) {
         const logged = db.prepare('SELECT 1 FROM habit_logs WHERE habit_id=? AND date=?').get(habit.id, yesterday);
@@ -228,6 +229,18 @@ function createScheduler(db, logger) {
     register('automation-log-cleanup', 24 * 60 * 60 * 1000, async () => {
       const result = db.prepare("DELETE FROM automation_log WHERE created_at < datetime('now', '-30 days')").run();
       if (result.changes > 0) logger.info({ deleted: result.changes }, 'Pruned old automation logs');
+    });
+
+    // ─── WAL checkpoint (every 5 minutes) ───
+    // Flushes WAL data into the main DB file, reducing corruption risk if the
+    // process is killed (Docker stop/restart, OOM, power loss).
+    // With frequent checkpoints, at most 5 minutes of writes can be lost.
+    register('wal-checkpoint', 5 * 60 * 1000, async () => {
+      try {
+        db.pragma('wal_checkpoint(PASSIVE)');
+      } catch (e) {
+        logger.warn({ err: e }, 'Periodic WAL checkpoint failed');
+      }
     });
   }
 

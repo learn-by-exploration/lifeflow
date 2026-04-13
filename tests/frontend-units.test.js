@@ -167,10 +167,10 @@ describe('NLP parser — POST /api/tasks/parse', () => {
       .expect(200);
     assert.ok(res.body.title.includes('meeting'), 'title preserved');
     assert.ok(res.body.due_date, 'due_date set');
-    // Verify the parsed date is in the future
+    // Verify date is valid and resolves to Monday (timezone-safe check)
     const parsed = new Date(res.body.due_date + 'T12:00:00');
-    const now = new Date();
-    assert.ok(parsed > now, 'next monday should be in the future');
+    assert.ok(!Number.isNaN(parsed.getTime()), 'parsed date should be valid');
+    assert.equal(parsed.getDay(), 1, 'parsed date should be Monday');
   });
 
   it('parses "p2 review docs" → priority 2', async () => {

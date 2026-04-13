@@ -5,6 +5,9 @@ All notable changes to LifeFlow are documented in this file.
 ## [0.8.3] - 2026-04-04
 
 ### Added
+- **Phase 3 and 4 planning tools** — Added pinned life areas in the sidebar, direct task quick-add from area view, and a new hierarchical Task Planner with batch goal moves.
+- **Habit analytics reports** — Added streak, completion-rate, sparkline, and weekday summary reporting for habits in the Reports workspace.
+- **Interactive Gantt rescheduling** — Added drag and keyboard date shifting for Gantt bars to speed up timeline planning.
 - **Advanced Automation Engine** — Complete event-driven rule execution system with:
   - 19 trigger types: task (completed, created, updated, overdue, due_today, due_soon, stale), goal (progress, all_tasks_done), habit (logged, streak, missed), focus (completed, streak), schedule (daily, weekly, monthly), review (daily_review_saved, weekly_review_saved)
   - 19 action types: task (add_to_myday, remove_from_myday, set_priority, set_status, set_due_date, add_tag, move_to_goal, create_followup, add_subtasks, apply_template), habit (log_habit, create_habit_task), notification (send_notification, send_toast), organization (move_to_inbox, archive_goal, create_review_prompt)

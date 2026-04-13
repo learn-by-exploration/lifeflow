@@ -3,6 +3,7 @@ const { mkdtempSync, rmSync } = require('fs');
 const path = require('path');
 const request = require('supertest');
 const crypto = require('crypto');
+const { toDateStr, addDays } = require('../src/utils/date');
 
 let _app, _db, _dir, _testSessionId, _testUserId;
 
@@ -222,23 +223,20 @@ function agentAs(sessionId) {
   });
 }
 
-// Use UTC dates to match SQLite's date('now')
+// Match the app's local calendar-date semantics.
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return toDateStr();
 }
 
 function daysFromNow(n) {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
+  return toDateStr(addDays(new Date(), n));
 }
 
-// Match server's local-midnight-to-UTC date calculation (used by streak code)
+// Match server-side local date calculations used across streaks and planners.
 function serverLocalDate(offsetDays = 0) {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
-  if (offsetDays) d.setDate(d.getDate() + offsetDays);
-  return d.toISOString().slice(0, 10);
+  return toDateStr(addDays(d, offsetDays));
 }
 
 function rebuildSearch() {

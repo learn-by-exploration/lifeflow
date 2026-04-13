@@ -1,60 +1,43 @@
 const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { setup, cleanDb, teardown, agent, makeTask, makeArea, today, daysFromNow } = require('./helpers');
+const fs = require('fs');
+const path = require('path');
+const { setup, cleanDb, teardown, agent, makeArea, makeGoal, makeTask } = require('./helpers');
+
+const PUBLIC = path.join(__dirname, '..', 'public');
+const appJs = fs.readFileSync(path.join(PUBLIC, 'app.js'), 'utf8');
+const stylesCss = fs.readFileSync(path.join(PUBLIC, 'styles.css'), 'utf8');
 
 describe('Task Edit UI', () => {
-  let db;
-  before(() => { ({ db } = setup()); });
+  before(() => { setup(); });
   beforeEach(() => cleanDb());
   after(() => teardown());
 
-  it('task edit modal opens and displays full task details', async () => {
-    const task = makeTask({ title: 'Edit Test Task' });
-    const res = await agent().get('/api/tasks/' + task.id);
-    assert.equal(res.body.title, 'Edit Test Task');
+  it('task edit source includes grouped sections and note editor improvements', () => {
+    assert.ok(appJs.includes('function enhanceTaskEditUI()'));
+    assert.ok(appJs.includes("title:'Core Details'"));
+    assert.ok(appJs.includes("title:'Schedule & Priority'"));
+    assert.ok(appJs.includes("title:'Execution Breakdown'"));
+    assert.ok(appJs.includes('dp-note-editor'));
+    assert.ok(stylesCss.includes('.dp-group-title'));
   });
 
-  it('task edit modal has organized field groups', async () => {
-    // Metadata group, Dates group, Priority/Status group, Assignment group
-    const res = await agent().get('/api/tasks');
-    assert.ok(Array.isArray(res.body));
+  it('task title validation checks required and max length', () => {
+    assert.ok(appJs.includes('Title is required'));
+    assert.ok(appJs.includes('255 characters or fewer'));
+    assert.ok(appJs.includes('Task title is too long (max 255 chars)'));
   });
 
-  it('inline title editing works with Enter/Escape', async () => {
-    const task = makeTask({ title: 'Old Title' });
+  it('task update endpoint still supports title and note edits', async () => {
+    const area = makeArea();
+    const goal = makeGoal(area.id);
+    const task = makeTask(goal.id, { title: 'Old Title', note: 'Old note' });
     const res = await agent().put('/api/tasks/' + task.id).send({
-      title: 'New Title'
+      title: 'New Title',
+      note: '# Heading\n- item'
     });
     assert.equal(res.status, 200);
     assert.equal(res.body.title, 'New Title');
-  });
-
-  it('multi-line note editor supports markdown', async () => {
-    const task = makeTask({ note: '# Header\n- List item' });
-    assert.ok(task.note.includes('#'));
-  });
-
-  it('real-time validation provides feedback', async () => {
-    // Title required, max 255 chars, etc
-    const res = await agent().put('/api/tasks/999').send({
-      title: 'x'.repeat(256)
-    });
-    assert.equal(res.status, 400);
-  });
-
-  it('keyboard navigation Tab between fields', async () => {
-    const task = makeTask({ title: 'Nav Test' });
-    assert.ok(task);
-  });
-
-  it('custom field editing in task modal', async () => {
-    const task = makeTask({ title: 'Custom Field Test' });
-    assert.ok(task);
-  });
-
-  it('modal scrolling handles long notes/many fields', async () => {
-    const longNote = 'x'.repeat(1000);
-    const task = makeTask({ note: longNote });
-    assert.equal(task.note.length, 1000);
+    assert.ok(res.body.note.includes('# Heading'));
   });
 });

@@ -1,70 +1,42 @@
 const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { setup, cleanDb, teardown, agent, makeTask, today, daysFromNow } = require('./helpers');
+const fs = require('fs');
+const path = require('path');
+const { setup, cleanDb, teardown, agent, makeArea, makeGoal, makeTask, today, daysFromNow } = require('./helpers');
+
+const PUBLIC = path.join(__dirname, '..', 'public');
+const appJs = fs.readFileSync(path.join(PUBLIC, 'app.js'), 'utf8');
+const stylesCss = fs.readFileSync(path.join(PUBLIC, 'styles.css'), 'utf8');
 
 describe('Calendar View Styling', () => {
-  let db;
-  before(() => { ({ db } = setup()); });
+  before(() => { setup(); });
   beforeEach(() => cleanDb());
   after(() => teardown());
 
-  it('calendar renders month grid correctly', async () => {
-    const res = await agent().get('/api/tasks');
+  it('calendar source includes priority pills and quick-add controls', () => {
+    assert.ok(appJs.includes('cal-quick-add'));
+    assert.ok(appJs.includes('ctd p${pri}'));
+    assert.ok(stylesCss.includes('.ctd.p3'));
+    assert.ok(stylesCss.includes('.ctd.p2'));
+    assert.ok(stylesCss.includes('.ctd.p1'));
+    assert.ok(stylesCss.includes('.ctd.p0'));
+  });
+
+  it('calendar source includes mobile agenda mode and today highlighting', () => {
+    assert.ok(appJs.includes('const isMobileAgenda=window.innerWidth<600'));
+    assert.ok(stylesCss.includes('.cal-agenda'));
+    assert.ok(stylesCss.includes('.cal-agenda-day.today'));
+    assert.ok(stylesCss.includes('.cc.today'));
+  });
+
+  it('calendar API returns created tasks within date range', async () => {
+    const area = makeArea();
+    const goal = makeGoal(area.id);
+    const due = daysFromNow(3);
+    makeTask(goal.id, { title: 'Cal Task', due_date: due, priority: 3 });
+    const res = await agent().get(`/api/tasks/calendar?start=${today()}&end=${daysFromNow(7)}`);
+    assert.equal(res.status, 200);
     assert.ok(Array.isArray(res.body));
-  });
-
-  it('calendar cells display task pills with color coding', async () => {
-    const task = makeTask({ title: 'High Priority', priority: 3, due_date: today() });
-    assert.equal(task.priority, 3);
-  });
-
-  it('priority color coding: 3=red, 2=orange, 1=yellow, 0=gray', async () => {
-    const high = makeTask({ priority: 3 });
-    const mid = makeTask({ priority: 2 });
-    const low = makeTask({ priority: 1 });
-    const none = makeTask({ priority: 0 });
-    assert.ok([high, mid, low, none].every(t => t));
-  });
-
-  it('task status affects visual appearance (done=strikethrough)', async () => {
-    const task = makeTask({ title: 'Done Task', status: 'done' });
-    assert.equal(task.status, 'done');
-  });
-
-  it('hover state shows full task title and quick actions', async () => {
-    const task = makeTask({ title: 'Hover Test Task' });
-    assert.ok(task);
-  });
-
-  it('click expands task or opens detail modal', async () => {
-    const task = makeTask({ title: 'Click Test' });
-    const res = await agent().get('/api/tasks/' + task.id);
-    assert.equal(res.body.title, 'Click Test');
-  });
-
-  it('quick-add button in empty cells creates task with that date', async () => {
-    const res = await agent().post('/api/tasks').send({
-      title: 'Quick Add Task',
-      due_date: daysFromNow(5)
-    });
-    assert.equal(res.status, 201);
-    assert.equal(res.body.due_date, daysFromNow(5));
-  });
-
-  it('smooth transitions when hovering/clicking', async () => {
-    // CSS animations test - visual regression
-    const res = await agent().get('/api/');
-    assert.ok(res);
-  });
-
-  it('mobile responsiveness: calendar switches to agenda on small screens', async () => {
-    // 600px breakpoint
-    const res = await agent().get('/api/');
-    assert.ok(res);
-  });
-
-  it('day column highlights current day with border', async () => {
-    const now = new Date();
-    assert.ok(now instanceof Date);
+    assert.ok(res.body.some(t => t.title === 'Cal Task'));
   });
 });

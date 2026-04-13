@@ -4,6 +4,8 @@
  */
 'use strict';
 
+const { toDateStr } = require('../../../utils/date');
+
 const CAPTURE_FUNCTION = {
   name: 'parse_task',
   description: 'Parse natural language into structured task fields',
@@ -38,7 +40,7 @@ Rules:
 - Detect my_day: "today" or "for today" implies my_day = true
 - goal_hint: if text implies a life area or goal (e.g., "for my fitness goal"), extract it
 
-Today's date: ${new Date().toISOString().split('T')[0]}
+Today's date: ${toDateStr()}
 Day of week: ${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getDay()]}`;
 
   const contextParts = [];

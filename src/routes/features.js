@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const { isValidColor } = require('../middleware/validate');
+const { toDateStr, addDays } = require('../utils/date');
 module.exports = function(deps) {
   const { db, enrichTask, enrichTasks, getNextPosition, automationEngine } = deps;
   const router = Router();
@@ -27,6 +28,7 @@ const SETTINGS_DEFAULTS = {
   userPersona: '',
   keyboardShortcuts: '',    // JSON map of custom key bindings
   dailyQuote: 'false',      // show daily motivation quote on app open
+  pinnedAreas: '[]',        // JSON array of pinned life area IDs
 };
 
 const SETTINGS_KEYS = new Set(Object.keys(SETTINGS_DEFAULTS));
@@ -200,8 +202,8 @@ const XP_AMOUNTS = { task_complete: 10, subtask_complete: 3, focus_session: 5, h
 
 router.get('/api/gamification/stats', (req, res) => {
   const user = db.prepare('SELECT xp_total, xp_level, daily_goal, weekly_goal FROM users WHERE id=?').get(req.userId) || {};
-  const today = new Date().toISOString().slice(0, 10);
-  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const today = toDateStr();
+  const weekAgo = toDateStr(addDays(new Date(), -7));
   const todayDone = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='done' AND date(completed_at)=? AND user_id=?").get(today, req.userId)?.c || 0;
   const weekDone = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='done' AND date(completed_at)>=? AND user_id=?").get(weekAgo, req.userId)?.c || 0;
   const recentXp = db.prepare("SELECT amount, reason, created_at FROM user_xp WHERE user_id=? ORDER BY created_at DESC LIMIT 20").all(req.userId);
@@ -390,8 +392,8 @@ router.post('/api/demo/start', (req, res) => {
     const g5 = gIns.run(a3,'Learn Guitar','Practice 30 min daily','active',req.userId).lastInsertRowid;
     // Create 20 tasks
     const tIns = db.prepare('INSERT INTO tasks (goal_id,title,status,priority,due_date,my_day,user_id) VALUES (?,?,?,?,?,?,?)');
-    const today = new Date().toISOString().slice(0,10);
-    const tomorrow = new Date(Date.now()+864e5).toISOString().slice(0,10);
+    const today = toDateStr();
+    const tomorrow = toDateStr(addDays(new Date(), 1));
     tIns.run(g1,'Design API endpoints','todo',2,today,1,req.userId);
     tIns.run(g1,'Write unit tests','todo',1,today,1,req.userId);
     tIns.run(g1,'Deploy to staging','todo',2,tomorrow,0,req.userId);
@@ -605,12 +607,12 @@ router.get('/api/features/daily-quote', async (req, res) => {
 router.get('/api/habits', (req, res) => {
   const habits = db.prepare('SELECT h.*, la.name as area_name, la.icon as area_icon FROM habits h LEFT JOIN life_areas la ON h.area_id=la.id WHERE h.archived=0 AND h.user_id=? ORDER BY h.position').all(req.userId);
   if (!habits.length) return res.json(habits);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toDateStr();
   // Batch-load all logs for these habits (last 400 days for streak calc)
   const hIds = habits.map(h => h.id);
   const hph = hIds.map(() => '?').join(',');
-  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 400);
-  const allLogs = db.prepare(`SELECT habit_id, date, count FROM habit_logs WHERE habit_id IN (${hph}) AND date >= ? ORDER BY date DESC`).all(...hIds, cutoff.toISOString().slice(0, 10));
+  const cutoff = addDays(new Date(), -400);
+  const allLogs = db.prepare(`SELECT habit_id, date, count FROM habit_logs WHERE habit_id IN (${hph}) AND date >= ? ORDER BY date DESC`).all(...hIds, toDateStr(cutoff));
   // Build per-habit log map: habit_id -> { date -> count }
   const logMap = {};
   allLogs.forEach(l => {
@@ -628,7 +630,7 @@ router.get('/api/habits', (req, res) => {
     if (todayCount < h.target) d.setDate(d.getDate() - 1);
     else { streak = 1; d.setDate(d.getDate() - 1); }
     for (;;) {
-      const ds = d.toISOString().slice(0, 10);
+      const ds = toDateStr(d);
       const count = logs[ds];
       if (count !== undefined && count >= h.target) { streak++; d.setDate(d.getDate() - 1); }
       else break;
@@ -709,7 +711,7 @@ router.post('/api/habits/:id/log', (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const habit = db.prepare('SELECT * FROM habits WHERE id=? AND user_id=?').get(id, req.userId);
   if (!habit) return res.status(404).json({ error: 'Not found' });
-  const date = req.body.date || new Date().toISOString().slice(0, 10);
+  const date = req.body.date || toDateStr();
   const existing = db.prepare('SELECT * FROM habit_logs WHERE habit_id=? AND date=?').get(id, date);
   if (existing) {
     db.prepare('UPDATE habit_logs SET count=count+1 WHERE habit_id=? AND date=?').run(id, date);
@@ -726,7 +728,7 @@ router.post('/api/habits/:id/log', (req, res) => {
     for (const l of logs) {
       const expected = new Date(d);
       expected.setDate(expected.getDate() - streak);
-      if (l.date === expected.toISOString().slice(0, 10)) streak++;
+      if (l.date === toDateStr(expected)) streak++;
       else break;
     }
     automationEngine.emit('habit_logged', { userId: req.userId, habit, date, count: log.count, streak });
@@ -742,7 +744,7 @@ router.delete('/api/habits/:id/log', (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ID' });
   const habit = db.prepare('SELECT * FROM habits WHERE id=? AND user_id=?').get(id, req.userId);
   if (!habit) return res.status(404).json({ error: 'Not found' });
-  const date = (req.body && req.body.date) || new Date().toISOString().slice(0, 10);
+  const date = (req.body && req.body.date) || toDateStr();
   const existing = db.prepare('SELECT * FROM habit_logs WHERE habit_id=? AND date=?').get(id, date);
   if (existing && existing.count > 1) {
     db.prepare('UPDATE habit_logs SET count=count-1 WHERE habit_id=? AND date=?').run(id, date);
@@ -764,8 +766,8 @@ router.get('/api/habits/:id/heatmap', (req, res) => {
 // ─── DAY PLANNER API ───
 // Suggest endpoint must come before :date to avoid param capture
 router.get('/api/planner/suggest', (req, res) => {
-  const today = new Date().toISOString().split('T')[0];
-  const in3days = new Date(Date.now() + 3*86400000).toISOString().split('T')[0];
+  const today = toDateStr();
+  const in3days = toDateStr(addDays(new Date(), 3));
 
   const overdue = enrichTasks(db.prepare(`SELECT t.*, g.title as goal_title, g.color as goal_color, a.name as area_name, a.icon as area_icon, a.color as area_color
     FROM tasks t JOIN goals g ON t.goal_id=g.id JOIN life_areas a ON g.area_id=a.id
@@ -795,7 +797,7 @@ router.get('/api/planner/smart', (req, res) => {
     WHERE t.status != 'done' AND t.my_day = 0 AND t.user_id=?
     ORDER BY t.priority DESC, t.due_date
   `).all(req.userId);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toDateStr();
   const scored = tasks.map(t => {
     let score = 0;
     const reasons = [];
@@ -987,7 +989,7 @@ router.get('/api/planner/:date', (req, res) => {
 
   router.post('/api/ai/plan-day', async (req, res) => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = toDateStr();
       let tasks = db.prepare("SELECT t.*, g.title as goal_title FROM tasks t LEFT JOIN goals g ON t.goal_id = g.id WHERE t.user_id = ? AND t.status != 'done' AND (t.due_date = ? OR t.my_day = 1 OR t.status = 'doing')").all(req.userId, today);
       tasks = enrichTasks(tasks);
       if (!tasks.length) return res.json({ data: { plan: [], summary: 'No tasks for today!' } });
@@ -1004,7 +1006,7 @@ router.get('/api/planner/:date', (req, res) => {
 
   router.post('/api/ai/next-task', async (req, res) => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = toDateStr();
       let tasks = db.prepare("SELECT t.*, g.title as goal_title FROM tasks t LEFT JOIN goals g ON t.goal_id = g.id WHERE t.user_id = ? AND t.status != 'done' AND (t.due_date <= ? OR t.my_day = 1 OR t.status = 'doing' OR t.priority >= 2) LIMIT 20").all(req.userId, today);
       tasks = enrichTasks(tasks);
       if (!tasks.length) return res.json({ data: { task_id: null, reason: 'No active tasks — you\'re all caught up!' } });
@@ -1019,10 +1021,10 @@ router.get('/api/planner/:date', (req, res) => {
 
   router.post('/api/ai/review-week', async (req, res) => {
     try {
-      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+      const weekAgo = toDateStr(addDays(new Date(), -7));
       const completed = db.prepare("SELECT t.title, t.priority, a.name as area FROM tasks t LEFT JOIN goals g ON t.goal_id = g.id LEFT JOIN life_areas a ON g.area_id = a.id WHERE t.user_id = ? AND t.completed_at >= ?").all(req.userId, weekAgo);
       const created = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE user_id = ? AND created_at >= ?").get(req.userId, weekAgo).c;
-      const overdue = db.prepare("SELECT title FROM tasks WHERE user_id = ? AND status != 'done' AND due_date < ?").all(req.userId, new Date().toISOString().split('T')[0]);
+      const overdue = db.prepare("SELECT title FROM tasks WHERE user_id = ? AND status != 'done' AND due_date < ?").all(req.userId, toDateStr());
       const focusMinutes = db.prepare("SELECT COALESCE(SUM(duration_sec), 0) / 60 as m FROM focus_sessions WHERE user_id = ? AND started_at >= ?").get(req.userId, weekAgo).m;
       const habitStats = db.prepare("SELECT h.name, h.target, COUNT(hl.id) as logged FROM habits h LEFT JOIN habit_logs hl ON hl.habit_id = h.id AND hl.date >= ? WHERE h.user_id = ? AND h.archived = 0 GROUP BY h.id").all(weekAgo, req.userId);
       // Area breakdown
@@ -1061,7 +1063,7 @@ router.get('/api/planner/:date', (req, res) => {
 
   router.post('/api/ai/cognitive-load', async (req, res) => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = toDateStr();
       const activeTasks = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE user_id = ? AND status != 'done'").get(req.userId).c;
       const overdueTasks = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE user_id = ? AND status != 'done' AND due_date < ?").get(req.userId, today).c;
       const dueSoon = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE user_id = ? AND status != 'done' AND due_date BETWEEN ? AND date(?, ?)")
@@ -1076,7 +1078,7 @@ router.get('/api/planner/:date', (req, res) => {
 
   router.post('/api/ai/daily-highlight', async (req, res) => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = toDateStr();
       const completed = db.prepare("SELECT title FROM tasks WHERE user_id = ? AND completed_at >= ? LIMIT 10").all(req.userId, today);
       const focusMin = db.prepare("SELECT COALESCE(SUM(duration_sec), 0) / 60 as m FROM focus_sessions WHERE user_id = ? AND started_at >= ?").get(req.userId, today).m;
       const habitsLogged = db.prepare("SELECT h.name FROM habits h JOIN habit_logs hl ON hl.habit_id = h.id WHERE h.user_id = ? AND hl.date = ?").all(req.userId, today);
@@ -1087,7 +1089,7 @@ router.get('/api/planner/:date', (req, res) => {
 
   router.post('/api/ai/accountability-check', async (req, res) => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = toDateStr();
       const planned = db.prepare("SELECT id, title, status, priority FROM tasks WHERE user_id = ? AND (due_date = ? OR my_day = 1) AND status != 'done'").all(req.userId, today);
       const completed = db.prepare("SELECT id, title FROM tasks WHERE user_id = ? AND completed_at >= ?").all(req.userId, today);
       const result = await aiService.accountabilityCheck(req.userId, planned, completed, { timeOfDay: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) });

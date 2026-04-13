@@ -102,6 +102,8 @@ ${scriptContent}
       'tmpl-a-cancel', 'tmpl-a-apply', 'tmpl-a-goal',
       // Notes view (created by renderNotes/openNote)
       'note-back', 'note-del', 'note-title', 'note-content', 'note-goal',
+      // Habit detail modal edit tab (created by renderHabitDetailModal)
+      'hdm-edit-name', 'hdm-edit-icon', 'hdm-edit-color', 'hdm-edit-freq', 'hdm-edit-target', 'hdm-edit-area',
       // Weekly review (created by renderReview)
       'rv-save', 'rv-acc', 'rv-refl', 'rv-next',
       // Automation rules (created by renderRules/showRuleModal)
@@ -475,8 +477,15 @@ describe('CSS Integrity', () => {
 
     const undefined_ = [...usedVars].filter(v => !definedVars.has(v));
     // Dynamic vars set via inline style="" in JS at runtime
+    // Also exclude vars with fallback values — var(--x, fallback) is valid without definition
     const dynamicVars = new Set(['swatch']);
-    const realUndefined = undefined_.filter(v => !dynamicVars.has(v));
+    const realUndefined0 = undefined_.filter(v => !dynamicVars.has(v));
+    // Filter out vars that have fallbacks in usage: var(--x, ...)
+    const varsWithFallback = new Set();
+    const fallbackRegex = /var\(--([a-zA-Z0-9_-]+)\s*,/g;
+    let fb;
+    while ((fb = fallbackRegex.exec(styleContent)) !== null) varsWithFallback.add(fb[1]);
+    const realUndefined = realUndefined0.filter(v => !varsWithFallback.has(v));
     if (realUndefined.length > 0) {
       assert.fail(
         `CSS custom properties used but never defined:\n` +
