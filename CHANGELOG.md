@@ -2,6 +2,11 @@
 
 All notable changes to LifeFlow are documented in this file.
 
+## [0.8.5] - 2026-04-14
+
+### Changed
+- Version bump to align with package.json
+
 ## [0.8.3] - 2026-04-04
 
 ### Added
