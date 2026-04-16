@@ -3138,7 +3138,7 @@ async function initServiceWorker(){
     return;
   }
   try{
-    const reg=await navigator.serviceWorker.register('/sw.js',{scope:'/'});
+    const reg=await navigator.serviceWorker.register('sw.js',{scope:'.'});
     // Listen for messages from SW (e.g., notification click with taskId)
     navigator.serviceWorker.addEventListener('message',e=>{
       if(e.data?.action==='openTask'&&e.data?.taskId){openDP(e.data.taskId)}

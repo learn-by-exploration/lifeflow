@@ -114,9 +114,8 @@ module.exports = function(deps) {
     const api_tokens = db.prepare('SELECT id, user_id, name, token_hash, last_used_at, created_at, expires_at FROM api_tokens WHERE user_id=?').all(userId);
     const push_subscriptions = db.prepare('SELECT * FROM push_subscriptions WHERE user_id=?').all(userId);
 
-    // Include all user accounts (id, email, password_hash, display_name) for full restore capability
-    // Password hashes are bcrypt — safe to store (same as what's in the SQLite file)
-    const users = db.prepare('SELECT id, email, password_hash, display_name, created_at FROM users').all();
+    // Include user accounts for restore — exclude password_hash (sensitive, already in auth.db)
+    const users = db.prepare('SELECT id, email, display_name, created_at FROM users').all();
 
     return {
       users,
@@ -247,14 +246,14 @@ module.exports = function(deps) {
       db.prepare('DELETE FROM task_templates WHERE user_id=?').run(req.userId);
       db.prepare('DELETE FROM weekly_reviews WHERE user_id=?').run(req.userId);
       db.prepare('DELETE FROM inbox WHERE user_id=?').run(req.userId);
-      try { db.prepare('DELETE FROM badges WHERE user_id=?').run(req.userId); } catch(e) {}
+      try { db.prepare('DELETE FROM badges WHERE user_id=?').run(req.userId); } catch(e) { logger.warn({ err: e }, 'Optional delete badges failed'); }
       db.prepare('DELETE FROM settings WHERE user_id=?').run(req.userId);
-      try { db.prepare('DELETE FROM webhooks WHERE user_id=?').run(req.userId); } catch(e) {}
-      try { db.prepare('DELETE FROM api_tokens WHERE user_id=?').run(req.userId); } catch(e) {}
-      try { db.prepare('DELETE FROM push_subscriptions WHERE user_id=?').run(req.userId); } catch(e) {}
-      try { db.prepare('DELETE FROM daily_reviews WHERE user_id=?').run(req.userId); } catch(e) {}
-      try { db.prepare('DELETE FROM user_xp WHERE user_id=?').run(req.userId); } catch(e) {}
-      try { db.prepare('DELETE FROM custom_statuses WHERE goal_id IN (SELECT id FROM goals WHERE user_id=?)').run(req.userId); } catch(e) {}
+      try { db.prepare('DELETE FROM webhooks WHERE user_id=?').run(req.userId); } catch(e) { logger.warn({ err: e }, 'Optional delete webhooks failed'); }
+      try { db.prepare('DELETE FROM api_tokens WHERE user_id=?').run(req.userId); } catch(e) { logger.warn({ err: e }, 'Optional delete api_tokens failed'); }
+      try { db.prepare('DELETE FROM push_subscriptions WHERE user_id=?').run(req.userId); } catch(e) { logger.warn({ err: e }, 'Optional delete push_subscriptions failed'); }
+      try { db.prepare('DELETE FROM daily_reviews WHERE user_id=?').run(req.userId); } catch(e) { logger.warn({ err: e }, 'Optional delete daily_reviews failed'); }
+      try { db.prepare('DELETE FROM user_xp WHERE user_id=?').run(req.userId); } catch(e) { logger.warn({ err: e }, 'Optional delete user_xp failed'); }
+      try { db.prepare('DELETE FROM custom_statuses WHERE goal_id IN (SELECT id FROM goals WHERE user_id=?)').run(req.userId); } catch(e) { logger.warn({ err: e }, 'Optional delete custom_statuses failed'); }
       // goal_milestones cascade from goals delete
 
       // Map old IDs to new IDs

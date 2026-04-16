@@ -582,12 +582,12 @@ describe('Data Integrity Safety Guards', () => {
   });
 
   describe('Backup includes all data types', () => {
-    it('export includes users with password hashes', async () => {
+    it('export includes users without password hashes', async () => {
       const area = makeArea(); makeGoal(area.id);
       const res = await agent().get('/api/export').expect(200);
       assert.ok(res.body.users, 'export should include users');
       assert.ok(res.body.users.length > 0, 'should have at least one user');
-      assert.ok(res.body.users[0].password_hash, 'user should have password_hash');
+      assert.ok(!res.body.users[0].password_hash, 'user should NOT have password_hash (sensitive data excluded)');
       assert.ok(res.body.users[0].email, 'user should have email');
     });
 

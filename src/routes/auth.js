@@ -340,7 +340,7 @@ module.exports = function(deps) {
   // ─── List Users (for assignment picker) ───
   router.get('/api/users', (req, res) => {
     if (!req.userId) return res.status(401).json({ error: 'Authentication required' });
-    const users = db.prepare('SELECT id, display_name FROM users').all();
+    const users = db.prepare('SELECT id, display_name FROM users LIMIT 500').all();
     res.json(users);
   });
 

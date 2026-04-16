@@ -52,7 +52,20 @@ module.exports = function initPlugin(context) {
   // ─── Build router with all LifeFlow routes ───
   const router = Router();
 
-  // Auth routes are handled by monolith — skip LifeFlow's auth
+  // Auth routes are handled by monolith — skip LifeFlow's standalone auth.
+  // Provide lightweight /api/auth/me and /api/users for the SPA.
+  router.get('/api/auth/me', (req, res) => {
+    if (!req.userId) return res.status(401).json({ error: 'Not authenticated' });
+    const lfUser = db.prepare('SELECT id, email, display_name, created_at FROM users WHERE id = ?').get(req.userId);
+    if (!lfUser) return res.status(401).json({ error: 'User not found' });
+    res.json({ user: { id: lfUser.id, email: lfUser.email, display_name: lfUser.display_name, created_at: lfUser.created_at } });
+  });
+
+  router.get('/api/users', (req, res) => {
+    const users = db.prepare('SELECT id, display_name FROM users').all();
+    res.json(users);
+  });
+
   // Mount all feature routes (they use absolute paths like /api/tags)
   router.use(require('./routes/tags')(deps));
   router.use(require('./routes/areas')(deps));
