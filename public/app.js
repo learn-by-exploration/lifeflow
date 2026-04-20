@@ -3102,8 +3102,8 @@ document.addEventListener('keydown', (e) => {
 
 // Boot
 Promise.all([loadSettings(),loadAreas(),loadTags(),loadSavedFilters(),loadSmartCounts(),loadUserLists(),loadAllUsers()]).then(()=>{
-  // Apply settings on load
-  if(appSettings.theme){
+  // Apply settings on load (skip if embedded in parent SPA — parent controls theme)
+  if(appSettings.theme && window.self === window.top){
     document.documentElement.setAttribute('data-theme',appSettings.theme);
     localStorage.setItem('lf-theme',appSettings.theme);
   }
@@ -3123,8 +3123,8 @@ Promise.all([loadSettings(),loadAreas(),loadTags(),loadSavedFilters(),loadSmartC
       });
     }
   }
-  // Prefers-color-scheme: auto-set theme if user hasn't explicitly chosen one
-  if(!localStorage.getItem('lf-theme-explicit')){
+  // Prefers-color-scheme: auto-set theme if user hasn't explicitly chosen one (skip in iframe)
+  if(!localStorage.getItem('lf-theme-explicit') && window.self === window.top){
     document.documentElement.setAttribute('data-theme-auto','true');
   }
   // Check for first-time user onboarding
