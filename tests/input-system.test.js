@@ -254,9 +254,9 @@ describe('ARIA dialog attributes on modals', () => {
       const re = new RegExp(`id="${id}"[^>]*aria-modal="true"`);
       assert.ok(re.test(html), `#${id} (${desc}) must have aria-modal="true"`);
     });
-    it(`#${id} has aria-label (${desc})`, () => {
-      const re = new RegExp(`id="${id}"[^>]*aria-label="`);
-      assert.ok(re.test(html), `#${id} (${desc}) must have aria-label`);
+    it(`#${id} has aria-label or aria-labelledby (${desc})`, () => {
+      const re = new RegExp(`id="${id}"[^>]*aria-label(?:ledby)?="`);
+      assert.ok(re.test(html), `#${id} (${desc}) must have aria-label or aria-labelledby`);
     });
   }
 });
