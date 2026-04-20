@@ -161,6 +161,7 @@ app.use(require('./routes/data')(deps));
 app.use(require('./routes/productivity')(deps));
 app.use(require('./routes/lists')(deps));
 app.use(require('./routes/custom-fields')(deps));
+app.use(require('./routes/problems')(deps));
 
 // Serve share page
 app.get('/share/:token', (req, res) => {

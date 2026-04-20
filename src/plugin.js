@@ -77,6 +77,7 @@ module.exports = function initPlugin(context) {
   router.use(require('./routes/productivity')(deps));
   router.use(require('./routes/lists')(deps));
   router.use(require('./routes/custom-fields')(deps));
+  router.use(require('./routes/problems')(deps));
 
   // ─── Scheduler ───
   const scheduler = createScheduler(db, logger);

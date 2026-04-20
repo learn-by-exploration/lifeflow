@@ -80,6 +80,14 @@ function cleanDb() {
   try { db.exec('DELETE FROM user_xp'); } catch(e) {}
   try { db.exec('DELETE FROM task_attachments'); } catch(e) {}
   try { db.exec('DELETE FROM custom_statuses'); } catch(e) {}
+  try { db.exec('DELETE FROM problem_tags'); } catch(e) {}
+  try { db.exec('DELETE FROM problem_links'); } catch(e) {}
+  try { db.exec('DELETE FROM problem_actions'); } catch(e) {}
+  try { db.exec('DELETE FROM problem_decisions'); } catch(e) {}
+  try { db.exec('DELETE FROM problem_options'); } catch(e) {}
+  try { db.exec('DELETE FROM problem_reframes'); } catch(e) {}
+  try { db.exec('DELETE FROM problem_journal'); } catch(e) {}
+  try { db.exec('DELETE FROM problems'); } catch(e) {}
 }
 
 function teardown() {
@@ -245,4 +253,14 @@ function rebuildSearch() {
   if (server.rebuildSearchIndex) server.rebuildSearchIndex();
 }
 
-module.exports = { setup, cleanDb, teardown, makeArea, makeGoal, makeTask, makeSubtask, makeTag, linkTag, makeFocus, makeList, makeListItem, makeHabit, logHabit, agent, rawAgent, makeUser2, agentAs, today, daysFromNow, serverLocalDate, rebuildSearch };
+function makeProblem(overrides = {}) {
+  const { db } = setup();
+  const o = { title: 'Test Problem', description: '', phase: 'capture', status: 'active', category: 'personal', urgency: 1, importance: 1, privacy_level: 'normal', user_id: 1, ...overrides };
+  const r = db.prepare(`INSERT INTO problems (title, description, phase, status, category, urgency, importance, privacy_level, user_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`).run(
+    o.title, o.description, o.phase, o.status, o.category, o.urgency, o.importance, o.privacy_level, o.user_id
+  );
+  return db.prepare('SELECT * FROM problems WHERE id=?').get(r.lastInsertRowid);
+}
+
+module.exports = { setup, cleanDb, teardown, makeArea, makeGoal, makeTask, makeSubtask, makeTag, linkTag, makeFocus, makeList, makeListItem, makeHabit, logHabit, agent, rawAgent, makeUser2, agentAs, today, daysFromNow, serverLocalDate, rebuildSearch, makeProblem };
