@@ -1,0 +1,31 @@
+{
+  "service": "LifeFlow",
+  "prefix": "lf",
+  "icon": "task_alt",
+  "color": "tasks",
+  "views": [
+    {"id": "myday", "label": "Today", "icon": "wb_sunny"},
+    {"id": "focus", "label": "Focus", "icon": "timer"},
+    {"id": "habits", "label": "Habits", "icon": "repeat"},
+    {"id": "inbox", "label": "Inbox", "icon": "inbox"},
+    {"id": "tasks", "label": "Tasks", "icon": "checklist"},
+    {"id": "board", "label": "Board", "icon": "view_kanban"},
+    {"id": "goals", "label": "Goals", "icon": "flag"},
+    {"id": "areas", "label": "Areas", "icon": "category"},
+    {"id": "search", "label": "Search", "icon": "search"},
+    {"id": "calendar", "label": "Calendar", "icon": "calendar_month"},
+    {"id": "weekly", "label": "Weekly Plan", "icon": "view_week"},
+    {"id": "matrix", "label": "Matrix", "icon": "grid_view"},
+    {"id": "planner", "label": "Day Planner", "icon": "schedule"},
+    {"id": "taskplanner", "label": "Task Planner", "icon": "account_tree"},
+    {"id": "upcoming", "label": "Upcoming", "icon": "upcoming"},
+    {"id": "all", "label": "All Tasks", "icon": "list"},
+    {"id": "dashboard", "label": "Dashboard", "icon": "bar_chart"},
+    {"id": "logbook", "label": "Activity Log", "icon": "history"},
+    {"id": "review", "label": "Weekly Review", "icon": "rate_review"},
+    {"id": "notes", "label": "Notes", "icon": "sticky_note_2"},
+    {"id": "problems", "label": "Problems", "icon": "lightbulb"},
+    {"id": "settings", "label": "Settings", "icon": "settings"},
+    {"id": "reports", "label": "Reports", "icon": "assessment"}
+  ]
+}
