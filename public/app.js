@@ -572,6 +572,7 @@ async function render(){
   else if(currentView==='notes')await renderNotes();
   else if(currentView==='timeanalytics')await renderTimeAnalytics();
   else if(currentView==='rules')await renderRules();
+  else if(currentView==='problems')await renderProblemsView($('ct'));
   else if(currentView==='goals')await renderGoalsView($('ct'));
   else if(currentView==='areas')await renderAreasView($('ct'));
   else if(currentView==='search')await renderSearchView($('ct'));
@@ -618,6 +619,7 @@ function updateBC(){
   else if(currentView==='notes'){pt.textContent='Notes';bc.innerHTML=''}
   else if(currentView==='timeanalytics'){pt.textContent='Time Analytics';bc.innerHTML=''}
   else if(currentView==='rules'){pt.textContent='Automations';bc.innerHTML=''}
+  else if(currentView==='problems'){pt.textContent='Problems';bc.innerHTML=''}
   else if(currentView==='goals'){pt.textContent='Goals';bc.innerHTML=''}
   else if(currentView==='areas'){pt.textContent='Life Areas';bc.innerHTML=''}
   else if(currentView==='search'){pt.textContent='Search';bc.innerHTML=''}
